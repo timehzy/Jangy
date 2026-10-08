@@ -32,8 +32,8 @@ final class AppModel {
         }
     }
 
-    func undo() { store.undo(); player.rebuild() }
-    func redo() { store.redo(); player.rebuild() }
+    func undo() { lastIssues = nil; store.undo(); player.rebuild() }
+    func redo() { lastIssues = nil; store.redo(); player.rebuild() }
 
     func export() {
         exportProgress = 0
@@ -66,7 +66,7 @@ final class PlayerController {
     private(set) var currentTime: TimeInterval = 0
     private(set) var cues: [CaptionCue] = []
 
-    private var timeObserver: Any?
+    private var timePollingTask: Task<Void, Never>?
     private var rebuildTask: Task<Void, Never>?
     private let store: EditStore
     private let resolver: AssetResolver
@@ -82,13 +82,18 @@ final class PlayerController {
         rebuildTask = Task { @MainActor in
             guard !Task.isCancelled else { return }
             guard let package = try? await PreviewBridge.makePreview(for: store.plan, resolver: resolver) else { return }
-            if let old = player, let observer = timeObserver { old.removeTimeObserver(observer) }
+            // 重建竞态防护：await 期间可能已被下一次 rebuild 取消，此时不得安装过期 player。
+            guard !Task.isCancelled else { return }
             let newPlayer = AVPlayer(playerItem: package.playerItem)
-            timeObserver = newPlayer.addPeriodicTimeObserver(
-                forInterval: CMTime(seconds: 0.1, preferredTimescale: 600),
-                queue: .main
-            ) { [weak self] time in
-                MainActor.assumeIsolated { self?.currentTime = time.seconds }
+            timePollingTask?.cancel()
+            // PlayerController 经 @State 随 App 终身存活，轮询 Task 强引用 newPlayer 无泄漏之虞；
+            // @MainActor Task 闭包与 self 同属 MainActor 隔离域，捕获非 Sendable 值合法。
+            timePollingTask = Task { @MainActor [weak self] in
+                while !Task.isCancelled {
+                    try? await Task.sleep(for: .milliseconds(100))
+                    guard let self, !Task.isCancelled else { return }
+                    self.currentTime = newPlayer.currentTime().seconds
+                }
             }
             player = newPlayer
             cues = package.cues

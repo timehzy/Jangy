@@ -2,7 +2,7 @@ import SwiftUI
 import POCCore
 
 struct ContentView: View {
-    @Bindable var model: AppModel
+    var model: AppModel
 
     var body: some View {
         VStack(spacing: 0) {
