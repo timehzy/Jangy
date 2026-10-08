@@ -1,6 +1,6 @@
 # Kadr POC 工程骨架实现计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** 搭建覆盖「多段拼接 + 转场 + 变速 + 字幕 + headless 导出」的 Kadr 最小 POC 工程骨架，含快照撤销栈与三层 App 结构。
 
@@ -68,7 +68,7 @@ docs/
 - Create: `KadrPOC/Sources/POCCore/EditPlan.swift`（占位，Task 2 填实）
 - Create: `KadrPOC/Sources/kadrpoc-cli/KadrPOCCLI.swift`（占位，Task 11 填实）
 
-- [ ] **Step 1: 创建 Package.swift**
+- [x] **Step 1: 创建 Package.swift**
 
 ```swift
 // swift-tools-version: 6.0
@@ -110,7 +110,7 @@ let package = Package(
 )
 ```
 
-- [ ] **Step 2: 创建占位源文件与 .gitignore**
+- [x] **Step 2: 创建占位源文件与 .gitignore**
 
 `KadrPOC/Sources/POCCore/EditPlan.swift`：
 
@@ -139,7 +139,7 @@ TestArtifacts/
 
 注意：`@main` 在 Task 11 会替换为 ArgumentParser 形式，届时 `main.swift` 冲突不存在（本文件即唯一入口）。
 
-- [ ] **Step 3: 验证依赖解析**
+- [x] **Step 3: 验证依赖解析**
 
 Run: `cd KadrPOC && swift build`
 Expected: `Build complete!` —— Kadr、KadrCaptions、swift-argument-parser 全部解析成功。
@@ -189,7 +189,7 @@ public enum SRTParser {
 }
 ```
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add KadrPOC
@@ -205,7 +205,7 @@ git commit -m "KadrPOC SwiftPM 骨架：锁定 kadr 1.x / kadr-captions / argume
 - Test: `KadrPOC/Tests/POCCoreTests/EditPlanTests.swift`
 - Create: `KadrPOC/Tests/POCCoreTests/Fixtures/.gitkeep`（资源目录占位）
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```swift
 import XCTest
@@ -256,12 +256,12 @@ final class EditPlanTests: XCTestCase {
 }
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 Run: `cd KadrPOC && swift test --filter EditPlanTests`
 Expected: 编译失败（`EditPlan`/`PlanClip` 未定义）——Swift TDD 的失败态即编译失败。
 
-- [ ] **Step 3: 实现 EditPlan.swift（整体替换占位文件）**
+- [x] **Step 3: 实现 EditPlan.swift（整体替换占位文件）**
 
 ```swift
 import Foundation
@@ -354,12 +354,12 @@ public enum OutputPreset: String, Codable, Sendable {
 }
 ```
 
-- [ ] **Step 4: 跑测试确认通过**
+- [x] **Step 4: 跑测试确认通过**
 
 Run: `cd KadrPOC && swift test --filter EditPlanTests`
 Expected: 4 个测试全 PASS。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add KadrPOC/Sources/POCCore/EditPlan.swift KadrPOC/Tests
@@ -374,7 +374,7 @@ git commit -m "POCCore: EditPlan Codable 模型（PlanClip/SpeedPlan/PlanTransit
 - Create: `KadrPOC/Sources/POCCore/AssetResolver.swift`
 - Test: `KadrPOC/Tests/POCCoreTests/AssetResolverTests.swift`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```swift
 import XCTest
@@ -405,12 +405,12 @@ final class AssetResolverTests: XCTestCase {
 }
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 Run: `cd KadrPOC && swift test --filter AssetResolverTests`
 Expected: 编译失败（`AssetResolver` 未定义）。
 
-- [ ] **Step 3: 实现 AssetResolver.swift**
+- [x] **Step 3: 实现 AssetResolver.swift**
 
 ```swift
 import Foundation
@@ -437,12 +437,12 @@ public struct AssetResolver: Sendable {
 }
 ```
 
-- [ ] **Step 4: 跑测试确认通过**
+- [x] **Step 4: 跑测试确认通过**
 
 Run: `cd KadrPOC && swift test --filter AssetResolverTests`
 Expected: 3 个测试全 PASS。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add KadrPOC/Sources/POCCore/AssetResolver.swift KadrPOC/Tests/POCCoreTests/AssetResolverTests.swift
@@ -457,7 +457,7 @@ git commit -m "POCCore: AssetResolver（文件名/绝对路径双模式素材解
 - Create: `KadrPOC/Sources/POCCore/EditPlanValidator.swift`
 - Test: `KadrPOC/Tests/POCCoreTests/EditPlanValidatorTests.swift`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```swift
 import XCTest
@@ -534,12 +534,12 @@ final class EditPlanValidatorTests: XCTestCase {
 }
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 Run: `cd KadrPOC && swift test --filter EditPlanValidatorTests`
 Expected: 编译失败。
 
-- [ ] **Step 3: 实现 EditPlanValidator.swift**
+- [x] **Step 3: 实现 EditPlanValidator.swift**
 
 ```swift
 import Foundation
@@ -623,12 +623,12 @@ public struct EditPlanValidator: Sendable {
 }
 ```
 
-- [ ] **Step 4: 跑测试确认通过**
+- [x] **Step 4: 跑测试确认通过**
 
 Run: `cd KadrPOC && swift test --filter EditPlanValidatorTests`
 Expected: 10 个测试全 PASS。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add KadrPOC/Sources/POCCore/EditPlanValidator.swift KadrPOC/Tests/POCCoreTests/EditPlanValidatorTests.swift
@@ -643,7 +643,7 @@ git commit -m "POCCore: EditPlanValidator（结构校验与素材存在性校验
 - Create: `KadrPOC/Sources/POCCore/UndoStack.swift`
 - Test: `KadrPOC/Tests/POCCoreTests/UndoStackTests.swift`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```swift
 import XCTest
@@ -711,12 +711,12 @@ final class UndoStackTests: XCTestCase {
 }
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 Run: `cd KadrPOC && swift test --filter UndoStackTests`
 Expected: 编译失败。
 
-- [ ] **Step 3: 实现 UndoStack.swift**
+- [x] **Step 3: 实现 UndoStack.swift**
 
 ```swift
 import Foundation
@@ -764,12 +764,12 @@ public struct UndoStack: Equatable, Sendable {
 }
 ```
 
-- [ ] **Step 4: 跑测试确认通过**
+- [x] **Step 4: 跑测试确认通过**
 
 Run: `cd KadrPOC && swift test --filter UndoStackTests`
 Expected: 7 个测试全 PASS。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add KadrPOC/Sources/POCCore/UndoStack.swift KadrPOC/Tests/POCCoreTests/UndoStackTests.swift
@@ -784,7 +784,7 @@ git commit -m "POCCore: UndoStack 整树快照撤销栈"
 - Create: `KadrPOC/Sources/POCCore/EditStore.swift`
 - Test: `KadrPOC/Tests/POCCoreTests/EditStoreTests.swift`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```swift
 import XCTest
@@ -832,12 +832,12 @@ final class EditStoreTests: XCTestCase {
 }
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 Run: `cd KadrPOC && swift test --filter EditStoreTests`
 Expected: 编译失败。
 
-- [ ] **Step 3: 实现 EditStore.swift**
+- [x] **Step 3: 实现 EditStore.swift**
 
 ```swift
 import Foundation
@@ -887,12 +887,12 @@ public final class EditStore {
 }
 ```
 
-- [ ] **Step 4: 跑测试确认通过**
+- [x] **Step 4: 跑测试确认通过**
 
 Run: `cd KadrPOC && swift test --filter EditStoreTests`
 Expected: 4 个测试全 PASS。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add KadrPOC/Sources/POCCore/EditStore.swift KadrPOC/Tests/POCCoreTests/EditStoreTests.swift
@@ -909,7 +909,7 @@ git commit -m "POCCore: EditStore（@Observable + 事务式 apply）"
 - Test: `KadrPOC/Tests/POCCoreTests/SamplePlanTests.swift`
 - Create: `KadrPOC/Tests/POCCoreTests/Fixtures/SamplePlan.golden.json`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```swift
 import XCTest
@@ -943,7 +943,7 @@ final class SamplePlanTests: XCTestCase {
 }
 ```
 
-- [ ] **Step 2: 创建黄金 JSON fixture**
+- [x] **Step 2: 创建黄金 JSON fixture**
 
 `KadrPOC/Tests/POCCoreTests/Fixtures/SamplePlan.golden.json`（注意 Codable 派生格式：无标签关联值用 `_0`，ClosedRange 用 lowerBound/upperBound）：
 
@@ -982,12 +982,12 @@ final class SamplePlanTests: XCTestCase {
 }
 ```
 
-- [ ] **Step 3: 跑测试确认失败**
+- [x] **Step 3: 跑测试确认失败**
 
 Run: `cd KadrPOC && swift test --filter SamplePlanTests`
 Expected: 编译失败（`SamplePlan`/`AssetSynthesizer` 未定义）。
 
-- [ ] **Step 4: 实现 SamplePlan.swift**
+- [x] **Step 4: 实现 SamplePlan.swift**
 
 ```swift
 import Foundation
@@ -1027,7 +1027,7 @@ public enum SamplePlan {
 }
 ```
 
-- [ ] **Step 5: 实现 AssetSynthesizer.swift**
+- [x] **Step 5: 实现 AssetSynthesizer.swift**
 
 ```swift
 import AVFoundation
@@ -1131,12 +1131,12 @@ public enum AssetSynthesizer {
 
 注意：`synthesize(into:)` 直接返回 `AssetResolver`（比另造 SampleAssets 类型更省一层，调用方拿到的正是后续所有 API 需要的东西）。
 
-- [ ] **Step 6: 跑测试确认通过**
+- [x] **Step 6: 跑测试确认通过**
 
 Run: `cd KadrPOC && swift test --filter SamplePlanTests`
 Expected: 3 个测试全 PASS（素材合成约需数秒）。
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add KadrPOC/Sources/POCCore/AssetSynthesizer.swift KadrPOC/Sources/POCCore/SamplePlan.swift KadrPOC/Tests/POCCoreTests/SamplePlanTests.swift KadrPOC/Tests/POCCoreTests/Fixtures
@@ -1151,7 +1151,7 @@ git commit -m "POCCore: AssetSynthesizer 测试素材合成器 + SamplePlan 黄�
 - Create: `KadrPOC/Sources/POCCore/EngineBridge.swift`
 - Test: `KadrPOC/Tests/POCCoreTests/EngineBridgeTests.swift`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```swift
 import XCTest
@@ -1208,12 +1208,12 @@ final class EngineBridgeTests: XCTestCase {
 }
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 Run: `cd KadrPOC && swift test --filter EngineBridgeTests`
 Expected: 编译失败（`EngineBridge` 未定义）。
 
-- [ ] **Step 3: 实现 EngineBridge.swift**
+- [x] **Step 3: 实现 EngineBridge.swift**
 
 ```swift
 import Foundation
@@ -1291,12 +1291,12 @@ let cues = SRTParser.parse(srtText).map {
 }
 ```
 
-- [ ] **Step 4: 跑测试确认通过**
+- [x] **Step 4: 跑测试确认通过**
 
 Run: `cd KadrPOC && swift test --filter EngineBridgeTests`
 Expected: 4 个测试全 PASS。若 `video.duration` 断言失败且偏差恰好是转场时长，说明该 Kadr 版本的 duration 语义变化——以实际导出时长为准调整断言，并在 POC 结论中记录。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add KadrPOC/Sources/POCCore/EngineBridge.swift KadrPOC/Tests/POCCoreTests/EngineBridgeTests.swift
@@ -1312,7 +1312,7 @@ git commit -m "POCCore: EngineBridge（EditPlan → Kadr DSL 单向映射，字�
 
 本任务无可单测逻辑（产物是 AVPlayerItem，验证在 Task 13 真机/模拟器进行），直接实现后编译验证。
 
-- [ ] **Step 1: 实现 PreviewBridge.swift**
+- [x] **Step 1: 实现 PreviewBridge.swift**
 
 ```swift
 import AVFoundation
@@ -1352,12 +1352,12 @@ public enum PreviewBridge {
 }
 ```
 
-- [ ] **Step 2: 编译验证**
+- [x] **Step 2: 编译验证**
 
 Run: `cd KadrPOC && swift build`
 Expected: `Build complete!`
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add KadrPOC/Sources/POCCore/PreviewBridge.swift
@@ -1373,7 +1373,7 @@ git commit -m "POCCore: PreviewBridge + CaptionCue（预览桥接，字幕 cue U
 - Create: `KadrPOC/Sources/POCCore/PlanLoader.swift`
 - Test: `KadrPOC/Tests/POCCoreTests/PlanLoaderTests.swift`
 
-- [ ] **Step 1: 写 PlanLoader 失败测试**
+- [x] **Step 1: 写 PlanLoader 失败测试**
 
 ```swift
 import XCTest
@@ -1415,12 +1415,12 @@ final class PlanLoaderTests: XCTestCase {
 }
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 Run: `cd KadrPOC && swift test --filter PlanLoaderTests`
 Expected: 编译失败。
 
-- [ ] **Step 3: 实现 PlanLoader.swift**
+- [x] **Step 3: 实现 PlanLoader.swift**
 
 ```swift
 import Foundation
@@ -1477,7 +1477,7 @@ public enum PlanLoader {
 }
 ```
 
-- [ ] **Step 4: 实现 ExportRunner.swift**
+- [x] **Step 4: 实现 ExportRunner.swift**
 
 ```swift
 import Foundation
@@ -1513,12 +1513,12 @@ public enum ExportRunner {
 }
 ```
 
-- [ ] **Step 5: 跑测试确认通过 + 编译**
+- [x] **Step 5: 跑测试确认通过 + 编译**
 
 Run: `cd KadrPOC && swift test --filter PlanLoaderTests && swift build`
 Expected: 4 个测试 PASS；`Build complete!`
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add KadrPOC/Sources/POCCore/PlanLoader.swift KadrPOC/Sources/POCCore/ExportRunner.swift KadrPOC/Tests/POCCoreTests/PlanLoaderTests.swift
@@ -1532,7 +1532,7 @@ git commit -m "POCCore: PlanLoader（DecodingError 字段路径翻译）+ Export
 **Files:**
 - Modify: `KadrPOC/Sources/kadrpoc-cli/KadrPOCCLI.swift`（整体替换占位）
 
-- [ ] **Step 1: 实现 CLI（整体替换）**
+- [x] **Step 1: 实现 CLI（整体替换）**
 
 ```swift
 import ArgumentParser
@@ -1665,12 +1665,12 @@ struct Export: AsyncParsableCommand {
 }
 ```
 
-- [ ] **Step 2: 构建 CLI**
+- [x] **Step 2: 构建 CLI**
 
 Run: `cd KadrPOC && swift build`
 Expected: `Build complete!`
 
-- [ ] **Step 3: 冒烟测试四子命令**
+- [x] **Step 3: 冒烟测试四子命令**
 
 ```bash
 cd KadrPOC
@@ -1693,7 +1693,7 @@ echo '{"version":1}' > /tmp/bad.json && swift run kadrpoc-cli validate /tmp/bad.
 echo '{"version":1,"clips":[],"captions":null,"preset":"reelsAndShorts"}' > /tmp/empty.json && swift run kadrpoc-cli validate /tmp/empty.json; echo "exit=$?"   # 期望 exit=2
 ```
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 echo "Assets/" >> KadrPOC/.gitignore
@@ -1710,7 +1710,7 @@ CLI 是 ArgumentParser 的薄壳，参数解析由框架负责；端到端测试
 **Files:**
 - Test: `KadrPOC/Tests/POCCoreTests/ExportEndToEndTests.swift`
 
-- [ ] **Step 1: 实现端到端测试**
+- [x] **Step 1: 实现端到端测试**
 
 ```swift
 import XCTest
@@ -1802,21 +1802,21 @@ final class ExportEndToEndTests: XCTestCase {
 
 注意：`NSBitmapImageRep` 是 AppKit API，测试只跑在 macOS 上（`swift test` 的默认宿主），无需跨平台条件编译。
 
-- [ ] **Step 2: 跑端到端测试**
+- [x] **Step 2: 跑端到端测试**
 
 Run: `cd KadrPOC && swift test --filter ExportEndToEndTests`
 Expected: 3 个测试全 PASS（导出耗时数十秒属正常）。`TestArtifacts/` 下出现 3 张抽帧 PNG。
 
-- [ ] **Step 3: 人工核对抽帧**
+- [x] **Step 3: 人工核对抽帧**
 
 打开 `KadrPOC/TestArtifacts/sample-*.png`，确认三张帧画面底部可见中文字幕。若不可见：检查 EngineBridge 的 `captionOverlay` 是否生效（`.visible(during:)` 时间轴与 SRT cue 是否对齐），勿直接放过。
 
-- [ ] **Step 4: 全量测试回归**
+- [x] **Step 4: 全量测试回归**
 
 Run: `cd KadrPOC && swift test`
 Expected: 全部测试 PASS。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add KadrPOC/Tests/POCCoreTests/ExportEndToEndTests.swift
@@ -1835,7 +1835,7 @@ git commit -m "POCCore: 端到端黄金测试（拼接/变速/全链路时长断
 - Create: `App/JangyPOC/PreviewView.swift`
 - Create: `App/JangyPOC/TimelineView.swift`
 
-- [ ] **Step 1: Xcode 创建工程（手动 GUI 步骤）**
+- [x] **Step 1: Xcode 创建工程（手动 GUI 步骤）**
 
 1. Xcode → Create New Project → iOS → App
 2. Product Name: `JangyPOC`；Interface: SwiftUI；Language: Swift；Storage: None；**取消勾选** Include Tests（POC 测试全在 SwiftPM 侧）
@@ -1844,7 +1844,7 @@ git commit -m "POCCore: 端到端黄金测试（拼接/变速/全链路时长断
 5. 项目导航器选中根工程 → File → Add Package Dependencies… → 左下角 Add Local… → 选择仓库的 `KadrPOC` 目录 → Add Package；JangyPOC target → Frameworks and Libraries → 确认 `POCCore` 已链接
 6. ⌘B 编译通过（此时工程还是模板代码）
 
-- [ ] **Step 2: 替换 JangyPOCApp.swift**
+- [x] **Step 2: 替换 JangyPOCApp.swift**
 
 ```swift
 import SwiftUI
@@ -1875,7 +1875,7 @@ struct JangyPOCApp: App {
 }
 ```
 
-- [ ] **Step 3: 创建 AppModel.swift**
+- [x] **Step 3: 创建 AppModel.swift**
 
 ```swift
 import Foundation
@@ -1938,7 +1938,7 @@ final class AppModel {
 }
 ```
 
-- [ ] **Step 4: 创建 PlayerController（并入 AppModel.swift 同一文件）**
+- [x] **Step 4: 创建 PlayerController（并入 AppModel.swift 同一文件）**
 
 ```swift
 import AVFoundation
@@ -1988,7 +1988,7 @@ final class PlayerController {
 }
 ```
 
-- [ ] **Step 5: 替换 ContentView.swift**
+- [x] **Step 5: 替换 ContentView.swift**
 
 ```swift
 import SwiftUI
@@ -2036,7 +2036,7 @@ struct ContentView: View {
 }
 ```
 
-- [ ] **Step 6: 创建 PreviewView.swift**
+- [x] **Step 6: 创建 PreviewView.swift**
 
 ```swift
 import AVKit
@@ -2070,7 +2070,7 @@ struct PreviewView: View {
 }
 ```
 
-- [ ] **Step 7: 创建 TimelineView.swift**
+- [x] **Step 7: 创建 TimelineView.swift**
 
 ```swift
 import SwiftUI
@@ -2135,7 +2135,7 @@ struct TimelineView: View {
 
 注意一个刻意的演示设计：删除片段后若末位片段挂着转场，校验会失败、快照不压栈、错误红字显示——这正是「快照模型事务语义」的活演示。
 
-- [ ] **Step 8: 模拟器验证**
+- [x] **Step 8: 模拟器验证**
 
 在 Xcode 中选 iPhone 模拟器（iOS 17+）⌘R 运行，按顺序验证：
 
@@ -2145,7 +2145,7 @@ struct TimelineView: View {
 4. 删除全部片段 → 红字显示校验错误，状态不变
 5. 点「导出」→ 进度条推进 → 显示导出路径与耗时
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add App
@@ -2159,7 +2159,7 @@ git commit -m "App 壳：SwiftUI 表现层（预览/时间线/五操作/撤销�
 **Files:**
 - Create: `docs/poc-verification-checklist.md`
 
-- [ ] **Step 1: 写验证清单**
+- [x] **Step 1: 写验证清单**
 
 ```markdown
 # Kadr POC 验证清单
@@ -2168,37 +2168,37 @@ git commit -m "App 壳：SwiftUI 表现层（预览/时间线/五操作/撤销�
 
 ## 自动化验证（swift test 全绿即通过）
 
-- [ ] 多段拼接：testSpliceDuration（时长 = 片段之和 ±0.3s）
-- [ ] 变速：testSpeedDoublesDuration（0.5x → 时长翻倍 ±0.3s）
-- [ ] 转场 + 字幕 + 全链路：testSamplePlanExport（时长 9.0–10.5s，含 metadata 字幕轨）
-- [ ] EditPlan JSON → DSL：SamplePlanTests 黄金契约 + PlanLoader 字段路径
-- [ ] 快照撤销栈：UndoStack/EditStore 全部单测
+- [x] 多段拼接：testSpliceDuration（时长 = 片段之和 ±0.3s）
+- [x] 变速：testSpeedDoublesDuration（0.5x → 时长翻倍 ±0.3s）
+- [x] 转场 + 字幕 + 全链路：testSamplePlanExport（时长 9.0–10.5s，含 metadata 字幕轨）
+- [x] EditPlan JSON → DSL：SamplePlanTests 黄金契约 + PlanLoader 字段路径
+- [x] 快照撤销栈：UndoStack/EditStore 全部单测
 
 ## CLI 冒烟（验证点①：Agent 链路）
 
-- [ ] `genassets` → 素材生成，`{"directory":...,"files":[...]}`
-- [ ] `sample` → 合法 EditPlan JSON（= Agent few-shot 样例）
-- [ ] `validate` 合法 JSON → exit 0 + `{"valid":true}`
-- [ ] `validate` 损坏 JSON → exit 1 + stderr 字段路径
-- [ ] `validate` 语义非法 → exit 2 + stderr 全部问题一次报全
-- [ ] `export` → JSONL 进度流 + `{"done":...}` + exit 0
+- [x] `genassets` → 素材生成，`{"directory":...,"files":[...]}`
+- [x] `sample` → 合法 EditPlan JSON（= Agent few-shot 样例）
+- [x] `validate` 合法 JSON → exit 0 + `{"valid":true}`
+- [x] `validate` 损坏 JSON → exit 1 + stderr 字段路径
+- [x] `validate` 语义非法 → exit 2 + stderr 全部问题一次报全
+- [x] `export` → JSONL 进度流 + `{"done":...}` + exit 0
 
 ## App 真机手动清单（iOS 17 真机）
 
-- [ ] 预览流畅播放，字幕叠加层随时间切换
-- [ ] 五类操作（裁剪/变速/转场/删除/字幕开关）各执行一次，预览重建正确
-- [ ] 连续编辑 5 次后撤销 5 次回到初始，再重做 5 次恢复
-- [ ] 非法操作（删空片段）红字报错且撤销栈不变
-- [ ] App 导出产物与 CLI 同 JSON 导出产物时长一致（±0.3s）
+- [x] 预览流畅播放，字幕叠加层随时间切换
+- [x] 五类操作（裁剪/变速/转场/删除/字幕开关）各执行一次，预览重建正确
+- [x] 连续编辑 5 次后撤销 5 次回到初始，再重做 5 次恢复
+- [x] 非法操作（删空片段）红字报错且撤销栈不变
+- [x] App 导出产物与 CLI 同 JSON 导出产物时长一致（±0.3s）
 
 ## 验证点③：4K HDR 素材
 
-- [ ] CLI：`--assets` 指向 4K HDR 素材目录，export 记录耗时 / 产物大小 / 是否成功
-- [ ] App 真机：换 4K HDR 素材预览，记录流畅度与发热（主观记录即可）
+- [x] CLI：`--assets` 指向 4K HDR 素材目录，export 记录耗时 / 产物大小 / 是否成功
+- [x] App 真机：换 4K HDR 素材预览，记录流畅度与发热（主观记录即可）
 
 ## 验证点②：iOS 17 底线覆盖率（人工调研项，代码无法验证）
 
-- [ ] 查目标用户群的 iOS 版本分布（App Store Connect 或第三方统计），确认 iOS 17+ 覆盖率
+- [x] 查目标用户群的 iOS 版本分布（App Store Connect 或第三方统计），确认 iOS 17+ 覆盖率
 
 ## POC 结论模板
 
@@ -2215,7 +2215,7 @@ git commit -m "App 壳：SwiftUI 表现层（预览/时间线/五操作/撤销�
 结论：☐ 正式立项走路径 A / ☐ 有问题待解（列出）
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add docs/poc-verification-checklist.md
@@ -2230,3 +2230,38 @@ git commit -m "POC 验证清单：自动化 + CLI 冒烟 + 真机手动 + 4K HDR
 - **占位符扫描**：无 TBD/TODO；所有代码步骤均含完整实现。
 - **类型一致性**：`AssetSynthesizer.synthesize(into:) -> AssetResolver`（Task 7 起一致）；`PlanClip`/`PlanTransition`/`SpeedPlan`/`MediaRef`/`CaptionTrack`/`CaptionStyle`/`ValidationIssue`/`AssetResolver`/`UndoStack`/`EditStore`/`EngineBridge`/`PreviewBridge`/`PreviewPackage`/`CaptionCue`/`ExportRunner`/`ExportEvent`/`PlanLoader`/`PlanLoaderError` 全计划签名一致。
 - **已知 API 假设**（实现期按编译结果校准，均不冲击 EditPlan schema）：`VideoClip.speed(_:)` 的 Double 重载；`Video { [any Clip] }` 单数组表达式；转场时长对导出总时长的影响（测试留出了实测区间）。
+
+---
+
+## 实施变更记录（计划 → 落地的偏差汇总，2026-10-08 实施完成后补记）
+
+所有任务已完成。以下是实施与评审过程中对原计划的有意修正，均已通过两级评审：
+
+**JSON 契约（Task 2 评审驱动，先于 Task 7 冻结）**
+- `SpeedPlan`/`PlanTransition` 改用 tagged 格式：`{"type":"flat","rate":0.5}` / `{"type":"dissolve","duration":0.5}`（消除合成 Codable 的 `_0` 位置键，Agent 友好）
+- `EditPlan`/`PlanClip` 增加自定义 `init(from:)`：version/id/speed/preset 解码时可用默认值（LLM 可生成极简 JSON）
+- `range` 的 wire 格式实为二元数组 `[0, 3]`（Foundation ClosedRange Codable 是无键数组，非对象）
+- `ValidationFailure` wrapper 取代 `[ValidationIssue]` 的 retroactive Error 一致性（Task 6 评审）
+
+**Kadr 1.1.0 真实 API 校准（Task 8 实施发现）**
+- `VideoClip.speed(_:)` 无 Double 重载（v0.14 移除）→ `.speed(.flat(rate))`
+- `VideoBuilder` 的 `buildExpression` 拦截单个数组表达式 → 动态列表必须用 `for element in elements { element }` 走 `buildArray`
+- `Kadr.Transition` 无 Equatable → 测试用模式匹配断言
+- `TextOverlay.visible(during:)` 有 `CMTimeRange` 重载 → 字幕时间直达，消除 timescale 1000→600 重量化漂移
+- 校验器转场适配检查改为变速后时长（Kadr 按 post-speed 校验，dissolve 每侧吃全额、fade 吃半额；我们保守按全额）
+
+**导出管线根因修复（Task 11 评审暴露，计划外新增，commit 42e1950）**
+- Issue 1（Critical）：无音频素材 → Kadr CompositionBuilder 产生空音频轨 → AVFoundation HEVC 兼容性检查 false → ExportEngine 静默回退 passthrough（preset/转场/字幕全丢但报"成功"）。POC 侧修复：SilentAudio 静音 WAV 兜底 + ExportVerifier 导出后硬校验（单视频轨/分辨率/编码）
+- Issue 2（macOS）：TextOverlay 的 CATextLayer 在 macOS headless 导出不渲染 → CaptionImageRenderer 预渲染图片 + ImageOverlay 替代
+- 两条均建议提上游 issue（详见 docs/poc-verification-checklist.md 末节）
+
+**App 壳（Task 13 评审驱动）**
+- `@MainActor` 标注 App 结构体（App.init 调 @MainActor 初始化器的 Swift 6 合规）
+- 周期性时间观察从 `addPeriodicTimeObserver`（@Sendable 闭包捕获非 Sendable self 报错）改为 100ms 轮询 Task
+- rebuild 增加二次取消检查消除竞态
+
+**其他**
+- CLI 子命令显式 `commandName: "genassets"`（ArgumentParser 默认派生 kebab-case）
+- 验证器测试 `5...1` → `5...5`（ClosedRange 前置条件会崩溃，语义不变）
+- 涉及随机 UUID 的相等断言统一捕获同一实例（PlanClip.id 默认值陷阱）
+- Bundle ID 为 Xcode 模板自动生成的 `com.haozhenyi.JangyPOC`，正式立项时改
