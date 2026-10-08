@@ -19,6 +19,9 @@ public enum ExportRunner {
                     for try await progress in exporter.run() {
                         continuation.yield(.progress(progress.fractionCompleted))
                     }
+                    // 防静默 passthrough：Kadr 兼容性检查失败时会"成功"地产出
+                    // 未渲染的码流拷贝（详见 ExportVerifier 注释）——交付前硬校验。
+                    try await ExportVerifier.verify(output: output, preset: plan.preset)
                     continuation.yield(.done(url: output, durationMs: Int(Date().timeIntervalSince(start) * 1000)))
                     continuation.finish()
                 } catch {

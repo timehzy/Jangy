@@ -1,3 +1,4 @@
+import AVFoundation
 import Foundation
 import CoreMedia
 import Kadr
@@ -16,13 +17,29 @@ import KadrCaptions
 public enum EngineBridge {
 
     public static func makeComposition(from plan: EditPlan, resolver: AssetResolver) async throws -> Kadr.Video {
+        // 上游 Kadr bug 规避（trigger-avoidance，详见 ExportVerifier 注释）：
+        // Kadr CompositionBuilder 无条件添加音频合成轨；素材无音频时该轨为空，
+        // AVFoundation 兼容性检查对含空轨的 composition 一律返回 false，
+        // ExportEngine 便静默回退 passthrough。给无音频素材挂一段静音替换音频，
+        // 让音频轨始终有 segment，兼容性检查即可通过、走正常重编码路径。
+        // 静音时长覆盖最长 clip 源区间即可（Kadr 按 min(音频时长, clip时长) 截取）。
+        var silenceURL: URL?
+        let maxClipSeconds = plan.clips.map { $0.range.upperBound - $0.range.lowerBound }.max() ?? 0
+
         var elements: [any Kadr.Clip] = []
         for clip in plan.clips {
-            var videoClip = Kadr.VideoClip(url: resolver.resolve(clip.source))
+            let sourceURL = resolver.resolve(clip.source)
+            var videoClip = Kadr.VideoClip(url: sourceURL)
                 .trimmed(to: clip.range)
             // Kadr 1.x 校准：`speed(_:)` 只接受 Speed 枚举（Double 重载在 v0.14 被移除）。
             if clip.speed.rate != 1.0 {
                 videoClip = videoClip.speed(.flat(clip.speed.rate))
+            }
+            if try await !assetHasAudio(sourceURL) {
+                if silenceURL == nil {
+                    silenceURL = try SilentAudio.url(covering: maxClipSeconds + 0.25)
+                }
+                videoClip = videoClip.withAudio(silenceURL!)
             }
             elements.append(videoClip)
             if let transition = clip.transitionAfter {
@@ -46,10 +63,17 @@ public enum EngineBridge {
             let cues = try await Kadr.Caption.load(srt: resolver.resolve(track.source))
             video = video.captions(cues)                    // 软字幕：AVMetadataItem
             for cue in cues {
-                video = video.overlay(captionOverlay(cue, style: track.style))  // 烧录：TextOverlay
+                video = video.overlay(captionOverlay(cue, style: track.style))  // 烧录：ImageOverlay（见 captionOverlay 注释）
             }
         }
         return video
+    }
+
+    /// 素材是否自带音频轨。文件损坏/无法读取时按"无音频"处理——
+    /// 挂静音规避总不会更糟（真错误会在 Kadr 导出期抛出）。
+    static func assetHasAudio(_ url: URL) async throws -> Bool {
+        let asset = AVURLAsset(url: url)
+        return try await !asset.loadTracks(withMediaType: .audio).isEmpty
     }
 
     static func kadrTransition(_ transition: PlanTransition) -> Kadr.Transition {
@@ -59,20 +83,17 @@ public enum EngineBridge {
         }
     }
 
-    /// 正式版：长 SRT（数百 cue）考虑合并同时点 cue 或分页渲染，避免 CALayer 爆炸。
-    static func captionOverlay(_ cue: Kadr.Caption, style: CaptionStyle) -> Kadr.TextOverlay {
-        // CMTimeRange 直达：SRT 解析为 timescale 1000，直接传递避免
-        // Double 秒往返被重定量化到 timescale 600 产生漂移。
-        return Kadr.TextOverlay(
-            cue.text,
-            style: Kadr.TextStyle(
-                fontSize: style.fontSize,
-                alignment: .center,
-                weight: style.isBold ? .bold : .regular
-            )
-        )
-        .position(.bottom)
-        .anchor(.bottom)
-        .visible(during: cue.timeRange)
+    /// 字幕烧录 overlay：预渲染图片而非 Kadr.TextOverlay。
+    /// 原因（实测隔离，详见 CaptionImageRenderer 注释）：macOS headless 导出中
+    /// AVVideoCompositionCoreAnimationTool 不绘制 CATextLayer 文字，TextOverlay 全部隐形；
+    /// ImageOverlay（CGImage contents）则稳定可见。
+    /// 位置语义与原 TextOverlay 方案一致：底部居中、CMTimeRange 直达的可见窗口。
+    /// 正式版：长 SRT（数百 cue）考虑合并同时点 cue 或分页渲染，避免 layer/图片数量爆炸。
+    static func captionOverlay(_ cue: Kadr.Caption, style: CaptionStyle) -> Kadr.ImageOverlay {
+        let image = CaptionImageRenderer.render(cue.text, fontSize: style.fontSize, isBold: style.isBold)
+        return Kadr.ImageOverlay(image)
+            .position(.normalized(x: 0.5, y: 0.92))  // 底部居中，留 8% 安全边距
+            .anchor(.bottom)
+            .visible(during: cue.timeRange)          // CMTimeRange 直达：timescale 1000 原样保留
     }
 }

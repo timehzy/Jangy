@@ -73,7 +73,8 @@ final class EngineBridgeTests: XCTestCase {
         let plan = SamplePlan.make()
         let video = try await EngineBridge.makeComposition(from: plan, resolver: resolver)
         let cues = try await Kadr.Caption.load(srt: resolver.resolve(plan.captions!.source))
-        let overlay = try XCTUnwrap(video.overlays.first as? Kadr.TextOverlay)
+        // 烧录走 ImageOverlay（macOS headless 下 CATextLayer 不渲染，见 CaptionImageRenderer 注释）
+        let overlay = try XCTUnwrap(video.overlays.first as? Kadr.ImageOverlay)
         let visibility = try XCTUnwrap(overlay.visibilityRange)
         let cueRange = cues[0].timeRange
         XCTAssertEqual(CMTimeGetSeconds(visibility.start), CMTimeGetSeconds(cueRange.start), accuracy: 0.01)
