@@ -44,7 +44,9 @@
   - 单片段 3s → 1080x1920 HEVC，685ms，ExportVerifier 通过（无 passthrough）
   - 双片段 dissolve 0.5s → 5.5s（重叠语义正确），1214ms，单视频轨硬校验通过
   - 色调映射：源帧与产物帧逐像素一致（红段 sat 0.585→0.58，蓝段 0.576→0.571），无发灰/偏色
-  - **注意**：产物保留 BT.2020 + HLG 元数据——管线是 HDR 直通而非转 SDR，正式产品需决策这是特性还是问题
+  - HDR 出行为（2026-10-08 补验）：`reelsAndShorts` = Kadr `Codec.hevc` → `AVAssetExportPresetHEVCHighestQuality`，AVFoundation 对 HEVC 预设保留 BT.2020+HLG 元数据，HDR 直通
+  - HDR→SDR 可行（2026-10-08 补验，两条等价路径）：① Kadr `Codec.h264`（内建 `.tiktok` preset 即 1080x1920 H.264）——H.264 预设自动色调映射到 BT.709；② composition 显式指定 BT.709 色彩属性。两路产物逐像素一致 (156,36,54) sat 0.769，色调正确
+  - POCCore 接入方式：新增 OutputPreset case 映射 Kadr `.custom(_, _, _, .h264)` 或 `.tiktok`，无需改 Kadr
   - 注意：纯色合成素材不考验编码器负载，真实 4K HDR 耗时以真机为准
 - [ ] App 真机：换 4K HDR 素材预览，记录流畅度与发热（主观记录即可）
 
@@ -62,7 +64,7 @@
 | 字幕 | ☑ | 抽帧人工核对：☑ 通过；真机预览叠加层正常 |
 | headless 导出 | ☑ | CLI 冒烟通过；产物 9.5s / 1080x1920 HEVC |
 | EditPlan JSON → DSL 端到端 | ☑ | 黄金 JSON 契约 + CLI validate/export 全链路 |
-| 4K HDR 预览/导出 | ☑ | CLI 已验（2026-10-08）：导出/转场/色调全部通过；真机流畅度发热待验；产物为 HDR 直通非转 SDR |
+| 4K HDR 预览/导出 | ☑ | CLI 已验（2026-10-08）：导出/转场/色调全通过；HDR 直通与 HDR→SDR 双路均验证（SDR 走 Kadr Codec.h264 或 709 composition，等价）；真机流畅度发热待验 |
 
 结论：☐ 正式立项走路径 A / ☐ 有问题待解（列出）
 
