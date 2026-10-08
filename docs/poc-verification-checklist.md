@@ -66,7 +66,14 @@
 | EditPlan JSON → DSL 端到端 | ☑ | 黄金 JSON 契约 + CLI validate/export 全链路 |
 | 4K HDR 预览/导出 | ☑ | CLI 已验（2026-10-08）：导出/转场/色调全通过；HDR 直通与 HDR→SDR 双路均验证（SDR 走 Kadr Codec.h264 或 709 composition，等价）；真机流畅度发热待验 |
 
-结论：☐ 正式立项走路径 A / ☐ 有问题待解（列出）
+结论：☑ 正式立项走路径 A（2026-10-08 落定）——全部关键字 ☑，Kadr 全家桶直达方案成立
+
+立项后遗留跟进项（不阻塞结论，转入 backlog）：
+
+- [ ] App 真机 4K HDR 预览流畅度/发热（清单验证点③最后一格）
+- [ ] iOS 17 底线覆盖率调研（验证点②，人工项）
+- [ ] HDR 直通产品决策：产物保留 BT.2020 + HLG 元数据是特性还是问题（影响导出管线设计）
+- [ ] 向 Kadr 上游提 Issue 1（无音频静默 passthrough）与 Issue 2（macOS CATextLayer 不渲染）
 
 ## 实现期已暴露的 Kadr 上游问题
 

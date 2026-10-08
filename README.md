@@ -49,6 +49,7 @@ CLI 约定：stdout 只走结构化 JSON/JSONL，日志与错误走 stderr；exi
 - [x] 导出写入系统相册（临时文件渲染 → PHPhotoLibrary 注册）
 - [x] 真机手动验证通过（2026-10-08，清单见 [docs/poc-verification-checklist.md](docs/poc-verification-checklist.md)）
 - [x] 4K HDR CLI 侧验证通过（2026-10-08：导出/转场/色调全通过；HDR 直通与 HDR→SDR 双路均验证，见清单）
+- [x] **POC 结论落定：正式立项走路径 A（Kadr 全家桶直达）**（2026-10-08，见 [验证清单](docs/poc-verification-checklist.md)）
 - [ ] iOS 17 覆盖率调研（人工调研项，见清单）
 
 已知取舍：
