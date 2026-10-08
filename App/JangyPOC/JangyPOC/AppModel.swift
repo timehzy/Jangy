@@ -1,6 +1,7 @@
 import AVFoundation
 import Foundation
 import Observation
+import Photos
 import POCCore
 
 /// App 侧状态装配：EditStore（编辑状态层）+ PlayerController（预览）+ 导出进度。
@@ -35,10 +36,12 @@ final class AppModel {
     func undo() { lastIssues = nil; store.undo(); player.rebuild() }
     func redo() { lastIssues = nil; store.redo(); player.rebuild() }
 
+    /// 导出：先渲染到临时文件，完成后写入系统相册，方便真机直接验证成片。
     func export() {
         exportProgress = 0
         exportMessage = nil
-        let out = resolver.directory.appendingPathComponent("poc-export-\(Int(Date().timeIntervalSince1970)).mp4")
+        let out = FileManager.default.temporaryDirectory
+            .appendingPathComponent("poc-export-\(Int(Date().timeIntervalSince1970)).mp4")
         Task {
             do {
                 for try await event in ExportRunner.export(plan: store.plan, resolver: resolver, to: out) {
@@ -46,8 +49,14 @@ final class AppModel {
                     case .progress(let fraction):
                         exportProgress = fraction
                     case .done(let url, let ms):
-                        exportProgress = nil
-                        exportMessage = "已导出 \(url.lastPathComponent)（\(ms)ms）\n路径: \(url.path)"
+                        do {
+                            try await Self.saveToPhotoLibrary(url)
+                            exportProgress = nil
+                            exportMessage = "已导出到相册（\(ms)ms）"
+                        } catch {
+                            exportProgress = nil
+                            exportMessage = "已渲染但保存相册失败: \(error.localizedDescription)\n文件: \(url.path)"
+                        }
                     }
                 }
             } catch {
@@ -55,6 +64,21 @@ final class AppModel {
                 exportMessage = "导出失败: \(error.localizedDescription)"
             }
         }
+    }
+
+    /// 相册写入封装：申请 add-only 授权后把渲染产物注册为视频资源。
+    private static func saveToPhotoLibrary(_ url: URL) async throws {
+        let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
+        guard status == .authorized || status == .limited else {
+            throw NSError(domain: "JangyPOC", code: 1, userInfo: [
+                NSLocalizedDescriptionKey: "没有相册写入权限（请在系统设置中允许访问相册）"
+            ])
+        }
+        try await PHPhotoLibrary.shared().performChanges {
+            let request = PHAssetCreationRequest.forAsset()
+            request.addResource(with: .video, fileURL: url, options: nil)
+        }
+        try? FileManager.default.removeItem(at: url)
     }
 }
 
