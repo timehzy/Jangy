@@ -1,15 +1,25 @@
 import XCTest
 import CoreMedia
 import Kadr
+import KadrCaptions
 @testable import POCCore
 
 final class EngineBridgeTests: XCTestCase {
 
     private var resolver: AssetResolver!
+    private var assetsDir: URL!
 
     override func setUp() async throws {
-        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        resolver = try AssetSynthesizer.synthesize(into: dir)
+        assetsDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        resolver = try AssetSynthesizer.synthesize(into: assetsDir)
+    }
+
+    override func tearDown() async throws {
+        if let assetsDir {
+            try? FileManager.default.removeItem(at: assetsDir)
+        }
+        resolver = nil
+        assetsDir = nil
     }
 
     func testSamplePlanStructure() async throws {
@@ -24,7 +34,8 @@ final class EngineBridgeTests: XCTestCase {
         XCTAssertEqual(video.captions.count, 3)
         XCTAssertEqual(video.overlays.count, 3)
         // duration = 3(clip1@1x) + 0.5(转场) + 6(clip2@0.5x) + 1(clip3@2x) = 10.5
-        // （Kadr Video.duration 为各 Clip.duration 之和，转场时长计入）
+        // Video.duration 是属性求和（转场全额计入）≠ 渲染输出时长（dissolve 重叠扣除，
+        // 此 sample 渲染输出为 9.5s）；预览/导出不得用它当输出长度。
         XCTAssertEqual(CMTimeGetSeconds(video.duration), 10.5, accuracy: 0.01)
     }
 
@@ -56,5 +67,21 @@ final class EngineBridgeTests: XCTestCase {
         let video = try await EngineBridge.makeComposition(from: plan, resolver: resolver)
         XCTAssertEqual(video.clips.count, 1)
         XCTAssertEqual(CMTimeGetSeconds(video.duration), 3.0, accuracy: 0.01)
+    }
+
+    func testCaptionOverlayVisibilityRangeMatchesCue() async throws {
+        let plan = SamplePlan.make()
+        let video = try await EngineBridge.makeComposition(from: plan, resolver: resolver)
+        let cues = try await Kadr.Caption.load(srt: resolver.resolve(plan.captions!.source))
+        let overlay = try XCTUnwrap(video.overlays.first as? Kadr.TextOverlay)
+        let visibility = try XCTUnwrap(overlay.visibilityRange)
+        let cueRange = cues[0].timeRange
+        XCTAssertEqual(CMTimeGetSeconds(visibility.start), CMTimeGetSeconds(cueRange.start), accuracy: 0.01)
+        XCTAssertEqual(CMTimeGetSeconds(CMTimeRangeGetEnd(visibility)),
+                       CMTimeGetSeconds(CMTimeRangeGetEnd(cueRange)), accuracy: 0.01)
+        // CMTimeRange 直达（无双秒往返）：SRT 解析为 timescale 1000，overlay 必须原样保留，
+        // 不得被 ClosedRange<TimeInterval> 重定量化到 600。
+        XCTAssertEqual(visibility.start.timescale, cueRange.start.timescale)
+        XCTAssertEqual(visibility.duration.timescale, cueRange.duration.timescale)
     }
 }

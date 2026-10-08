@@ -56,9 +56,12 @@ public struct EditPlanValidator: Sendable {
                     issues.append(ValidationIssue(path: "clips[\(i)].transitionAfter", message: "转场时长必须为正"))
                     continue
                 }
-                let thisDuration = clip.range.upperBound - clip.range.lowerBound
+                // Kadr CompositionBuilder 按变速后时长（裁剪时长 / speedRate）检查转场适配。
+                // 这里刻意保持保守：用完整转场时长对 min(两侧)，而非 Kadr 的 fade 每侧 duration/2——
+                // 过严安全（误拒少数合法 plan），过松危险（放行 Kadr 导出期才拒绝的 plan）。
+                let thisDuration = (clip.range.upperBound - clip.range.lowerBound) / clip.speed.rate
                 let next = plan.clips[i + 1]
-                let nextDuration = next.range.upperBound - next.range.lowerBound
+                let nextDuration = (next.range.upperBound - next.range.lowerBound) / next.speed.rate
                 if transition.duration > min(thisDuration, nextDuration) {
                     issues.append(ValidationIssue(path: "clips[\(i)].transitionAfter", message: "转场时长不能超过相邻片段时长"))
                 }

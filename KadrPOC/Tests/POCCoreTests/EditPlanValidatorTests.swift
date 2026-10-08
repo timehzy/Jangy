@@ -48,6 +48,17 @@ final class EditPlanValidatorTests: XCTestCase {
         XCTAssertEqual(issues.map(\.path), ["clips[0].transitionAfter"])
     }
 
+    func testTransitionFitUsesPostSpeedDuration() {
+        // clip0 裁剪 2s @2x → 变速后 1s；dissolve 1.5s。
+        // 变速前判断会放行（2 >= 1.5），但 Kadr CompositionBuilder 按变速后时长检查，
+        // 导出期会抛 invalidTransition——校验器必须提前拦截。
+        let issues = validator.validate(EditPlan(clips: [
+            clip(0...2, speed: .flat(2.0), transition: .dissolve(duration: 1.5)),
+            clip(0...3),
+        ]))
+        XCTAssertEqual(issues.map(\.path), ["clips[0].transitionAfter"])
+    }
+
     func testCaptionSourceMustBeSRT() {
         let plan = EditPlan(clips: [clip()],
                             captions: CaptionTrack(source: MediaRef(fileName: "a.vtt"), isEnabled: true,
