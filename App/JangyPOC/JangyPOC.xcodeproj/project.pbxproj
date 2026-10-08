@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		44E03CF23077C1E70009DB62 /* POCCore in Frameworks */ = {isa = PBXBuildFile; productRef = 44E03CF13077C1E70009DB62 /* POCCore */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		44E03CD03077C0D10009DB62 /* JangyPOC.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = JangyPOC.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -23,6 +27,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				44E03CF23077C1E70009DB62 /* POCCore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -65,6 +70,7 @@
 			);
 			name = JangyPOC;
 			packageProductDependencies = (
+				44E03CF13077C1E70009DB62 /* POCCore */,
 			);
 			productName = JangyPOC;
 			productReference = 44E03CD03077C0D10009DB62 /* JangyPOC.app */;
@@ -94,6 +100,9 @@
 			);
 			mainGroup = 44E03CC73077C0D10009DB62;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				44E03CF03077C1E70009DB62 /* XCLocalSwiftPackageReference "../../KadrPOC" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 44E03CD13077C0D10009DB62 /* Products */;
 			projectDirPath = "";
@@ -332,6 +341,20 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		44E03CF03077C1E70009DB62 /* XCLocalSwiftPackageReference "../../KadrPOC" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../../KadrPOC;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		44E03CF13077C1E70009DB62 /* POCCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = POCCore;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 44E03CC83077C0D10009DB62 /* Project object */;
 }
