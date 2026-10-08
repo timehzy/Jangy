@@ -1,0 +1,24 @@
+{
+	"configurations": [
+		{
+			"type": "swift",
+			"request": "launch",
+			"args": [],
+			"cwd": "${workspaceFolder:Jangy}/KadrPOC",
+			"name": "Debug kadrpoc-cli (KadrPOC)",
+			"target": "kadrpoc-cli",
+			"configuration": "debug",
+			"preLaunchTask": "swift: Build Debug kadrpoc-cli (KadrPOC)"
+		},
+		{
+			"type": "swift",
+			"request": "launch",
+			"args": [],
+			"cwd": "${workspaceFolder:Jangy}/KadrPOC",
+			"name": "Release kadrpoc-cli (KadrPOC)",
+			"target": "kadrpoc-cli",
+			"configuration": "release",
+			"preLaunchTask": "swift: Build Release kadrpoc-cli (KadrPOC)"
+		}
+	]
+}
