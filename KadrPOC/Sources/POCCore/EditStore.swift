@@ -1,10 +1,8 @@
 import Foundation
 
-/// Result 的 Failure 必须遵循 Error；校验结果以数组承载，故补条件一致性。
-extension Array: @retroactive Error where Element == ValidationIssue {}
-
 /// 编辑状态层入口：持有当前快照，所有编辑操作 = 产出新快照压栈。
 /// 校验失败 = 不产出新快照 = 栈不变（快照模型天然是事务语义）。
+/// 线程约定：主线程使用；POC 不做并发编辑。
 @Observable
 public final class EditStore {
     public private(set) var plan: EditPlan
@@ -21,11 +19,11 @@ public final class EditStore {
     public var historyCount: Int { undoStack.snapshots.count }
 
     @discardableResult
-    public func apply(_ mutate: (inout EditPlan) -> Void) -> Result<EditPlan, [ValidationIssue]> {
+    public func apply(_ mutate: (inout EditPlan) -> Void) -> Result<EditPlan, ValidationFailure> {
         var next = plan
         mutate(&next)
         let issues = validator.validate(next)
-        guard issues.isEmpty else { return .failure(issues) }
+        guard issues.isEmpty else { return .failure(ValidationFailure(issues: issues)) }
         undoStack.push(next)
         plan = next
         return .success(next)

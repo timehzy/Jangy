@@ -1,7 +1,7 @@
 import Foundation
 
 /// 校验问题：path 指向 JSON 字段路径（如 "clips[1].speed"），Agent/人都可读。
-public struct ValidationIssue: Equatable, Sendable, CustomStringConvertible {
+public struct ValidationIssue: Equatable, Sendable, Codable, CustomStringConvertible {
     public let path: String
     public let message: String
 
@@ -11,6 +11,13 @@ public struct ValidationIssue: Equatable, Sendable, CustomStringConvertible {
     }
 
     public var description: String { "\(path): \(message)" }
+}
+
+/// apply/导出前校验的失败载体：聚合全部问题，CLI 可直接 JSON 序列化给 Agent。
+public struct ValidationFailure: Error, Equatable, Sendable, Codable {
+    public let issues: [ValidationIssue]
+
+    public init(issues: [ValidationIssue]) { self.issues = issues }
 }
 
 /// 结构校验（纯函数，无 IO）与素材存在性校验（有 IO）分离：

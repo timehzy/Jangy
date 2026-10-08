@@ -19,11 +19,12 @@ final class EditStoreTests: XCTestCase {
         let initial = initialPlan()          // 修复 UUID 陷阱：捕获同一实例
         let store = EditStore(initial: initial)
         let result = store.apply { $0.clips[0].speed = .flat(99) }
-        guard case .failure(let issues) = result else { return XCTFail("应失败") }
-        XCTAssertEqual(issues.map(\.path), ["clips[0].speed"])
+        guard case .failure(let failure) = result else { return XCTFail("应失败") }
+        XCTAssertEqual(failure.issues.map(\.path), ["clips[0].speed"])
         // 事务语义：失败 = 什么都没发生
         XCTAssertEqual(store.plan, initial)
         XCTAssertFalse(store.canUndo)
+        XCTAssertEqual(store.historyCount, 1)  // 栈未被触碰的直接证据
     }
 
     func testUndoRedoRestoresPlan() {
