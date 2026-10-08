@@ -73,7 +73,7 @@ final class ExportEndToEndTests: XCTestCase {
         // 8. 抽帧人工核对：三段字幕窗口各取一帧存到 KadrPOC/TestArtifacts/（gitignored），
         //    供人工确认字幕烧录的位置/字号/内容。复用本次导出产物，不再重复导出。
         //    t=1.0 → cue1（clip1 红底）、t=5.0 → cue2（clip2 绿底 0.5x 段）、
-        //    t=8.8 → cue3（clip3 蓝底 2x 段；避开 8.5s 的 clip2/clip3 接缝，解码器可能取到任一侧）
+        //    t=8.8 → cue3（clip3 蓝底 2x 段；抽帧已设零容差，精确取帧不会落到 8.5s 接缝另一侧）
         let artifactsDir = Self.testArtifactsDir()
         try FileManager.default.createDirectory(at: artifactsDir, withIntermediateDirectories: true)
         for (seconds, name) in [(1.0, "sample_t1.0_cue1.png"), (5.0, "sample_t5.0_cue2.png"), (8.8, "sample_t8.8_cue3.png")] {
@@ -139,6 +139,9 @@ final class ExportEndToEndTests: XCTestCase {
     private func frameRGBA(_ asset: AVAsset, at seconds: Double) throws -> ([UInt8], Int, Int) {
         let gen = AVAssetImageGenerator(asset: asset)
         gen.appliesPreferredTrackTransform = true
+        // 零容差：默认容差会取最近关键帧（近似帧），导致核对帧取错片段
+        gen.requestedTimeToleranceBefore = .zero
+        gen.requestedTimeToleranceAfter = .zero
         let cg = try gen.copyCGImage(at: CMTime(seconds: seconds, preferredTimescale: 600), actualTime: nil)
         let w = cg.width, h = cg.height
         var pixels = [UInt8](repeating: 0, count: w * h * 4)
@@ -154,6 +157,9 @@ final class ExportEndToEndTests: XCTestCase {
         #if canImport(AppKit)
         let gen = AVAssetImageGenerator(asset: asset)
         gen.appliesPreferredTrackTransform = true
+        // 零容差：默认容差会取最近关键帧（近似帧），导致核对帧取错片段
+        gen.requestedTimeToleranceBefore = .zero
+        gen.requestedTimeToleranceAfter = .zero
         let cg = try gen.copyCGImage(at: CMTime(seconds: seconds, preferredTimescale: 600), actualTime: nil)
         let rep = NSBitmapImageRep(cgImage: cg)
         guard let png = rep.representation(using: .png, properties: [:]) else {
