@@ -62,4 +62,5 @@ CLI 约定：stdout 只走结构化 JSON/JSONL，日志与错误走 stderr；exi
 - [iOS 开源视频剪辑框架选型调研报告](docs/iOS开源视频剪辑框架选型调研报告.md)
 - [图片编辑框架设计对比与借鉴分析](docs/图片编辑框架设计对比与借鉴分析.md)
 - [POC 验证清单](docs/poc-verification-checklist.md)
+- [立项路线图（路径 A 落地计划）](docs/roadmap-path-a.md)
 - [Kadr POC 设计 spec / 实现计划](docs/superpowers/specs/2026-10-08-kadr-poc-skeleton-design.md) · [计划](docs/superpowers/plans/2026-10-08-kadr-poc-skeleton.md)
