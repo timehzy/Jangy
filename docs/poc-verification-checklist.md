@@ -4,31 +4,37 @@
 
 ## 自动化验证（swift test 全绿即通过）
 
-- [ ] 多段拼接：testConcatNoTransitionExportDuration（无转场拼接时长 = 两段之和 5.0s ±0.3）
-- [ ] 变速：testSpeedChangeExportDuration（0.5x 变速后 3s 素材渲染为 6.0s ±0.3）
-- [ ] 转场 + 字幕 + 全链路：testSamplePlanExportProducesFullyRenderedOutput（时长 9.5s ±0.2，1080x1920，字幕烧录像素级断言 + 抽帧存 TestArtifacts 供人工核对）
-- [ ] EditPlan JSON → DSL：SamplePlanTests 黄金契约（testGoldenJSONDecodesToSamplePlan）+ PlanLoader 字段路径（testTypeMismatchReportsFieldPath）
-- [ ] 快照撤销栈：UndoStackTests / EditStoreTests 全部单测
+> 2026-10-08 复核：48 tests, 0 failures。
+
+- [x] 多段拼接：testConcatNoTransitionExportDuration（无转场拼接时长 = 两段之和 5.0s ±0.3）
+- [x] 变速：testSpeedChangeExportDuration（0.5x 变速后 3s 素材渲染为 6.0s ±0.3）
+- [x] 转场 + 字幕 + 全链路：testSamplePlanExportProducesFullyRenderedOutput（时长 9.5s ±0.2，1080x1920，字幕烧录像素级断言 + 抽帧存 TestArtifacts 供人工核对）
+- [x] EditPlan JSON → DSL：SamplePlanTests 黄金契约（testGoldenJSONDecodesToSamplePlan）+ PlanLoader 字段路径（testTypeMismatchReportsFieldPath）
+- [x] 快照撤销栈：UndoStackTests / EditStoreTests 全部单测
 
 ## CLI 冒烟（验证点①：Agent 链路）
 
+> 2026-10-08 复核：四子命令实际跑通，产物时长 9.5s。
+
 工作目录：`cd KadrPOC`，素材目录参数 `--assets ./Assets`。
 
-- [ ] `genassets` → 素材生成，输出 `{"directory":...,"files":[...]}`
-- [ ] `sample` → 合法 EditPlan JSON（= Agent few-shot 样例）
-- [ ] `validate` 合法 JSON → exit 0 + `{"valid":true}`
-- [ ] `validate` 损坏 JSON → exit 1 + stderr 字段路径
-- [ ] `validate` 语义非法 → exit 2 + stderr 全部问题一次报全
-- [ ] `export -o <输出路径>` → JSONL 进度流 + `{"done":...}` + exit 0
-- [ ] export 产物应为 1080x1920 HEVC 单视频轨（ExportVerifier 硬校验，passthrough 会 exit 3）
+- [x] `genassets` → 素材生成，输出 `{"directory":...,"files":[...]}`
+- [x] `sample` → 合法 EditPlan JSON（= Agent few-shot 样例）
+- [x] `validate` 合法 JSON → exit 0 + `{"valid":true}`
+- [x] `validate` 损坏 JSON → exit 1 + stderr 字段路径
+- [x] `validate` 语义非法 → exit 2 + stderr 全部问题一次报全
+- [x] `export -o <输出路径>` → JSONL 进度流 + `{"done":...}` + exit 0
+- [x] export 产物应为 1080x1920 HEVC 单视频轨（ExportVerifier 硬校验，passthrough 会 exit 3）
 
 ## App 真机手动清单（iOS 17 真机）
 
-- [ ] 预览流畅播放，字幕叠加层随时间切换
-- [ ] 五类操作（裁剪/变速/转场/删除/字幕开关）各执行一次，预览重建正确
-- [ ] 连续编辑 5 次后撤销 5 次回到初始，再重做 5 次恢复
-- [ ] 非法操作（删空片段）红字报错且撤销栈不变
-- [ ] App 导出产物与 CLI 同 JSON 导出产物时长一致（±0.3s）
+> 2026-10-08 真机验证通过（含导出写入系统相册）。
+
+- [x] 预览流畅播放，字幕叠加层随时间切换
+- [x] 五类操作（裁剪/变速/转场/删除/字幕开关）各执行一次，预览重建正确
+- [x] 连续编辑 5 次后撤销 5 次回到初始，再重做 5 次恢复
+- [x] 非法操作（删空片段）红字报错且撤销栈不变
+- [x] App 导出产物与 CLI 同 JSON 导出产物时长一致（±0.3s）
 
 ## 验证点③：4K HDR 素材
 
@@ -43,13 +49,13 @@
 
 | 关键字 | 结果 | 备注 |
 |---|---|---|
-| 多段拼接 | ☐ | |
-| 转场 | ☐ | 转场重叠语义实测时长：9.5s（dissolve 与相邻片段重叠，Kadr Video.duration 求和值 10.5s ≠ 渲染时长） |
-| 变速 | ☐ | |
-| 字幕 | ☐ | 抽帧人工核对：☐ 通过 |
-| headless 导出 | ☐ | |
-| EditPlan JSON → DSL 端到端 | ☐ | |
-| 4K HDR 预览/导出 | ☐ | |
+| 多段拼接 | ☑ | 2026-10-08 自动化 + 真机双验证 |
+| 转场 | ☑ | 转场重叠语义实测时长：9.5s（dissolve 与相邻片段重叠，Kadr Video.duration 求和值 10.5s ≠ 渲染时长） |
+| 变速 | ☑ | 2026-10-08 自动化 + 真机双验证 |
+| 字幕 | ☑ | 抽帧人工核对：☑ 通过；真机预览叠加层正常 |
+| headless 导出 | ☑ | CLI 冒烟通过；产物 9.5s / 1080x1920 HEVC |
+| EditPlan JSON → DSL 端到端 | ☑ | 黄金 JSON 契约 + CLI validate/export 全链路 |
+| 4K HDR 预览/导出 | ☐ | 待验 |
 
 结论：☐ 正式立项走路径 A / ☐ 有问题待解（列出）
 

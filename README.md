@@ -47,7 +47,8 @@ CLI 约定：stdout 只走结构化 JSON/JSONL，日志与错误走 stderr；exi
 
 - [x] Kadr POC 工程骨架（14 任务 + 评审修复，48 测试全绿）：编辑状态层、快照撤销栈、引擎适配层、CLI 四子命令、App 壳
 - [x] 导出写入系统相册（临时文件渲染 → PHPhotoLibrary 注册）
-- [ ] 真机手动验证（清单见 [docs/poc-verification-checklist.md](docs/poc-verification-checklist.md)）
+- [x] 真机手动验证通过（2026-10-08，清单见 [docs/poc-verification-checklist.md](docs/poc-verification-checklist.md)）
+- [ ] 4K HDR 素材验证 · iOS 17 覆盖率调研（待办，见清单）
 
 已知取舍：
 
