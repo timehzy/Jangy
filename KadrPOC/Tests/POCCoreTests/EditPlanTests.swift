@@ -43,4 +43,61 @@ final class EditPlanTests: XCTestCase {
         XCTAssertEqual(PlanTransition.dissolve(duration: 0.5).duration, 0.5)
         XCTAssertEqual(PlanTransition.fade(duration: 0.3).duration, 0.3)
     }
+
+    /// Agent 手写的极简 JSON：省略 version/id/speed/transitionAfter/captions/preset，
+    /// 解码时全部落回默认值。id 缺省时随机生成，故只断言可断言的字段。
+    func testDecodesMinimalJSON() throws {
+        let json = """
+        {
+          "clips": [
+            {
+              "source": { "fileName": "clip1.mp4" },
+              "range": [0, 3]
+            }
+          ]
+        }
+        """
+        let plan = try JSONDecoder().decode(EditPlan.self, from: Data(json.utf8))
+        XCTAssertEqual(plan.version, 1)
+        XCTAssertEqual(plan.preset, .reelsAndShorts)
+        XCTAssertNil(plan.captions)
+        XCTAssertEqual(plan.clips.count, 1)
+        XCTAssertEqual(plan.clips[0].source, MediaRef(fileName: "clip1.mp4"))
+        XCTAssertEqual(plan.clips[0].range, 0...3)
+        XCTAssertEqual(plan.clips[0].speed, .flat(1.0))
+        XCTAssertNil(plan.clips[0].transitionAfter)
+    }
+
+    func testSpeedPlanWireFormat() throws {
+        struct Wrapper: Codable { var speed: SpeedPlan }
+        let data = try JSONEncoder().encode(Wrapper(speed: .flat(0.5)))
+        let json = String(data: data, encoding: .utf8)!
+        XCTAssertTrue(json.contains("\"type\":\"flat\""), "got: \(json)")
+        XCTAssertTrue(json.contains("\"rate\":0.5"), "got: \(json)")
+
+        let decoded = try JSONDecoder().decode(SpeedPlan.self,
+                                               from: Data("{\"type\":\"flat\",\"rate\":0.5}".utf8))
+        XCTAssertEqual(decoded, .flat(0.5))
+    }
+
+    func testPlanTransitionWireFormat() throws {
+        struct Wrapper: Codable { var transition: PlanTransition }
+        let data = try JSONEncoder().encode(Wrapper(transition: .dissolve(duration: 0.5)))
+        let json = String(data: data, encoding: .utf8)!
+        XCTAssertTrue(json.contains("\"type\":\"dissolve\""), "got: \(json)")
+        XCTAssertTrue(json.contains("\"duration\":0.5"), "got: \(json)")
+
+        let decoded = try JSONDecoder().decode(PlanTransition.self,
+                                               from: Data("{\"type\":\"dissolve\",\"duration\":0.5}".utf8))
+        XCTAssertEqual(decoded, .dissolve(duration: 0.5))
+    }
+
+    func testUnknownEnumTypeThrows() {
+        XCTAssertThrowsError(
+            try JSONDecoder().decode(SpeedPlan.self,
+                                     from: Data("{\"type\":\"warp\",\"rate\":1}".utf8))
+        ) { error in
+            XCTAssertTrue(String(describing: error).contains("warp"))
+        }
+    }
 }
