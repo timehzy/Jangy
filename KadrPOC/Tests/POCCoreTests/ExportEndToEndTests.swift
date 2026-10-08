@@ -1,6 +1,9 @@
 import XCTest
 import AVFoundation
 import CoreGraphics
+#if canImport(AppKit)
+import AppKit
+#endif
 @testable import POCCore
 
 /// 端到端导出回归：防 Kadr 静默 passthrough（空音频轨 → 兼容性检查 false →
@@ -66,6 +69,50 @@ final class ExportEndToEndTests: XCTestCase {
         let center = try centerPixel(asset, at: 2.75)
         XCTAssertGreaterThan(center.r, 80, "dissolve 中点应保留红色分量")
         XCTAssertGreaterThan(center.g, 80, "dissolve 中点应混入绿色分量")
+
+        // 8. 抽帧人工核对：三段字幕窗口各取一帧存到 KadrPOC/TestArtifacts/（gitignored），
+        //    供人工确认字幕烧录的位置/字号/内容。复用本次导出产物，不再重复导出。
+        //    t=1.0 → cue1（clip1 红底）、t=5.0 → cue2（clip2 绿底 0.5x 段）、t=8.5 → cue3（clip3 蓝底 2x 段）
+        let artifactsDir = Self.testArtifactsDir()
+        try FileManager.default.createDirectory(at: artifactsDir, withIntermediateDirectories: true)
+        for (seconds, name) in [(1.0, "sample_t1.0_cue1.png"), (5.0, "sample_t5.0_cue2.png"), (8.5, "sample_t8.5_cue3.png")] {
+            try saveFramePNG(asset, at: seconds, to: artifactsDir.appendingPathComponent(name))
+        }
+    }
+
+    /// 变速专项：clip2 0...3 @0.5x 单段 → 导出时长 ≈ 6.0s。
+    /// 若变速未生效（按原速渲染）会量出 ~3s，直接红灯。
+    func testSpeedChangeExportDuration() async throws {
+        let plan = EditPlan(clips: [
+            PlanClip(source: MediaRef(fileName: "clip2.mp4"),
+                     range: 0...3, speed: .flat(0.5))
+        ])
+        let output = try await exportToFile(plan, name: "speed.mp4")
+        let duration = try await CMTimeGetSeconds(AVURLAsset(url: output).load(.duration))
+        XCTAssertEqual(duration, 6.0, accuracy: 0.3, "0.5x 变速后 3s 素材应渲染为 6s")
+    }
+
+    /// 拼接专项：clip1 0...3 @1x + clip3 0...2 @1x，无转场 → 导出时长 ≈ 5.0s。
+    /// 无转场重叠扣除，时长即两段之和；错误拼接/丢段都会偏。
+    func testConcatNoTransitionExportDuration() async throws {
+        let plan = EditPlan(clips: [
+            PlanClip(source: MediaRef(fileName: "clip1.mp4"), range: 0...3, speed: .flat(1.0)),
+            PlanClip(source: MediaRef(fileName: "clip3.mp4"), range: 0...2, speed: .flat(1.0))
+        ])
+        let output = try await exportToFile(plan, name: "concat.mp4")
+        let duration = try await CMTimeGetSeconds(AVURLAsset(url: output).load(.duration))
+        XCTAssertEqual(duration, 5.0, accuracy: 0.3, "无转场拼接时长应为两段之和 5s")
+    }
+
+    /// 跑一遍导出并断言以 done 结束，返回输出文件 URL。
+    private func exportToFile(_ plan: EditPlan, name: String) async throws -> URL {
+        let output = assetsDir.appendingPathComponent(name)
+        var sawDone = false
+        for try await event in ExportRunner.export(plan: plan, resolver: resolver, to: output) {
+            if case .done = event { sawDone = true }
+        }
+        XCTAssertTrue(sawDone, "导出流应以 done 结束")
+        return output
     }
 
     /// 抽取指定时刻帧，统计底部区域内近白色像素数。
@@ -99,5 +146,31 @@ final class ExportEndToEndTests: XCTestCase {
                             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
         ctx.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
         return (pixels, w, h)
+    }
+
+    /// 抽帧并编码 PNG 落盘（人工核对产物）。测试宿主为 macOS，用 NSBitmapImageRep。
+    private func saveFramePNG(_ asset: AVAsset, at seconds: Double, to url: URL) throws {
+        #if canImport(AppKit)
+        let gen = AVAssetImageGenerator(asset: asset)
+        gen.appliesPreferredTrackTransform = true
+        let cg = try gen.copyCGImage(at: CMTime(seconds: seconds, preferredTimescale: 600), actualTime: nil)
+        let rep = NSBitmapImageRep(cgImage: cg)
+        guard let png = rep.representation(using: .png, properties: [:]) else {
+            XCTFail("PNG 编码失败: \(url.lastPathComponent)")
+            return
+        }
+        try png.write(to: url)
+        #else
+        throw XCTSkip("抽帧落盘仅在 macOS 测试宿主支持")
+        #endif
+    }
+
+    /// KadrPOC/TestArtifacts/（已 gitignore）。由本文件路径定位包根，与测试工作目录解耦。
+    private static func testArtifactsDir() -> URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // POCCoreTests/
+            .deletingLastPathComponent()   // Tests/
+            .deletingLastPathComponent()   // KadrPOC/
+            .appendingPathComponent("TestArtifacts")
     }
 }
