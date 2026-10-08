@@ -1,10 +1,10 @@
 {
-  "originHash" : "eab8841c9a98f0f0c2d334b07637dc99bca7f7bc61cff013062d362ab45bcfe4",
+  "originHash" : "ca72294e2137fc43a691deb461b9e43b64f9763b4daa59500a082db7bc0ccda1",
   "pins" : [
     {
       "identity" : "kadr",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/SteliyanH/kadr.git",
+      "location" : "https://github.com/timehzy/kadr.git",
       "state" : {
         "revision" : "eb93a6fa6a4936b247afa5527753f3987d2f66a1",
         "version" : "1.1.0"
@@ -13,7 +13,7 @@
     {
       "identity" : "kadr-captions",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/SteliyanH/kadr-captions.git",
+      "location" : "https://github.com/timehzy/kadr-captions.git",
       "state" : {
         "revision" : "340d35e153a38dd96e75b8bc5ce3ba3f426aa5dc",
         "version" : "0.12.0"
