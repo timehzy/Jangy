@@ -64,7 +64,10 @@ public enum AssetSynthesizer {
 
         let totalFrames = Int(seconds * Double(fps))
         for frame in 0..<totalFrames {
-            while !input.isReadyForMoreMediaData { Thread.sleep(forTimeInterval: 0.005) }
+            while !input.isReadyForMoreMediaData {
+                if writer.status == .failed { throw writer.error! }  // 写入中途失败时退出，避免空转
+                Thread.sleep(forTimeInterval: 0.005)
+            }
             let buffer = try makePixelBuffer(pool: adaptor.pixelBufferPool!, width: width, height: height, color: color)
             let time = CMTime(value: CMTimeValue(frame), timescale: fps)
             guard adaptor.append(buffer, withPresentationTime: time) else { throw writer.error! }

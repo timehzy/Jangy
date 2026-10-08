@@ -5,7 +5,8 @@ import Kadr
 import KadrCaptions
 
 /// EditPlan → Kadr DSL 的单向映射。预览与导出共用这一个出口。
-/// 本文件是 POCCore 中唯一 import Kadr / KadrCaptions 的地方（硬边界规则 1）。
+/// 引擎适配层文件族（EngineBridge/PreviewBridge/ExportRunner）是 POCCore 中唯一允许
+/// import Kadr / KadrCaptions 的地方（硬边界规则 1）。
 ///
 /// 注意：`Kadr.Video.duration` 是各 Clip.duration 的属性求和（转场全额计入），
 /// ≠ 渲染输出时长（dissolve 与相邻片段重叠，输出更短）；预览/导出不得用它当输出长度。
@@ -35,7 +36,7 @@ public enum EngineBridge {
             if clip.speed.rate != 1.0 {
                 videoClip = videoClip.speed(.flat(clip.speed.rate))
             }
-            if try await !assetHasAudio(sourceURL) {
+            if await !assetHasAudio(sourceURL) {
                 if silenceURL == nil {
                     silenceURL = try SilentAudio.url(covering: maxClipSeconds + 0.25)
                 }
@@ -69,11 +70,11 @@ public enum EngineBridge {
         return video
     }
 
-    /// 素材是否自带音频轨。文件损坏/无法读取时按"无音频"处理——
-    /// 挂静音规避总不会更糟（真错误会在 Kadr 导出期抛出）。
-    static func assetHasAudio(_ url: URL) async throws -> Bool {
+    /// 素材是否自带音频轨。探测失败（文件损坏/无法读取）按"有音频"处理：
+    /// 不挂静音，让真错误在 Kadr 导出期响亮抛出，而不是给可能自带音频的素材静默盖上静音轨。
+    static func assetHasAudio(_ url: URL) async -> Bool {
         let asset = AVURLAsset(url: url)
-        return try await !asset.loadTracks(withMediaType: .audio).isEmpty
+        return (try? await asset.loadTracks(withMediaType: .audio).isEmpty == false) ?? true
     }
 
     static func kadrTransition(_ transition: PlanTransition) -> Kadr.Transition {

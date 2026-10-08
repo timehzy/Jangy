@@ -23,7 +23,8 @@ enum SilentAudio {
         let sampleRate: UInt32 = 44100
         let channels: UInt16 = 1
         let bitsPerSample: UInt16 = 16
-        let frames = UInt32(milliseconds) * sampleRate / 1000
+        // 先除后转：UInt32(ms) * 44100 在 > ~97s 时溢出
+        let frames = UInt32(UInt64(milliseconds) * UInt64(sampleRate) / 1000)
         let dataSize = frames * UInt32(channels) * UInt32(bitsPerSample / 8)
         let byteRate = sampleRate * UInt32(channels) * UInt32(bitsPerSample / 8)
         let blockAlign = channels * (bitsPerSample / 8)

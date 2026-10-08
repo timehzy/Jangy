@@ -59,8 +59,8 @@ final class ExportEndToEndTests: XCTestCase {
         let whiteAt1 = try whitePixelCount(asset, at: 1.0, inBottomFraction: 0.25)
         XCTAssertGreaterThan(whiteAt1, 100, "t=1.0 应有烧录字幕的白色像素")
 
-        // 6. 像素级：t=2.8 在 clip1 内、字幕窗口外（cue1 结束于 2.5s）
-        //    → 纯色帧，白色像素 ≈ 0（反证第 5 步不是底噪）
+        // 6. 像素级：t=2.8 处于 dissolve 窗口（2.5–3.0s）内、字幕窗口外（cue1 结束于 2.5s）
+        //    → 红↔绿混合帧，白色像素 ≈ 0（反证第 5 步不是底噪）
         let whiteAt28 = try whitePixelCount(asset, at: 2.8, inBottomFraction: 0.25)
         XCTAssertLessThan(whiteAt28, 100, "t=2.8 无字幕，应为纯色帧")
 
@@ -72,10 +72,11 @@ final class ExportEndToEndTests: XCTestCase {
 
         // 8. 抽帧人工核对：三段字幕窗口各取一帧存到 KadrPOC/TestArtifacts/（gitignored），
         //    供人工确认字幕烧录的位置/字号/内容。复用本次导出产物，不再重复导出。
-        //    t=1.0 → cue1（clip1 红底）、t=5.0 → cue2（clip2 绿底 0.5x 段）、t=8.5 → cue3（clip3 蓝底 2x 段）
+        //    t=1.0 → cue1（clip1 红底）、t=5.0 → cue2（clip2 绿底 0.5x 段）、
+        //    t=8.8 → cue3（clip3 蓝底 2x 段；避开 8.5s 的 clip2/clip3 接缝，解码器可能取到任一侧）
         let artifactsDir = Self.testArtifactsDir()
         try FileManager.default.createDirectory(at: artifactsDir, withIntermediateDirectories: true)
-        for (seconds, name) in [(1.0, "sample_t1.0_cue1.png"), (5.0, "sample_t5.0_cue2.png"), (8.5, "sample_t8.5_cue3.png")] {
+        for (seconds, name) in [(1.0, "sample_t1.0_cue1.png"), (5.0, "sample_t5.0_cue2.png"), (8.8, "sample_t8.8_cue3.png")] {
             try saveFramePNG(asset, at: seconds, to: artifactsDir.appendingPathComponent(name))
         }
     }

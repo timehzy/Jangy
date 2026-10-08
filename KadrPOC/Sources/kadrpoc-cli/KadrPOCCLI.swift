@@ -105,7 +105,9 @@ struct Export: AsyncParsableCommand {
         let resolver = AssetResolver(directory: URL(fileURLWithPath: assets))
         let issues = EditPlanValidator().validate(plan) + EditPlanValidator().validateAssets(plan, resolver: resolver)
         guard issues.isEmpty else {
-            for issue in issues { CLIError.stderr("\(issue)") }
+            let failure = ValidationFailure(issues: issues)
+            let data = try JSONEncoder().encode(failure)
+            CLIError.stderr(String(decoding: data, as: UTF8.self))
             throw ExitCode(2)
         }
 
