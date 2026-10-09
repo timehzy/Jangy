@@ -45,8 +45,11 @@ public enum AssetSynthesizer {
         return AssetResolver(directory: directory)
     }
 
-    private static func writeSolidColorVideo(to url: URL, color: CGColor, seconds: Double) throws {
-        let width = 1280, height = 720, fps: Int32 = 30
+    /// 合成单个纯色视频。internal 供测试用：回归测试需要非默认尺寸素材
+    /// （如 1080x1920 == preset renderSize，触发转场预览的 identity-transform 路径）。
+    static func writeSolidColorVideo(to url: URL, color: CGColor, seconds: Double,
+                                     width: Int = 1280, height: Int = 720) throws {
+        let fps: Int32 = 30
         let writer = try AVAssetWriter(outputURL: url, fileType: .mp4)
         let input = AVAssetWriterInput(mediaType: .video, outputSettings: [
             AVVideoCodecKey: AVVideoCodecType.h264,

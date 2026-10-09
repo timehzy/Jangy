@@ -11,6 +11,10 @@ public enum PlanLoaderError: Error, Equatable, CustomStringConvertible {
     }
 }
 
+extension PlanLoaderError: LocalizedError {
+    public var errorDescription: String? { description }
+}
+
 public enum PlanLoader {
 
     public static func load(from url: URL) throws -> EditPlan {
