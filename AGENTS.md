@@ -62,6 +62,6 @@ xcodebuild -project App/JangyPOC/JangyPOC.xcodeproj -scheme JangyPOC \
 | [docs/iOS开源视频剪辑框架选型调研报告.md](docs/iOS开源视频剪辑框架选型调研报告.md) | 框架选型依据（为什么用 Kadr） |
 | [docs/图片编辑框架设计对比与借鉴分析.md](docs/图片编辑框架设计对比与借鉴分析.md) | 图片编辑框架借鉴分析 |
 | [docs/poc-verification-checklist.md](docs/poc-verification-checklist.md) | 真机手动验证清单 + POC 结论模板 |
-| [docs/roadmap-path-a.md](docs/roadmap-path-a.md) | 立项路线图：路径 A 落地顺序、backlog、POC 已知取舍 |
+| [docs/roadmap-path-a.md](docs/roadmap-path-a.md) | 立项路线图：路径 A 落地顺序、backlog 定级（P0–P3 + 执行主体 + 验收标准） |
 | [docs/superpowers/specs/2026-10-08-kadr-poc-skeleton-design.md](docs/superpowers/specs/2026-10-08-kadr-poc-skeleton-design.md) | POC 设计 spec |
 | [docs/superpowers/plans/2026-10-08-kadr-poc-skeleton.md](docs/superpowers/plans/2026-10-08-kadr-poc-skeleton.md) | 实现计划（含 API 核实记录与对 spec 的调整） |
