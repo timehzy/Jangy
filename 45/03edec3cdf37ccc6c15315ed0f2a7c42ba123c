@@ -1,0 +1,25 @@
+docs/roadmap-path-a.md
+  s_50011662051c2b::t_84b03e6cbd1cb6 81
+  s_50011662051c2b::t_64aecd6b8243d5 18
+  s_50011662051c2b::t_762f67b7d3aedd 21-30,37-67
+  s_50011662051c2b::t_2ad2aa4678cd7b 31-35
+  s_50011662051c2b::t_0643b16c26b4d7 36
+AGENTS.md
+  s_50011662051c2b::t_346b17d735a748 65
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "4503edec3cdf37ccc6c15315ed0f2a7c42ba123c",
+  "prompts": {},
+  "sessions": {
+    "s_50011662051c2b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f2ff0b66-eeff-49cd-913e-d0c768e44bf9",
+        "model": "k3"
+      },
+      "human_author": "Michael <yiliforever@qq.com>"
+    }
+  }
+}
