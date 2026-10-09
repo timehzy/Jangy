@@ -1,32 +1,96 @@
 {
-  "version": 1,
-  "preset": "reelsAndShorts",
-  "clips": [
+  "assets" : [
     {
-      "id": "11111111-1111-1111-1111-111111111111",
-      "source": { "fileName": "clip1.mp4" },
-      "range": [0, 3],
-      "speed": { "type": "flat", "rate": 1.0 },
-      "transitionAfter": { "type": "dissolve", "duration": 0.5 }
+      "displayName" : "clip1.mp4",
+      "duration" : 4,
+      "fileName" : "clip1.mp4",
+      "hasAudio" : false,
+      "id" : "AAAAAAAA-0000-0000-0000-000000000001",
+      "kind" : "video",
+      "origin" : "synthesized",
+      "pixelHeight" : 720,
+      "pixelWidth" : 1280
     },
     {
-      "id": "22222222-2222-2222-2222-222222222222",
-      "source": { "fileName": "clip2.mp4" },
-      "range": [0, 3],
-      "speed": { "type": "flat", "rate": 0.5 },
-      "transitionAfter": null
+      "displayName" : "clip2.mp4",
+      "duration" : 4,
+      "fileName" : "clip2.mp4",
+      "hasAudio" : false,
+      "id" : "AAAAAAAA-0000-0000-0000-000000000002",
+      "kind" : "video",
+      "origin" : "synthesized",
+      "pixelHeight" : 720,
+      "pixelWidth" : 1280
     },
     {
-      "id": "33333333-3333-3333-3333-333333333333",
-      "source": { "fileName": "clip3.mp4" },
-      "range": [0, 2],
-      "speed": { "type": "flat", "rate": 2.0 },
-      "transitionAfter": null
+      "displayName" : "clip3.mp4",
+      "duration" : 4,
+      "fileName" : "clip3.mp4",
+      "hasAudio" : false,
+      "id" : "AAAAAAAA-0000-0000-0000-000000000003",
+      "kind" : "video",
+      "origin" : "synthesized",
+      "pixelHeight" : 720,
+      "pixelWidth" : 1280
+    },
+    {
+      "displayName" : "sample.srt",
+      "fileName" : "sample.srt",
+      "id" : "AAAAAAAA-0000-0000-0000-0000000000F1",
+      "kind" : "subtitle",
+      "origin" : "synthesized"
     }
   ],
-  "captions": {
-    "source": { "fileName": "sample.srt" },
-    "isEnabled": true,
-    "style": { "fontSize": 48, "isBold": true }
-  }
+  "captions" : {
+    "assetID" : "AAAAAAAA-0000-0000-0000-0000000000F1",
+    "isEnabled" : true,
+    "style" : {
+      "fontSize" : 48,
+      "isBold" : true
+    }
+  },
+  "clips" : [
+    {
+      "assetID" : "AAAAAAAA-0000-0000-0000-000000000001",
+      "id" : "11111111-1111-1111-1111-111111111111",
+      "range" : [
+        0,
+        3
+      ],
+      "speed" : {
+        "rate" : 1,
+        "type" : "flat"
+      },
+      "transitionAfter" : {
+        "duration" : 0.5,
+        "type" : "dissolve"
+      }
+    },
+    {
+      "assetID" : "AAAAAAAA-0000-0000-0000-000000000002",
+      "id" : "22222222-2222-2222-2222-222222222222",
+      "range" : [
+        0,
+        3
+      ],
+      "speed" : {
+        "rate" : 0.5,
+        "type" : "flat"
+      }
+    },
+    {
+      "assetID" : "AAAAAAAA-0000-0000-0000-000000000003",
+      "id" : "33333333-3333-3333-3333-333333333333",
+      "range" : [
+        0,
+        2
+      ],
+      "speed" : {
+        "rate" : 2,
+        "type" : "flat"
+      }
+    }
+  ],
+  "preset" : "reelsAndShorts",
+  "version" : 2
 }

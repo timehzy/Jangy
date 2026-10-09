@@ -63,7 +63,11 @@ final class EngineBridgeTests: XCTestCase {
     }
 
     func testSingleClipNoTransition() async throws {
-        let plan = EditPlan(clips: [PlanClip(source: MediaRef(fileName: "clip1.mp4"), range: 0...3)])
+        let assetID = UUID()
+        let plan = EditPlan(
+            assets: [AssetItem(id: assetID, kind: .video, fileName: "clip1.mp4", duration: 4.0)],
+            clips: [PlanClip(assetID: assetID, range: 0...3)]
+        )
         let video = try await EngineBridge.makeComposition(from: plan, resolver: resolver)
         XCTAssertEqual(video.clips.count, 1)
         XCTAssertEqual(CMTimeGetSeconds(video.duration), 3.0, accuracy: 0.01)
@@ -72,7 +76,7 @@ final class EngineBridgeTests: XCTestCase {
     func testCaptionOverlayVisibilityRangeMatchesCue() async throws {
         let plan = SamplePlan.make()
         let video = try await EngineBridge.makeComposition(from: plan, resolver: resolver)
-        let cues = try await Kadr.Caption.load(srt: resolver.resolve(plan.captions!.source))
+        let cues = try await Kadr.Caption.load(srt: resolver.resolve(plan.asset(withID: plan.captions!.assetID)!))
         // 烧录走 ImageOverlay（macOS headless 下 CATextLayer 不渲染，见 CaptionImageRenderer 注释）
         let overlay = try XCTUnwrap(video.overlays.first as? Kadr.ImageOverlay)
         let visibility = try XCTUnwrap(overlay.visibilityRange)

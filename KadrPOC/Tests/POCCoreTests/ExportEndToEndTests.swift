@@ -84,10 +84,7 @@ final class ExportEndToEndTests: XCTestCase {
     /// 变速专项：clip2 0...3 @0.5x 单段 → 导出时长 ≈ 6.0s。
     /// 若变速未生效（按原速渲染）会量出 ~3s，直接红灯。
     func testSpeedChangeExportDuration() async throws {
-        let plan = EditPlan(clips: [
-            PlanClip(source: MediaRef(fileName: "clip2.mp4"),
-                     range: 0...3, speed: .flat(0.5))
-        ])
+        let plan = Self.makePlan(clips: [("clip2.mp4", 0...3, 0.5)])
         let output = try await exportToFile(plan, name: "speed.mp4")
         let duration = try await CMTimeGetSeconds(AVURLAsset(url: output).load(.duration))
         XCTAssertEqual(duration, 6.0, accuracy: 0.3, "0.5x 变速后 3s 素材应渲染为 6s")
@@ -96,13 +93,23 @@ final class ExportEndToEndTests: XCTestCase {
     /// 拼接专项：clip1 0...3 @1x + clip3 0...2 @1x，无转场 → 导出时长 ≈ 5.0s。
     /// 无转场重叠扣除，时长即两段之和；错误拼接/丢段都会偏。
     func testConcatNoTransitionExportDuration() async throws {
-        let plan = EditPlan(clips: [
-            PlanClip(source: MediaRef(fileName: "clip1.mp4"), range: 0...3, speed: .flat(1.0)),
-            PlanClip(source: MediaRef(fileName: "clip3.mp4"), range: 0...2, speed: .flat(1.0))
-        ])
+        let plan = Self.makePlan(clips: [("clip1.mp4", 0...3, 1.0), ("clip3.mp4", 0...2, 1.0)])
         let output = try await exportToFile(plan, name: "concat.mp4")
         let duration = try await CMTimeGetSeconds(AVURLAsset(url: output).load(.duration))
         XCTAssertEqual(duration, 5.0, accuracy: 0.3, "无转场拼接时长应为两段之和 5s")
+    }
+
+    /// 素材表 + 片段的便捷构造：每段素材在登记表里有对应条目（v2 引用模型）。
+    private static func makePlan(clips: [(file: String, range: ClosedRange<TimeInterval>, speed: Double)]) -> EditPlan {
+        var assets: [AssetItem] = []
+        var planClips: [PlanClip] = []
+        for spec in clips {
+            let asset = AssetItem(kind: .video, fileName: spec.file, origin: .synthesized,
+                                  duration: 4.0, pixelWidth: 1280, pixelHeight: 720, hasAudio: false)
+            assets.append(asset)
+            planClips.append(PlanClip(assetID: asset.id, range: spec.range, speed: .flat(spec.speed)))
+        }
+        return EditPlan(assets: assets, clips: planClips)
     }
 
     /// 跑一遍导出并断言以 done 结束，返回输出文件 URL。

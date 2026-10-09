@@ -17,6 +17,13 @@ import KadrCaptions
 /// 否则非法 composition/缺失素材的错误延迟到 Kadr 导出期才抛出。
 public enum EngineBridge {
 
+    /// plan 引用的素材不在登记表中。正常路径已被 EditPlanValidator 拦截，
+    /// 这里防御性抛出，避免静默丢片段。
+    public struct MissingAssetError: Error, CustomStringConvertible {
+        public let assetID: UUID
+        public var description: String { "素材未登记: \(assetID)" }
+    }
+
     public static func makeComposition(from plan: EditPlan, resolver: AssetResolver) async throws -> Kadr.Video {
         // 上游 Kadr bug 规避（trigger-avoidance，详见 ExportVerifier 注释）：
         // Kadr CompositionBuilder 无条件添加音频合成轨；素材无音频时该轨为空，
@@ -29,14 +36,24 @@ public enum EngineBridge {
 
         var elements: [any Kadr.Clip] = []
         for clip in plan.clips {
-            let sourceURL = resolver.resolve(clip.source)
+            guard let asset = plan.asset(withID: clip.assetID) else {
+                throw MissingAssetError(assetID: clip.assetID)
+            }
+            let sourceURL = resolver.resolve(asset)
             var videoClip = Kadr.VideoClip(url: sourceURL)
                 .trimmed(to: clip.range)
             // Kadr 1.x 校准：`speed(_:)` 只接受 Speed 枚举（Double 重载在 v0.14 被移除）。
             if clip.speed.rate != 1.0 {
                 videoClip = videoClip.speed(.flat(clip.speed.rate))
             }
-            if await !assetHasAudio(sourceURL) {
+            // 登记表里已有 hasAudio 元数据时直接使用（导入期已探测），缺省再即时探测
+            let hasAudio: Bool
+            if let known = asset.hasAudio {
+                hasAudio = known
+            } else {
+                hasAudio = await assetHasAudio(sourceURL)
+            }
+            if !hasAudio {
                 if silenceURL == nil {
                     silenceURL = try SilentAudio.url(covering: maxClipSeconds + 0.25)
                 }
@@ -61,7 +78,10 @@ public enum EngineBridge {
         }.preset(preset)
 
         if let track = plan.captions, track.isEnabled {
-            let cues = try await Kadr.Caption.load(srt: resolver.resolve(track.source))
+            guard let captionAsset = plan.asset(withID: track.assetID) else {
+                throw MissingAssetError(assetID: track.assetID)
+            }
+            let cues = try await Kadr.Caption.load(srt: resolver.resolve(captionAsset))
             video = video.captions(cues)                    // 软字幕：AVMetadataItem
             for cue in cues {
                 video = video.overlay(captionOverlay(cue, style: track.style))  // 烧录：ImageOverlay（见 captionOverlay 注释）

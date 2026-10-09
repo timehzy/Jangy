@@ -1,5 +1,5 @@
 {
-  "originHash" : "f64b4d95974c3cc2245f9728cc8918cf7aa5deb1c8ad1a10807b2a25afd0f168",
+  "originHash" : "1820cec102bfc53a4b4f1dbb5ab57757bbc4e23abcc371ed2f3169f3859b4f6f",
   "pins" : [
     {
       "identity" : "kadr",
@@ -17,6 +17,15 @@
       "state" : {
         "revision" : "340d35e153a38dd96e75b8bc5ce3ba3f426aa5dc",
         "version" : "0.12.0"
+      }
+    },
+    {
+      "identity" : "kadr-photos",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/timehzy/kadr-photos.git",
+      "state" : {
+        "revision" : "b106384f914e325a7264fa604bb161f66f2a4027",
+        "version" : "0.11.0"
       }
     },
     {

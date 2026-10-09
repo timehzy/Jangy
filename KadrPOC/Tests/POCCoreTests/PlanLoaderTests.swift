@@ -10,14 +10,15 @@ final class PlanLoaderTests: XCTestCase {
     }
 
     func testLoadsValidPlan() throws {
-        let url = writeTemp(#"{"version":1,"clips":[{"id":"11111111-1111-1111-1111-111111111111","source":{"fileName":"a.mp4"},"range":[0,3],"speed":{"type":"flat","rate":1.0},"transitionAfter":null}],"captions":null,"preset":"reelsAndShorts"}"#)
+        let url = writeTemp(#"{"version":2,"assets":[{"id":"aaaaaaaa-0000-0000-0000-000000000001","kind":"video","fileName":"a.mp4"}],"clips":[{"id":"11111111-1111-1111-1111-111111111111","assetID":"aaaaaaaa-0000-0000-0000-000000000001","range":[0,3],"speed":{"type":"flat","rate":1.0},"transitionAfter":null}],"captions":null,"preset":"reelsAndShorts"}"#)
         let plan = try PlanLoader.load(from: url)
         XCTAssertEqual(plan.clips.count, 1)
-        XCTAssertEqual(plan.clips[0].source.fileName, "a.mp4")
+        XCTAssertEqual(plan.clips[0].assetID, UUID(uuidString: "aaaaaaaa-0000-0000-0000-000000000001")!)
+        XCTAssertEqual(plan.asset(withID: plan.clips[0].assetID)?.fileName, "a.mp4")
     }
 
     func testTypeMismatchReportsFieldPath() throws {
-        let url = writeTemp(#"{"version":1,"clips":[{"id":"11111111-1111-1111-1111-111111111111","source":{"fileName":"a.mp4"},"range":[0,3],"speed":{"type":"flat","rate":"fast"},"transitionAfter":null}],"captions":null,"preset":"reelsAndShorts"}"#)
+        let url = writeTemp(#"{"version":2,"clips":[{"id":"11111111-1111-1111-1111-111111111111","assetID":"aaaaaaaa-0000-0000-0000-000000000001","range":[0,3],"speed":{"type":"flat","rate":"fast"},"transitionAfter":null}],"captions":null,"preset":"reelsAndShorts"}"#)
         XCTAssertThrowsError(try PlanLoader.load(from: url)) { error in
             guard case let PlanLoaderError.decodingFailed(path, _) = error else {
                 return XCTFail("应为 decodingFailed，实际 \(error)")

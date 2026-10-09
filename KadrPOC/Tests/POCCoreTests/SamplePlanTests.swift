@@ -16,14 +16,23 @@ final class SamplePlanTests: XCTestCase {
         XCTAssertTrue(EditPlanValidator().validate(SamplePlan.make()).isEmpty)
     }
 
+    /// 样例工程的 clip/字幕引用必须全部落在素材登记表里（v2 引用完整性）。
+    func testSamplePlanReferencesResolve() {
+        let plan = SamplePlan.make()
+        for clip in plan.clips {
+            XCTAssertNotNil(plan.asset(withID: clip.assetID), "clip \(clip.id) 引用了未登记素材")
+        }
+        XCTAssertNotNil(plan.asset(withID: plan.captions!.assetID))
+    }
+
     func testSynthesizeProducesAssets() throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         let resolver = try AssetSynthesizer.synthesize(into: dir)
         for name in AssetSynthesizer.clipFileNames {
-            XCTAssertTrue(resolver.exists(MediaRef(fileName: name)), "\(name) 应已生成")
+            XCTAssertTrue(FileManager.default.fileExists(atPath: resolver.resolve(fileName: name).path), "\(name) 应已生成")
         }
-        XCTAssertTrue(resolver.exists(MediaRef(fileName: AssetSynthesizer.srtFileName)))
-        // 生成后素材存在性校验应通过
+        XCTAssertTrue(FileManager.default.fileExists(atPath: resolver.resolve(fileName: AssetSynthesizer.srtFileName).path))
+        // 生成后素材存在性校验应通过（登记表 4 个条目全部落盘）
         XCTAssertTrue(EditPlanValidator().validateAssets(SamplePlan.make(), resolver: resolver).isEmpty)
     }
 }

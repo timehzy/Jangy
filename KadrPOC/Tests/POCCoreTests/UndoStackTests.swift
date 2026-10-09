@@ -3,10 +3,11 @@ import XCTest
 
 final class UndoStackTests: XCTestCase {
 
-    /// 注意：PlanClip.id 缺省为随机 UUID，同一 marker 两次调用产生的实例不相等，
+    /// 注意：AssetItem.id / PlanClip.id 缺省为随机 UUID，同一 marker 两次调用产生的实例不相等，
     /// 因此各测试先把实例捕获到局部常量再做相等断言。
     private func plan(_ marker: String) -> EditPlan {
-        EditPlan(clips: [PlanClip(source: MediaRef(fileName: marker), range: 0...1)])
+        let asset = AssetItem(kind: .video, fileName: marker)
+        return EditPlan(assets: [asset], clips: [PlanClip(assetID: asset.id, range: 0...1)])
     }
 
     func testInitialState() {
