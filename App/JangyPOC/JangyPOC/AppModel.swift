@@ -4,7 +4,7 @@ import Observation
 import Photos
 import POCCore
 
-/// App 侧状态装配：EditStore（编辑状态层）+ PlayerController（预览）+ 导出进度。
+/// App 侧状态装配：EditStore（编辑状态层）+ PlayerController（预览）+ 导入/导出进度。
 /// 所有编辑经 edit() 进入 EditStore.apply —— 校验失败不压栈，撤销栈纹丝不动。
 @MainActor
 @Observable
@@ -12,15 +12,19 @@ final class AppModel {
     let store: EditStore
     let resolver: AssetResolver
     let player: PlayerController
+    private let importer: AssetImporter
 
     var exportProgress: Double?
     var exportMessage: String?
+    var importProgress: Double?
+    var importMessage: String?
     var lastIssues: [ValidationIssue]?
 
     init(store: EditStore, resolver: AssetResolver) {
         self.store = store
         self.resolver = resolver
         self.player = PlayerController(store: store, resolver: resolver)
+        self.importer = AssetImporter(directory: resolver.directory)
     }
 
     func edit(_ mutate: (inout EditPlan) -> Void) {
@@ -35,6 +39,53 @@ final class AppModel {
 
     func undo() { lastIssues = nil; store.undo(); player.rebuild() }
     func redo() { lastIssues = nil; store.redo(); player.rebuild() }
+
+    /// 从相册导入视频：授权 → 逐个解析（iCloud 自动下载）→ move 进素材库 →
+    /// 一次 apply 登记素材 + 追加片段（单撤销步）。失败的单个素材不阻断其余导入。
+    func importVideos(assetIdentifiers: [String]) {
+        guard !assetIdentifiers.isEmpty else { return }
+        importProgress = 0
+        importMessage = nil
+        let total = Double(assetIdentifiers.count)
+        Task { @MainActor in
+            guard await PhotosBridge.requestReadAccess() else {
+                importProgress = nil
+                importMessage = "没有相册读取权限（请在系统设置中允许访问相册）"
+                return
+            }
+            var items: [AssetItem] = []
+            var failures = 0
+            for (index, identifier) in assetIdentifiers.enumerated() {
+                do {
+                    let tempFile = try await PhotosBridge.resolveVideoFile(assetIdentifier: identifier) { fraction in
+                        Task { @MainActor in
+                            self.importProgress = (Double(index) + fraction) / total
+                        }
+                    }
+                    let item = try await importer.importVideo(from: tempFile, origin: .photoLibrary)
+                    items.append(item)
+                } catch {
+                    failures += 1
+                }
+                importProgress = Double(index + 1) / total
+            }
+            if !items.isEmpty {
+                edit {
+                    $0.assets.append(contentsOf: items)
+                    for item in items {
+                        // duration 探测失败时不追加片段（避免 range 无依据），素材仍入库
+                        if let duration = item.duration {
+                            $0.clips.append(PlanClip(assetID: item.id, range: 0...duration))
+                        }
+                    }
+                }
+            }
+            importProgress = nil
+            if failures > 0 {
+                importMessage = "\(failures) 个素材导入失败（iCloud 下载或格式不支持）"
+            }
+        }
+    }
 
     /// 导出：先渲染到临时文件，完成后写入系统相册，方便真机直接验证成片。
     func export() {

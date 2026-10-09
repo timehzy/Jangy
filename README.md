@@ -7,7 +7,7 @@
 ```
 ├── App/JangyPOC/          # iOS App 壳（SwiftUI，iOS 17+，Xcode 工程）
 │   └── JangyPOC/          #   表现层源码：预览/时间线/操作条/导出（本地引用 KadrPOC 包）
-├── KadrPOC/               # SwiftPM 包：POCCore 库 + kadrpoc-cli 可执行 + 48 个测试
+├── KadrPOC/               # SwiftPM 包：POCCore 库 + kadrpoc-cli 可执行 + 64 个测试
 │   ├── Sources/POCCore/   #   编辑状态层（纯 Swift）+ 引擎适配层（唯一 import Kadr 的地方）
 │   ├── Sources/kadrpoc-cli/#   Agent 链路 headless 验证入口
 │   ├── Tests/POCCoreTests/#
@@ -17,11 +17,13 @@
 
 ## 技术栈
 
-Swift 6.3 · Xcode 26.4 · SwiftPM · SwiftUI（iOS 17+）· [Kadr 1.0](https://github.com/SteliyanH/kadr) · [KadrCaptions 0.12](https://github.com/SteliyanH/kadr-captions) · swift-argument-parser
+Swift 6.3 · Xcode 26.4 · SwiftPM · SwiftUI（iOS 17+）· [Kadr 1.0](https://github.com/SteliyanH/kadr) · [KadrCaptions 0.12](https://github.com/SteliyanH/kadr-captions) · [KadrPhotos 0.11](https://github.com/SteliyanH/kadr-photos) · swift-argument-parser
+
+> Kadr 系依赖均走内部镜像 fork（`timehzy/kadr`、`timehzy/kadr-captions`、`timehzy/kadr-photos`），防上游单作者仓库变动。
 
 ## 快速开始
 
-### 跑测试（48 个，含导出端到端）
+### 跑测试（64 个，含导出端到端）
 
 ```bash
 cd KadrPOC && swift test
@@ -41,7 +43,7 @@ CLI 约定：stdout 只走结构化 JSON/JSONL，日志与错误走 stderr；exi
 
 ### iOS App
 
-用 Xcode 打开 `App/JangyPOC/JangyPOC.xcodeproj`，选择真机或模拟器运行。首次启动会同步合成测试素材（阻塞数秒，仅一次）。功能：预览播放（字幕叠加层）、撤销/重做、字幕开关、追加片段、导出到系统相册。
+用 Xcode 打开 `App/JangyPOC/JangyPOC.xcodeproj`，选择真机或模拟器运行。首次启动会同步合成测试素材（阻塞数秒，仅一次）。功能：预览播放（字幕叠加层）、撤销/重做、字幕开关、**从相册导入视频素材**（PHPicker 多选，iCloud 自动下载，passthrough 优先保 HDR/高帧率）、导出到系统相册。
 
 ## 当前状态
 
@@ -50,6 +52,7 @@ CLI 约定：stdout 只走结构化 JSON/JSONL，日志与错误走 stderr；exi
 - [x] 真机手动验证通过（2026-10-08，清单见 [docs/poc-verification-checklist.md](docs/poc-verification-checklist.md)）
 - [x] 4K HDR CLI 侧验证通过（2026-10-08：导出/转场/色调全通过；HDR 直通与 HDR→SDR 双路均验证，见清单）
 - [x] **POC 结论落定：正式立项走路径 A（Kadr 全家桶直达）**（2026-10-08，见 [验证清单](docs/poc-verification-checklist.md)）
+- [x] 素材导入 v1（2026-10-09）：EditPlan v2 素材登记表（`assets` 表 + `assetID` 引用，替代文件名直引）；App 相册导入（kadr-photos resolver → 素材库落盘 → 时间线追加）
 - [ ] iOS 17 覆盖率调研（人工调研项，见清单）
 
 已知取舍：

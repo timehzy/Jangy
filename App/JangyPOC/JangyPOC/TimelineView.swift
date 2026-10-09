@@ -9,7 +9,7 @@ struct TimelineView: View {
         List {
             ForEach(Array(model.store.plan.clips.enumerated()), id: \.element.id) { index, clip in
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("\(index + 1). \(clip.source.fileName)  [\(clip.range.lowerBound, format: .number.precision(.fractionLength(1)))–\(clip.range.upperBound, format: .number.precision(.fractionLength(1)))s]  \(clip.speed.rate, format: .number.precision(.fractionLength(2)))x")
+                    Text("\(index + 1). \(displayName(for: clip))  [\(clip.range.lowerBound, format: .number.precision(.fractionLength(1)))–\(clip.range.upperBound, format: .number.precision(.fractionLength(1)))s]  \(clip.speed.rate, format: .number.precision(.fractionLength(2)))x")
                         .font(.callout)
                     HStack {
                         Button("裁剪") { toggleTrim(index) }
@@ -23,6 +23,12 @@ struct TimelineView: View {
                 }
             }
         }
+    }
+
+    /// 片段标题：素材登记表里的 displayName；登记项缺失时兜底显示 ID 前 8 位
+    private func displayName(for clip: PlanClip) -> String {
+        model.store.plan.asset(withID: clip.assetID)?.displayName
+            ?? String(clip.assetID.uuidString.prefix(8))
     }
 
     private func toggleTrim(_ index: Int) {

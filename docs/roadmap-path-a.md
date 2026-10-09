@@ -5,15 +5,16 @@
 ## 已定论的结论
 
 - **正式立项走路径 A：Kadr 全家桶直达**（2026-10-08）。POC 五个关键字（多段拼接 / 转场 / 变速 / 字幕 / headless 导出）+ EditPlan JSON → DSL 端到端 + 4K HDR CLI 侧全部 ☑。
-- Kadr 依赖已切内部镜像 fork（`timehzy/kadr`、`timehzy/kadr-captions`），版本约束不变。fork 不会自动跟随上游：第一次需要上游修复时给两个 fork 配 `upstream` remote，手动同步、跑完 48 测试再合入。
+- Kadr 依赖已切内部镜像 fork（`timehzy/kadr`、`timehzy/kadr-captions`、`timehzy/kadr-photos`），版本约束不变。fork 不会自动跟随上游：第一次需要上游修复时给三个 fork 配 `upstream` remote，手动同步、跑完 64 测试再合入。
+- **HDR 直通已定调为特性**（2026-10-09）：导出保留 BT.2020 + HLG 元数据，定位「HDR 全链路」；分享到不支持 HDR 平台的发灰问题留到正式版导出管线处理。素材导入侧相应采用 passthrough 优先策略（不重编码、保 HDR/高帧率）。
 
 ## 落地顺序（按优先级）
 
 | # | 事项 | 状态 | 说明 |
 |---|---|---|---|
 | 1 | Kadr fork 内部镜像 + 锁版本 | ✅ 2026-10-08 | 风险登记册「单作者依赖」的核心缓解，成本极低，第一天就做 |
-| 2 | 素材导入 | 🔜 下一个任务 | kadr-photos 或 YPImagePicker；App 从「只能用合成素材」到能选相册真实视频的第一道门槛 |
-| 3 | 草稿持久化 | 待做 | kadr-persistence（内容寻址 + 完整性守卫），同时是 Agent 指令序列化格式，一鱼两吃 |
+| 2 | 素材导入 | ✅ 2026-10-09 | EditPlan v2 素材登记表（`assets` + `assetID` 引用，为素材管理打底）；kadr-photos fork（v0.11）；App 相册多选导入（passthrough 优先 → 素材库落盘 → 追加时间线）；64 测试全绿 + CLI 契约不变 |
+| 3 | 草稿持久化 | 🔜 下一个任务 | kadr-persistence（内容寻址 + 完整性守卫），同时是 Agent 指令序列化格式，一鱼两吃 |
 | 4 | POC 取舍清理入 backlog | 待做 | 见下节 |
 | 5 | 音频（kadr-audio）/ 拍摄（NextLevel）/ MCP 化 | 后置 | 差异化功能，遵循「UI 用 kadr-ui 原型，差异化后置」原则，素材导入 + 持久化跑通后再排 |
 
@@ -21,10 +22,14 @@
 
 - [ ] App 真机 4K HDR 预览流畅度/发热（清单验证点③最后一格，主观记录即可）
 - [ ] iOS 17 底线覆盖率调研（人工项：App Store Connect 或第三方统计）
-- [ ] **HDR 直通产品决策**：产物保留 BT.2020 + HLG 元数据是特性（HDR 全链路）还是问题（分享到不支持 HDR 的平台发灰）——影响导出管线设计，需在素材导入落地前定调
+- [x] ~~HDR 直通产品决策~~ → 已定调为特性（2026-10-09，见「已定论的结论」）
 - [ ] 向 Kadr 上游提两个 issue（草稿已写在[清单](poc-verification-checklist.md)第 69 行起）：
   - Issue 1（Critical）：无音频素材导出静默 passthrough
   - Issue 2（macOS 平台）：TextOverlay 的 CATextLayer 在 headless 导出不渲染
+- [ ] SwiftPM 包身份冲突预警：kadr-captions / kadr-photos 的 Package.swift 指向上游 kadr，与 timehzy 镜像同身份（当前仅警告，官方称未来版本升级为 error）——届时在 fork 上改写依赖 URL 并打新 tag
+- [ ] 素材导入真机验证：授权弹窗 / iCloud 素材下载进度 / HDR 相册视频导入后导出（passthrough 保真链路）/ 慢动作视频保帧率
+- [ ] 「文件 App 导入」通道（UIDocumentPicker，AssetOrigin.files 已预留）
+- [ ] App 内素材库管理 UI（网格/缩略图/删除未引用素材；kadr-photos 有 `assets(in:)` 相册列举可用，缩略图需自建 PHImageManager + 缓存）
 
 ## POC 已知取舍（正式版要处理）
 
@@ -32,6 +37,14 @@
 - 字幕预览以 SwiftUI Text 叠加层近似（Kadr overlay 仅导出时烧录）——「所见即所导」对字幕降级为「预览近似」，正式版需决策是否接受
 - 转场重叠语义：渲染时长 ≠ `Video.duration` 求和值（实测 9.5s vs 10.5s）——e2e 断言基于实测值，UI 时长显示同样要用实测口径
 
+## 素材导入选型记录（2026-10-09）
+
+对比 kadr-photos / YPImagePicker / 原生 PhotosPicker 后选定 **kadr-photos fork**：
+
+- YPImagePicker 出局：选中后强制 AVAssetExportSession 重编码才给回调——HDR/full-range 元数据有丢失先例（issue #806）、4K 大文件有内存爆炸史（#498），与「HDR 直通特性」直接冲突；内置 trimmer/滤镜与 Kadr 管线重复建设；需 readWrite 全量授权；不支持文件 App 导入；Stevia/PryntTrimmerView 双 `.exact` 依赖。
+- 原生 PhotosPicker 出局（作为长期方案）：`loadTransferable` 可用但 iCloud 进度、慢动作保帧率、Live Photo、typed error 都要自建；且系统选择器 UI 零定制，撑不起未来的 App 内素材库。
+- kadr-photos 入选：PHAsset→文件 URL 的异步桥（iCloud 进度/慢动作/Live Photo/typed error）正是缺的；`assets(in:)` 相册列举可支撑未来自建素材库 UI；Apache-2.0 与镜像策略同构。弱项（选择器 UI 零定制、无缩略图/持久化）反正都要自建。
+
 ## 下一步任务的入口
 
-任务 #2「素材导入」开新会话进行。进会话后先读 [AGENTS.md](../AGENTS.md)，关键约束：编辑必经 `EditStore.apply`、Kadr 依赖收敛在引擎适配层、CLI stdout 只走结构化 JSON。
+任务 #3「草稿持久化」开新会话进行。进会话后先读 [AGENTS.md](../AGENTS.md)，关键约束：编辑必经 `EditStore.apply`、素材引用走 `assets` 登记表 + `assetID`、Kadr 依赖收敛在引擎适配层、CLI stdout 只走结构化 JSON。
