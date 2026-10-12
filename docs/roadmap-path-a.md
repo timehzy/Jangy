@@ -37,10 +37,8 @@
 
 ### P1
 
-- [ ] **素材导入真机验证**（`真机`）：授权弹窗 / iCloud 素材下载进度 / HDR 相册视频导入后导出（passthrough 保真链路）/ 慢动作视频保帧率
-  - 验收：四项逐条记录结果，问题单独立项
-- [ ] **转场预览直通问题真机验证**（`真机`）：若真机无此问题（模拟器 CA image queue 像素格式支持更窄），正式版移除 renderSize 微扰
-  - 验收：真机结论记录；若移除微扰，`PreviewPlaybackTests` 回归全绿
+- [x] **素材导入真机验证**（✅ 2026-10-12）：授权弹窗正确 / iCloud 素材下载进度条正确 / HDR 相册视频导入后导出正确（passthrough 保真链路）/ 慢动作视频保帧率正确——四项全过，无新问题立项
+- [x] **转场预览直通问题真机验证**（✅ 2026-10-12）：真机无此问题（证实为模拟器 CA image queue 像素格式支持更窄所致）。`breakRenderSizeEquality` 微扰保留——POC 开发主战场仍是模拟器，无条件移除会让模拟器预览回归 -11800；正式版发布前再移除或按 `targetEnvironment(simulator)` 条件编译（届时 `PreviewPlaybackTests` 回归全绿才算完）
 - [ ] **App 真机 4K HDR 预览流畅度/发热**（`真机`）：清单验证点③最后一格，主观记录即可
 - [x] **首次启动同步合成测试素材阻塞主线程**（✅ 2026-10-12）：启动只做目录/草稿装配，合成移入 `AppModel.prepareAssets()`（POCCore 新增 `AssetSynthesizer.synthesizeAsync`，后台线程执行）；进度态 `isPreparingAssets` 门禁导入/导出，完成后才重建预览 + 草稿完整性核对；合成失败显式上报，不再 `preconditionFailure`
   - 验收：首屏渲染不等待素材合成；`swift test` 77 个全绿 + App 模拟器编译通过
