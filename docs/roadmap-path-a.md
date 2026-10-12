@@ -39,7 +39,6 @@
 
 - [x] **素材导入真机验证**（✅ 2026-10-12）：授权弹窗正确 / iCloud 素材下载进度条正确 / HDR 相册视频导入后导出正确（passthrough 保真链路）/ 慢动作视频保帧率正确——四项全过，无新问题立项
 - [x] **转场预览直通问题真机验证**（✅ 2026-10-12）：真机无此问题（证实为模拟器 CA image queue 像素格式支持更窄所致）。`breakRenderSizeEquality` 微扰保留——POC 开发主战场仍是模拟器，无条件移除会让模拟器预览回归 -11800；正式版发布前再移除或按 `targetEnvironment(simulator)` 条件编译（届时 `PreviewPlaybackTests` 回归全绿才算完）
-- [ ] **App 真机 4K HDR 预览流畅度/发热**（`真机`）：清单验证点③最后一格，主观记录即可
 - [x] **首次启动同步合成测试素材阻塞主线程**（✅ 2026-10-12）：启动只做目录/草稿装配，合成移入 `AppModel.prepareAssets()`（POCCore 新增 `AssetSynthesizer.synthesizeAsync`，后台线程执行）；进度态 `isPreparingAssets` 门禁导入/导出，完成后才重建预览 + 草稿完整性核对；合成失败显式上报，不再 `preconditionFailure`
   - 验收：首屏渲染不等待素材合成；`swift test` 77 个全绿 + App 模拟器编译通过
 
@@ -58,6 +57,7 @@
 
 ### P3
 
+- [ ] **App 真机 4K HDR 预览流畅度/发热**（`真机`，2026-10-12 自 P1 降级）：不优先——预览/导出都走 AVFoundation 系统管线，即使发现问题也基本没有应用层可做的优化空间；真机使用中若主观感知到卡顿/发热再记录
 - [ ] **iOS 17 底线覆盖率调研**（`人工`）：App Store Connect 或第三方统计，确认目标用户群 iOS 17+ 覆盖率
 - [ ] **SwiftPM 包身份冲突预警**（外部依赖；届时 `agent` 执行）：kadr-captions / kadr-photos 的 Package.swift 指向上游 kadr，与 timehzy 镜像同身份——当前仅警告，官方称未来版本升级为 error
   - 验收（触发时）：在 fork 上改写依赖 URL 并打新 tag，全量测试通过后切版本约束
