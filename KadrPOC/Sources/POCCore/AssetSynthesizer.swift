@@ -45,6 +45,14 @@ public enum AssetSynthesizer {
         return AssetResolver(directory: directory)
     }
 
+    /// 异步合成：重活（AVAssetWriter 逐帧写）放后台线程，不阻塞调用方。
+    /// App 启动路径用这个——首屏渲染不等待首次合成的数秒；幂等语义与同步版一致。
+    public static func synthesizeAsync(into directory: URL) async throws -> AssetResolver {
+        try await Task.detached(priority: .userInitiated) {
+            try synthesize(into: directory)
+        }.value
+    }
+
     /// 合成单个纯色视频。internal 供测试用：回归测试需要非默认尺寸素材
     /// （如 1080x1920 == preset renderSize，触发转场预览的 identity-transform 路径）。
     static func writeSolidColorVideo(to url: URL, color: CGColor, seconds: Double,

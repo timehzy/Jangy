@@ -35,4 +35,14 @@ final class SamplePlanTests: XCTestCase {
         // 生成后素材存在性校验应通过（登记表 4 个条目全部落盘）
         XCTAssertTrue(EditPlanValidator().validateAssets(SamplePlan.make(), resolver: resolver).isEmpty)
     }
+
+    /// 异步版与同步版产物一致（App 启动路径走异步，不阻塞首屏）。
+    func testSynthesizeAsyncProducesAssets() async throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let resolver = try await AssetSynthesizer.synthesizeAsync(into: dir)
+        for name in AssetSynthesizer.clipFileNames {
+            XCTAssertTrue(FileManager.default.fileExists(atPath: resolver.resolve(fileName: name).path), "\(name) 应已生成")
+        }
+        XCTAssertTrue(FileManager.default.fileExists(atPath: resolver.resolve(fileName: AssetSynthesizer.srtFileName).path))
+    }
 }

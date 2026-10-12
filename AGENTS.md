@@ -46,7 +46,7 @@ xcodebuild -project App/JangyPOC/JangyPOC.xcodeproj -scheme JangyPOC \
 - **Xcode 26 SDK 改了 `PHAssetCreationRequest.addResource` 的导入签名**：新 SDK 是 `addResource(with:fileURL:options:)`，旧文档里的 `addResource(_:fileURL:options:)` 编不过
 - **字幕不进预览**：Kadr 官方明确 overlay 仅导出时烧录（`AVVideoCompositionCoreAnimationTool`），`makePlayerItem()` 预览无字幕。App 用 SwiftUI Text 叠加层按播放器时间近似显示——「所见即所导」对字幕降级为「预览近似」
 - **转场重叠语义**：dissolve 与相邻片段重叠，渲染时长 ≠ `Video.duration` 求和值（样例工程实测 9.5s vs 10.5s）。e2e 断言基于实测值，不要「修正」成求和值
-- **App 首次启动**同步合成测试素材会阻塞主线程数秒（幂等，仅首次）——已知 POC 取舍，正式版要移出启动关键路径
+- **App 启动素材合成已异步化**（2026-10-12）：`JangyPOCApp.init` 只做目录/草稿装配，合成由 `AppModel.prepareAssets()` 后台执行（`AssetSynthesizer.synthesizeAsync`），期间 `isPreparingAssets` 门禁导入/导出，完成后才重建预览 + 完整性核对；合成失败显式上报（跳过完整性核对，避免「素材缺失」报告盖住根因）
 - **预览 player 生命周期**：`PlayerController.rebuild()` 换 player 前必须同步 `pause()` 旧实例 + 取消轮询 Task——旧 player 的回收依赖 dealloc（时机不受控），不主动停会出现「界面无播放器却有声音」的孤儿播放；轮询 Task 必须弱捕获 player，防止 Task 泄漏把旧 player 钉在内存里。rebuild 的 await 期间可能又来一次 rebuild，安装 player 前必须再查 `Task.isCancelled`；重建保留播放状态（旧 player 暂停/播完则新的不自动出声）
 - **转场预览直通怪癖（iOS 26 模拟器实测）**：转场路径（双视频轨 composition）中素材分辨率恰等于 preset renderSize 时，显示管线把解码 buffer 直通 CA image queue，像素格式被拒（-11800 / 底层 -19230）→ `AVPlayerItemFailedToPlayToEndTime`，播到转场即停；identity transform 微扰无效（判定基于尺寸相等），`PreviewBridge.breakRenderSizeEquality` 给 renderSize 加 0.5pt 规避。注意 `AVPlayerItem.videoComposition` setter 是 copy 语义，改完要 mutableCopy 赋回。真机是否需要规避待验证（见 roadmap backlog）
 - **iOS 26 SDK 弃用 `AVMutableVideoComposition` 族**（Swift 侧，提示用 `AVVideoComposition.Configuration`）：目前只是警告，Kadr 与本仓库都还在用；`AVMutableVideoCompositionLayerInstruction(assetTrackID:)` 的 Swift 导入已消失，要用 `init(assetTrack:)`

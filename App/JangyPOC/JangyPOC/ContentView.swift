@@ -19,13 +19,17 @@ struct ContentView: View {
                     model.edit { $0.captions?.isEnabled.toggle() }
                 }
                 Button("导入") { showPhotoPicker = true }
-                    .disabled(model.importProgress != nil)
+                    .disabled(model.isPreparingAssets || model.importProgress != nil)
                 Button("新建") { showResetConfirm = true }
                 Button("导出") { model.export() }
-                    .disabled(model.exportProgress != nil)
+                    .disabled(model.isPreparingAssets || model.exportProgress != nil)
             }
             .padding(.horizontal)
 
+            if model.isPreparingAssets {
+                ProgressView { Text("正在准备素材…").font(.caption) }
+                    .padding(.horizontal)
+            }
             if let progress = model.importProgress {
                 ProgressView(value: progress) { Text("导入素材…").font(.caption) }
                     .padding(.horizontal)

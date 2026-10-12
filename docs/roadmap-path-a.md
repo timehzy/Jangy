@@ -42,8 +42,8 @@
 - [ ] **转场预览直通问题真机验证**（`真机`）：若真机无此问题（模拟器 CA image queue 像素格式支持更窄），正式版移除 renderSize 微扰
   - 验收：真机结论记录；若移除微扰，`PreviewPlaybackTests` 回归全绿
 - [ ] **App 真机 4K HDR 预览流畅度/发热**（`真机`）：清单验证点③最后一格，主观记录即可
-- [ ] **首次启动同步合成测试素材阻塞主线程**（`agent`）：正式版移出启动关键路径（异步合成 + 进度态）
-  - 验收：启动首屏渲染不等待素材合成；`swift test` 全绿
+- [x] **首次启动同步合成测试素材阻塞主线程**（✅ 2026-10-12）：启动只做目录/草稿装配，合成移入 `AppModel.prepareAssets()`（POCCore 新增 `AssetSynthesizer.synthesizeAsync`，后台线程执行）；进度态 `isPreparingAssets` 门禁导入/导出，完成后才重建预览 + 草稿完整性核对；合成失败显式上报，不再 `preconditionFailure`
+  - 验收：首屏渲染不等待素材合成；`swift test` 77 个全绿 + App 模拟器编译通过
 
 ### P2
 
