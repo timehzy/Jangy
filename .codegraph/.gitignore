@@ -14,3 +14,7 @@ cache/
 
 # Hook markers
 .dirty
+
+# Daemon runtime (PID/socket 为机器与进程特定)
+daemon.pid
+daemon.sock
