@@ -1,6 +1,6 @@
 # 「文件 App 导入」通道实现计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** 新增文件 App 导入通道：UIDocumentPicker 多选视频 → 素材库落盘 → 追加时间线，与相册导入共用尾部链路。
 
@@ -21,7 +21,7 @@
 **Files:**
 - Create: `App/JangyPOC/JangyPOC/FilesPicker.swift`
 
-- [ ] **Step 1: 创建 FilesPicker.swift**
+- [x] **Step 1: 创建 FilesPicker.swift**
 
 ```swift
 import SwiftUI
@@ -65,14 +65,14 @@ struct FilesPicker: UIViewControllerRepresentable {
 
 说明：模式对照同目录 `PhotoLibraryPicker.swift`（Coordinator + nonisolated 回调 + MainActor 转发）。
 
-- [ ] **Step 2: 确认新文件已加入 Xcode target**
+- [x] **Step 2: 确认新文件已加入 Xcode target**
 
 JangyPOC.xcodeproj 若用文件系统同步组（Xcode 16 默认），新文件自动进 target。用编译验证：
 
 Run: `xcodebuild -project App/JangyPOC/JangyPOC.xcodeproj -scheme JangyPOC -destination 'generic/platform=iOS Simulator' build`
 Expected: BUILD SUCCEEDED（此时 FilesPicker 尚无引用，可能有未使用警告，属正常）
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add App/JangyPOC/JangyPOC/FilesPicker.swift
@@ -88,7 +88,7 @@ Co-Authored-By: Claude Code <noreply@anthropic.com>"
 **Files:**
 - Modify: `App/JangyPOC/JangyPOC/AppModel.swift:103-148`
 
-- [ ] **Step 1: 重构 importVideos，抽出 importPipeline**
+- [x] **Step 1: 重构 importVideos，抽出 importPipeline**
 
 将 `AppModel.swift` 第 103-148 行的 `importVideos(assetIdentifiers:)` 整个替换为：
 
@@ -164,17 +164,17 @@ Co-Authored-By: Claude Code <noreply@anthropic.com>"
 - `items` 为空不进 apply；duration 为 nil 只入库不追加片段
 - 授权失败提前 return 的路径不变
 
-- [ ] **Step 2: 编译验证**
+- [x] **Step 2: 编译验证**
 
 Run: `xcodebuild -project App/JangyPOC/JangyPOC.xcodeproj -scheme JangyPOC -destination 'generic/platform=iOS Simulator' build`
 Expected: BUILD SUCCEEDED
 
-- [ ] **Step 3: POCCore 测试回归（重构未触碰 POCCore，但必须确认全绿）**
+- [x] **Step 3: POCCore 测试回归（重构未触碰 POCCore，但必须确认全绿）**
 
 Run: `cd KadrPOC && swift test`
 Expected: 77 个测试全绿（0 failures）
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add App/JangyPOC/JangyPOC/AppModel.swift
@@ -190,7 +190,7 @@ Co-Authored-By: Claude Code <noreply@anthropic.com>"
 **Files:**
 - Modify: `App/JangyPOC/JangyPOC/AppModel.swift`（紧跟 Task 2 的 `importVideos` 之后插入）
 
-- [ ] **Step 1: 新增 importVideosFromFiles**
+- [x] **Step 1: 新增 importVideosFromFiles**
 
 在 `importVideos(assetIdentifiers:)` 方法之后插入：
 
@@ -208,12 +208,12 @@ Co-Authored-By: Claude Code <noreply@anthropic.com>"
     }
 ```
 
-- [ ] **Step 2: 编译验证**
+- [x] **Step 2: 编译验证**
 
 Run: `xcodebuild -project App/JangyPOC/JangyPOC.xcodeproj -scheme JangyPOC -destination 'generic/platform=iOS Simulator' build`
 Expected: BUILD SUCCEEDED
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add App/JangyPOC/JangyPOC/AppModel.swift
@@ -229,7 +229,7 @@ Co-Authored-By: Claude Code <noreply@anthropic.com>"
 **Files:**
 - Modify: `App/JangyPOC/JangyPOC/ContentView.swift`
 
-- [ ] **Step 1: 修改 ContentView**
+- [x] **Step 1: 修改 ContentView**
 
 四处改动（行号以当前文件为准，共 69 行的小文件，直接对照改）：
 
@@ -265,17 +265,17 @@ Co-Authored-By: Claude Code <noreply@anthropic.com>"
         }
 ```
 
-- [ ] **Step 2: 编译验证**
+- [x] **Step 2: 编译验证**
 
 Run: `xcodebuild -project App/JangyPOC/JangyPOC.xcodeproj -scheme JangyPOC -destination 'generic/platform=iOS Simulator' build`
 Expected: BUILD SUCCEEDED
 
-- [ ] **Step 3: 全量回归**
+- [x] **Step 3: 全量回归**
 
 Run: `cd KadrPOC && swift test`
 Expected: 77 个测试全绿
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add App/JangyPOC/JangyPOC/ContentView.swift
@@ -291,7 +291,7 @@ Co-Authored-By: Claude Code <noreply@anthropic.com>"
 **Files:**
 - Modify: `docs/roadmap-path-a.md:47-48`
 
-- [ ] **Step 1: 模拟器准备导入源**
+- [x] **Step 1: 模拟器准备导入源**
 
 启动模拟器后，用 `xcrun simctl` 把测试视频放进文件 App（或直接用素材库已有文件）：
 
@@ -304,7 +304,7 @@ xcrun simctl openurl booted "shareddocuments://"
 
 也可在模拟器里直接把 `KadrPOC/Assets/*.mp4` 拖进 Files App 窗口。
 
-- [ ] **Step 2: 手动验收全链路**
+- [x] **Step 2: 手动验收全链路**
 
 在模拟器跑 App，逐项核对：
 
@@ -317,7 +317,7 @@ xcrun simctl openurl booted "shareddocuments://"
 7. 撤销一步：登记 + 追加整体回退（单撤销步）
 8. 相册导入回归：从相册导入仍正常（Task 2 重构的行为等价性终验）
 
-- [ ] **Step 3: CLI 核对草稿完整性**
+- [x] **Step 3: CLI 核对草稿完整性**
 
 App  autosave 的 draft.json 即 EditPlan JSON，用 CLI 验证契约：
 
@@ -329,7 +329,7 @@ cd KadrPOC && swift run kadrpoc-cli validate <上一步找到的 draft.json> --a
 
 Expected: exit code 0，stdout 为校验通过的结构化 JSON
 
-- [ ] **Step 4: roadmap 回填**
+- [x] **Step 4: roadmap 回填**
 
 将 `docs/roadmap-path-a.md` P2 第一条改为：
 
@@ -337,7 +337,7 @@ Expected: exit code 0，stdout 为校验通过的结构化 JSON
 - [x] **「文件 App 导入」通道**（✅ 2026-10-13）：UIDocumentPicker asCopy 多选导入 → 素材库落盘 → 追加时间线全链路（`AssetOrigin.files` 落地）；AppModel 导入尾部抽为 `importPipeline` 两渠道共用；模拟器验收含混选失败文件不阻断、单撤销步回退、相册导入回归
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add docs/roadmap-path-a.md
