@@ -1,0 +1,51 @@
+Packages/JangyCore/Sources/JangyTestSupport/SamplePlan.swift
+  s_a3f900d97c8b77::t_474d82559452ec 2-5
+Jangy/JangyApp.swift
+  s_a3f900d97c8b77::t_583cfa0f59a329 13,17-18,25
+README.md
+  s_a3f900d97c8b77::t_0d47ba4dd9c8c3 28
+  s_a3f900d97c8b77::t_5bf01618526c62 11,13
+Packages/JangyCore/Sources/JangyTestSupport/AssetSynthesizer.swift
+  s_a3f900d97c8b77::t_40f34965a64030 50
+  s_a3f900d97c8b77::t_cf3fe97a938437 3-7
+Jangy/AppModel.swift
+  s_a3f900d97c8b77::t_841134d977beef 34
+  s_a3f900d97c8b77::t_c68e2568154f63 75,78
+  s_a3f900d97c8b77::t_19df291f4d68da 164
+docs/roadmap-path-a.md
+  s_a3f900d97c8b77::t_6623928ddb9aa5 106
+  s_a3f900d97c8b77::t_40f75a700a1646 91
+Jangy/ContentView.swift
+  s_a3f900d97c8b77::t_96ed31ad6348f9 76
+  s_a3f900d97c8b77::t_ffffe6231b720f 27,30
+docs/architecture-covenant.md
+  s_a3f900d97c8b77::t_2eda4d509bc949 48
+  s_a3f900d97c8b77::t_4fba7fc9788acb 99
+  s_a3f900d97c8b77::t_c3ca9b8a67a94b 50
+  s_a3f900d97c8b77::t_0ea826df0e923a 114
+Packages/JangyCore/Sources/jangy-cli/JangyCLI.swift
+  s_a3f900d97c8b77::t_9784145b29cbc5 4
+AGENTS.md
+  s_a3f900d97c8b77::t_450bca6ac8afd4 10
+  s_a3f900d97c8b77::t_2d9c78f1186cf9 19,28-30
+Packages/JangyCore/Sources/JangyCore/AssetItem.swift
+  s_a3f900d97c8b77::t_9c26739912c062 10
+Packages/JangyCore/Package.swift
+  s_a3f900d97c8b77::t_107e7fa4bd5cec 29-33,38,44
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "e8c972faab05f4818338b467367fa1a8643776ee",
+  "prompts": {},
+  "sessions": {
+    "s_a3f900d97c8b77": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "86bad31e-c503-4238-9ede-618712e84bf4",
+        "model": "k3"
+      },
+      "human_author": "Michael <yiliforever@qq.com>"
+    }
+  }
+}
