@@ -22,9 +22,15 @@ final class AppModel {
     var importMessage: String?
     var lastIssues: [ValidationIssue]?
     /// 剪辑 Agent 入口（L1）：sheet 对话 UI 的数据源；凭据缺失时 isConfigured = false。
-    let agent: AgentController
-    /// Agent 编辑联动闭包的绑定盒（见 init 内注释）。
-    private let agentEditHook: AgentEditHook
+    /// lazy：初始化器捕获 self，须待 init 完成后首次访问时执行。
+    /// @ObservationIgnored：引用初始化后不变，无需跟踪；嵌套的 items/isRunning 仍由
+    /// AgentController 自身的 @Observable 跟踪。@Observable 宏不支持 lazy 存储属性。
+    @ObservationIgnored private(set) lazy var agent = AgentController(
+        store: store,
+        resolver: resolver,
+        credentials: AgentCredentials.load(from: resolver.directory),
+        onAppliedEdit: { [weak self] in self?.handleAgentAppliedEdit() }
+    )
     /// 草稿相关提示：恢复失败原因 / 完整性报告 / 保存失败
     var draftMessage: String?
 
@@ -35,20 +41,6 @@ final class AppModel {
         self.importer = AssetImporter(directory: resolver.directory)
         self.draftStore = draftStore
         self.draftMessage = restoreNotice
-        // 联动闭包的延迟绑定盒：let agent 赋值完成前 self 未完全初始化，
-        // 逃逸闭包无法捕获 self；先捕获盒（本地 let），赋值完成后再绑定真实闭包。
-        let hook = AgentEditHook()
-        agent = AgentController(
-            store: store,
-            resolver: resolver,
-            credentials: AgentCredentials.load(from: resolver.directory),
-            onAppliedEdit: { [hook] in
-                // didApply 已在 MainActor 调度块内同步触发，直接联动即可
-                hook.body()
-            }
-        )
-        agentEditHook = hook
-        hook.body = { [weak self] in self?.handleAgentAppliedEdit() }
         verifyDraftIntegrity()
     }
 
@@ -229,12 +221,6 @@ final class AppModel {
         }
         try? FileManager.default.removeItem(at: url)
     }
-}
-
-/// Agent 编辑联动闭包的延迟绑定盒：AppModel init 期间 let agent 赋值完成前
-/// self 未完全初始化，逃逸闭包不能捕获 self；经盒转发，赋值完成后再绑定真实闭包。
-final class AgentEditHook {
-    var body: () -> Void = {}
 }
 
 /// 预览播放器：plan 变化 → PreviewBridge 重建 playerItem；周期性时间观察驱动字幕叠加层。
