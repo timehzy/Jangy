@@ -34,6 +34,7 @@
   - Issue 3（iOS 模拟器）：转场双轨 composition + 素材分辨率 == renderSize → CA image queue 拒绝直通 buffer（-11800/-19230），播到转场即停 → [#203](https://github.com/SteliyanH/kadr/issues/203)；POC 侧已用 renderSize+0.5pt 规避（`PreviewBridge.breakRenderSizeEquality`），回归测试 `PreviewPlaybackTests`
   - 提交前已对 v1.1.0 源码逐条核实根因描述；若上游有回复需跟进，回填结论到本节
   - 后续（2026-10-09）：#201 已提修复 PR → [#204](https://github.com/SteliyanH/kadr/pull/204)（根因修复：构建期移除空音频轨 + ClipVolume 仅在真实插入音频时登记；663 测试全绿）。CLA 已签署（提交邮箱已改 yiliforever@qq.com），等作者 review；合并后 POC 侧可评估移除 `SilentAudio` 兜底
+  - 后续（2026-10-13）：上游 #204 仍待 review，修复分支已先合入 fork main（v1.2.1，与 `renderedFrame` 同线），`SilentAudio` 兜底已随 v1.2.1 升级移除——`EngineBridge` 静音挂载逻辑与 `assetHasAudio` 探测整体删除，`SilentAudio.swift` 删除（git 历史可找回）；`ExportVerifier` 保留为纯防御性硬校验。注意行为变化：无音频素材的导出产物从此**不含音频轨**（原先是静音轨）
 
 ### P1
 
@@ -92,7 +93,7 @@ v1 头两个任务（均为 `人工` 决策项，决策后交 `agent` 执行）�
    - **命名去 POC 化**（✅ 2026-10-13）：同步完成目录结构标准化（布局：xcodeproj 提根 + `Packages/`，标准 iOS App 工程结构）。最终命名：包与模块 `KadrPOC`/`POCCore` → `Packages/JangyCore`（`JangyCore`）、CLI `kadrpoc-cli` → `jangy-cli`、App target `JangyPOC` → `Jangy`（`Jangy.xcodeproj` 提根、源码 `Jangy/`、bundle ID `com.haozhenyi.Jangy`、@main `JangyApp`）；CI / .vscode / 活文档同步，docs/superpowers 历史文档保留旧名（时间快照不改）。验证：86 测试全绿 + CLI 冒烟 + xcodebuild 模拟器构建通过
    - **POC 专属代码隔离**（✅ 2026-10-13）：`AssetSynthesizer` / `SamplePlan` 移入新 target `JangyTestSupport`（仅测试与 jangy-cli 依赖，App 不可见 → 不进正式产物为硬保证）；App 侧样例引导整体删除（`prepareAssets` / `isPreparingAssets` 门禁 / 初始与「新建」的样例工程），首发空时间线或恢复草稿即正式版行为；`synthesizeAsync` 及其测试随删除（无消费方）。开发期想要样例内容可用 CLI 播种：往模拟器沙盒 `Application Support/Jangy/` 跑 `genassets --to <dir>` + `sample > <dir>/draft.json`。验证：85 测试全绿（减去的 1 个是随 `synthesizeAsync` 删除的用例）+ CLI 冒烟 + xcodebuild 模拟器构建通过
    - **模拟器微扰**：`breakRenderSizeEquality` 发布前改 `targetEnvironment(simulator)` 条件编译（沿 P1 既定口径）
-   - **`SilentAudio` 兜底**：上游 [#204](https://github.com/SteliyanH/kadr/pull/204) 合并后评估移除
+   - **`SilentAudio` 兜底**（✅ 2026-10-13）：修复分支合入 fork main（v1.2.1），兜底已移除，详见上文 #201 后续注记
    - **不动**：CLI stdout JSON 契约、draft.json 格式、测试套件、三层依赖方向（Agent 链路与自动化依赖）
 
 ## 素材导入选型记录（2026-10-09）

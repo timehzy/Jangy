@@ -4,14 +4,16 @@ import Foundation
 
 /// 导出产物完整性校验。
 ///
-/// 背景（上游 Kadr bug，v1.x 未修）：`CompositionBuilder` 无条件向 composition
+/// 背景（Kadr issue #201）：`CompositionBuilder` 曾无条件向 composition
 /// 添加音频轨；当所有素材都无音频时该轨为空，而 AVFoundation 的
 /// `AVAssetExportSession.compatibility(ofExportPreset:with:outputFileType:)`
 /// 对含空轨的 composition 一律返回 false → `ExportEngine` 静默回退
 /// `AVAssetExportPresetPassthrough`：不挂 videoComposition，preset 的分辨率/帧率/
 /// 编码、转场、字幕烧录全部丢失，输出是原始码流拷贝（甚至多条视频轨），
-/// 且导出流程"成功"。这里在导出后硬校验产物形状——宁可 loud failure，
-/// 也不把 passthrough 垃圾当成功交付。
+/// 且导出流程"成功"。
+/// 根因修复已在 fork v1.2.1 落地（构建期移除空音频轨，上游 PR #204 同源）；
+/// 本校验器保留为导出交付前的硬守卫——宁可 loud failure，也不把任何原因的
+/// passthrough 垃圾当成功交付。
 public enum ExportVerifier {
 
     public enum Failure: Error, Equatable {

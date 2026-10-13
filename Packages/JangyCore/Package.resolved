@@ -6,8 +6,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/timehzy/kadr.git",
       "state" : {
-        "revision" : "d89ceee900d22051b7c35b0a14753a52c393a6d4",
-        "version" : "1.2.0"
+        "revision" : "5ebaf69a9f22a495146ca3ff1f9b2c262ee3a163",
+        "version" : "1.2.1"
       }
     },
     {

@@ -28,15 +28,6 @@ public enum EngineBridge {
     /// - Parameter options: 导出配置（仅导出链路关心 SDR 降级；预览走默认 HDR 直通）。
     public static func makeComposition(from plan: EditPlan, resolver: AssetResolver,
                                        options: ExportOptions = .default) async throws -> Kadr.Video {
-        // 上游 Kadr bug 规避（trigger-avoidance，详见 ExportVerifier 注释）：
-        // Kadr CompositionBuilder 无条件添加音频合成轨；素材无音频时该轨为空，
-        // AVFoundation 兼容性检查对含空轨的 composition 一律返回 false，
-        // ExportEngine 便静默回退 passthrough。给无音频素材挂一段静音替换音频，
-        // 让音频轨始终有 segment，兼容性检查即可通过、走正常重编码路径。
-        // 静音时长覆盖最长 clip 源区间即可（Kadr 按 min(音频时长, clip时长) 截取）。
-        var silenceURL: URL?
-        let maxClipSeconds = plan.clips.map { $0.range.upperBound - $0.range.lowerBound }.max() ?? 0
-
         var elements: [any Kadr.Clip] = []
         for clip in plan.clips {
             guard let asset = plan.asset(withID: clip.assetID) else {
@@ -48,19 +39,6 @@ public enum EngineBridge {
             // Kadr 1.x 校准：`speed(_:)` 只接受 Speed 枚举（Double 重载在 v0.14 被移除）。
             if clip.speed.rate != 1.0 {
                 videoClip = videoClip.speed(.flat(clip.speed.rate))
-            }
-            // 登记表里已有 hasAudio 元数据时直接使用（导入期已探测），缺省再即时探测
-            let hasAudio: Bool
-            if let known = asset.hasAudio {
-                hasAudio = known
-            } else {
-                hasAudio = await assetHasAudio(sourceURL)
-            }
-            if !hasAudio {
-                if silenceURL == nil {
-                    silenceURL = try SilentAudio.url(covering: maxClipSeconds + 0.25)
-                }
-                videoClip = videoClip.withAudio(silenceURL!)
             }
             elements.append(videoClip)
             if let transition = clip.transitionAfter {
@@ -98,13 +76,6 @@ public enum EngineBridge {
             }
         }
         return video
-    }
-
-    /// 素材是否自带音频轨。探测失败（文件损坏/无法读取）按"有音频"处理：
-    /// 不挂静音，让真错误在 Kadr 导出期响亮抛出，而不是给可能自带音频的素材静默盖上静音轨。
-    static func assetHasAudio(_ url: URL) async -> Bool {
-        let asset = AVURLAsset(url: url)
-        return (try? await asset.loadTracks(withMediaType: .audio).isEmpty == false) ?? true
     }
 
     static func kadrTransition(_ transition: PlanTransition) -> Kadr.Transition {

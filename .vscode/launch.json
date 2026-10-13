@@ -19,6 +19,26 @@
 			"target": "jangy-cli",
 			"configuration": "release",
 			"preLaunchTask": "swift: Build Release jangy-cli (JangyCore)"
+		},
+		{
+			"type": "swift",
+			"request": "launch",
+			"args": [],
+			"cwd": "${workspaceFolder:Jangy}/Packages/JangyCore",
+			"name": "Debug jangy-cli (Packages/JangyCore)",
+			"target": "jangy-cli",
+			"configuration": "debug",
+			"preLaunchTask": "swift: Build Debug jangy-cli (Packages/JangyCore)"
+		},
+		{
+			"type": "swift",
+			"request": "launch",
+			"args": [],
+			"cwd": "${workspaceFolder:Jangy}/Packages/JangyCore",
+			"name": "Release jangy-cli (Packages/JangyCore)",
+			"target": "jangy-cli",
+			"configuration": "release",
+			"preLaunchTask": "swift: Build Release jangy-cli (Packages/JangyCore)"
 		}
 	]
 }
