@@ -52,8 +52,8 @@
   - 验收：决策记录（接受近似 / 出精确预览技术方案）
 - [x] **转场重叠语义的时长口径统一**（✅ 2026-10-13）：渲染时长 ≠ `Video.duration` 求和值（实测 9.5s vs 10.5s）。口径统一收进 POCCore `TimelineDuration.swift`：`EditPlan.renderedDuration` = Σ 片段输出时长（源区间/倍速）− Σ 转场重叠量（dissolve 全额重叠、fade 不重叠，与 Kadr CompositionBuilder `overlap(during:)` 一致）；`EditPlanValidator` 转场适配检查改用同一 `outputDuration`。UI 侧 TimelineView 总时长与单片段输出时长均走此口径；e2e 时长断言改为锚定 `renderedDuration`（与真实导出产物互相锚定，样例 9.5s 锚点由 `TimelineDurationTests` 固定）
   - 验收：App 各处时长展示与导出实测时长一致 ✅（85 测试全绿 + App 模拟器编译通过）
-- [ ] **导出管线 HDR→SDR 降级选项**（`agent`，正式版）：HDR 直通已定调为特性，但分享到不支持 HDR 平台的发灰问题需导出侧提供 SDR 降级（SDR 路径 POC 已验证：Kadr Codec.h264 或 709 composition）
-  - 验收：导出设置提供 HDR 直通 / SDR 降级两档，SDR 档产物在不支持 HDR 设备上显示正常
+- [x] **导出管线 HDR→SDR 降级选项**（✅ 2026-10-13，真机验收通过）：HDR 直通已定调为特性，但分享到不支持 HDR 平台的发灰问题需导出侧提供 SDR 降级（SDR 路径 POC 已验证：Kadr Codec.h264 或 709 composition）。实现：新增 `ExportOptions`（POCCore 状态层，struct 预留扩展）承载导出配置；SDR 档映射为同几何/帧率的 `Codec.h264` preset，由 AVAssetExportSession 自动色调映射到 BT.709；`ExportRunner`/`ExportVerifier` 透传配置，SDR 档校验编码 avc1；App 侧点「导出」先弹 `ExportPanel` 配置面板（HDR 开关默认开启），确认后才导出；e2e 新增 SDR 专项（avc1 + 分辨率/时长不变）
+  - 验收：导出设置提供 HDR 直通 / SDR 降级两档 ✅；SDR 档产物在不支持 HDR 设备上显示正常 ✅（真机验证通过）；86 测试全绿 + App 模拟器编译通过 + CLI 冒烟通过
 
 ### P3
 
