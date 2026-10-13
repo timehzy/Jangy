@@ -1,0 +1,23 @@
+docs/superpowers/plans/2026-10-13-agent-app-integration.md
+  s_aee63377c92767::t_bf9fc0924e31ff 476-477
+  s_aee63377c92767::t_95866b10f0285a 558-561,570
+  s_aee63377c92767::t_86aaead212da18 1-426,429,431,433,435-475,478-557,562-569,571-902,904-1566
+  s_aee63377c92767::t_c1698660da73ba 903
+  s_aee63377c92767::t_69a95044361fec 427-428,430,432,434
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "ee0b69ec31db71228d23983b80ad559584db329a",
+  "prompts": {},
+  "sessions": {
+    "s_aee63377c92767": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "09bc7dbb-0862-42e2-be3e-5e892ffa5207",
+        "model": "k3"
+      },
+      "human_author": "Michael <yiliforever@qq.com>"
+    }
+  }
+}
