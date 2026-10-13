@@ -1,0 +1,35 @@
+KadrPOC/Sources/POCCore/TimelineDuration.swift
+  s_d617bfe72a1909::t_0895140a602d76 1-35
+KadrPOC/Sources/POCCore/EditPlanValidator.swift
+  s_d617bfe72a1909::t_9aa682a4184e3c 84,86
+App/JangyPOC/JangyPOC/TimelineView.swift
+  s_d617bfe72a1909::t_086e58c4a9b9b0 10-14,17
+docs/roadmap-path-a.md
+  s_d617bfe72a1909::t_b5c9d74f8f01d6 53-54
+AGENTS.md
+  s_d617bfe72a1909::t_66caf206e420ad 48
+  s_d617bfe72a1909::t_6788163690cbfe 10
+KadrPOC/Tests/POCCoreTests/TimelineDurationTests.swift
+  s_d617bfe72a1909::t_112250cc5c18b1 1-61
+KadrPOC/Sources/POCCore/EngineBridge.swift
+  s_d617bfe72a1909::t_059560051b5199 12-13
+KadrPOC/Tests/POCCoreTests/ExportEndToEndTests.swift
+  s_d617bfe72a1909::t_7a55bafc9df043 30,32
+  s_d617bfe72a1909::t_84b6427d13720c 55-56,58
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "f4645daa996751b619ac31069946dccf70714435",
+  "prompts": {},
+  "sessions": {
+    "s_d617bfe72a1909": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "70f0f721-015a-4d4d-bce9-068b2ef5700c",
+        "model": "k3"
+      },
+      "human_author": "Michael <yiliforever@qq.com>"
+    }
+  }
+}
