@@ -4,21 +4,21 @@
 			"type": "swift",
 			"request": "launch",
 			"args": [],
-			"cwd": "${workspaceFolder:Jangy}/KadrPOC",
-			"name": "Debug kadrpoc-cli (KadrPOC)",
-			"target": "kadrpoc-cli",
+			"cwd": "${workspaceFolder:Jangy}/Packages/JangyCore",
+			"name": "Debug jangy-cli (JangyCore)",
+			"target": "jangy-cli",
 			"configuration": "debug",
-			"preLaunchTask": "swift: Build Debug kadrpoc-cli (KadrPOC)"
+			"preLaunchTask": "swift: Build Debug jangy-cli (JangyCore)"
 		},
 		{
 			"type": "swift",
 			"request": "launch",
 			"args": [],
-			"cwd": "${workspaceFolder:Jangy}/KadrPOC",
-			"name": "Release kadrpoc-cli (KadrPOC)",
-			"target": "kadrpoc-cli",
+			"cwd": "${workspaceFolder:Jangy}/Packages/JangyCore",
+			"name": "Release jangy-cli (JangyCore)",
+			"target": "jangy-cli",
 			"configuration": "release",
-			"preLaunchTask": "swift: Build Release kadrpoc-cli (KadrPOC)"
+			"preLaunchTask": "swift: Build Release jangy-cli (JangyCore)"
 		}
 	]
 }

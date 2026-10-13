@@ -7,22 +7,22 @@ on:
     branches: [ "main" ]
 
 jobs:
-  poccore-tests:
-    name: POCCore swift test
+  jangycore-tests:
+    name: JangyCore swift test
     runs-on: macos-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Run POCCore tests
-        run: cd KadrPOC && swift test
+      - name: Run JangyCore tests
+        run: cd Packages/JangyCore && swift test
 
   app-build:
-    name: Build JangyPOC app (iOS Simulator)
+    name: Build Jangy app (iOS Simulator)
     runs-on: macos-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Build app
         run: |
-          xcodebuild -project App/JangyPOC/JangyPOC.xcodeproj -scheme JangyPOC \
+          xcodebuild -project Jangy.xcodeproj -scheme Jangy \
             -destination 'generic/platform=iOS Simulator' build
