@@ -177,14 +177,15 @@ final class AppModel {
     }
 
     /// 导出：先渲染到临时文件，完成后写入系统相册，方便真机直接验证成片。
-    func export() {
+    /// 配置来自导出面板（ExportPanel）：HDR 直通 / SDR 降级等选项见 ExportOptions。
+    func export(options: ExportOptions = .default) {
         exportProgress = 0
         exportMessage = nil
         let out = FileManager.default.temporaryDirectory
             .appendingPathComponent("poc-export-\(Int(Date().timeIntervalSince1970)).mp4")
         Task {
             do {
-                for try await event in ExportRunner.export(plan: store.plan, resolver: resolver, to: out) {
+                for try await event in ExportRunner.export(plan: store.plan, resolver: resolver, to: out, options: options) {
                     switch event {
                     case .progress(let fraction):
                         exportProgress = fraction
@@ -192,7 +193,7 @@ final class AppModel {
                         do {
                             try await Self.saveToPhotoLibrary(url)
                             exportProgress = nil
-                            exportMessage = "已导出到相册（\(ms)ms）"
+                            exportMessage = "已导出到相册（\(ms)ms，\(options.hdrPassthrough ? "HDR" : "SDR")）"
                         } catch {
                             exportProgress = nil
                             exportMessage = "已渲染但保存相册失败: \(error.localizedDescription)\n文件: \(url.path)"

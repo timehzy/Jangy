@@ -6,6 +6,7 @@ struct ContentView: View {
     @State private var showPhotoPicker = false
     @State private var showFilesPicker = false
     @State private var showResetConfirm = false
+    @State private var showExportPanel = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -25,7 +26,7 @@ struct ContentView: View {
                 }
                 .disabled(model.isPreparingAssets || model.importProgress != nil)
                 Button("新建") { showResetConfirm = true }
-                Button("导出") { model.export() }
+                Button("导出") { showExportPanel = true }
                     .disabled(model.isPreparingAssets || model.exportProgress != nil)
             }
             .padding(.horizontal)
@@ -70,6 +71,11 @@ struct ContentView: View {
                 model.importVideosFromFiles(urls: urls)
             }
             .ignoresSafeArea()
+        }
+        .sheet(isPresented: $showExportPanel) {
+            ExportPanel { options in
+                model.export(options: options)
+            }
         }
         .confirmationDialog("新建草稿？当前时间线将重置为样例工程（可撤销）",
                             isPresented: $showResetConfirm, titleVisibility: .visible) {
