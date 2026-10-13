@@ -1,0 +1,22 @@
+Packages/JangyCore/Tests/JangyAgentTests/EditAgentSessionTests.swift
+  s_aee63377c92767::t_f03a8d133e3d83 110-118
+Packages/JangyCore/Sources/JangyAgent/EditAgentSession.swift
+  s_aee63377c92767::t_5d87832e0c333d 146-147
+  s_aee63377c92767::t_97fc9bf2efc9be 83-85
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "fa199eae8b87a9f787fff03d2a3843fcd35a9d85",
+  "prompts": {},
+  "sessions": {
+    "s_aee63377c92767": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "09bc7dbb-0862-42e2-be3e-5e892ffa5207",
+        "model": "k3"
+      },
+      "human_author": "Michael <yiliforever@qq.com>"
+    }
+  }
+}
