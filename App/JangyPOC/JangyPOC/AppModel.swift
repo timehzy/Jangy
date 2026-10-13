@@ -164,6 +164,18 @@ final class AppModel {
         }
     }
 
+    /// 从文件 App 导入视频：picker（asCopy）已把文件拷入 App 临时目录，
+    /// 无授权申请、无 iCloud 解析步，直接进共用管线。origin 登记为 .files。
+    func importVideosFromFiles(urls: [URL]) {
+        guard !urls.isEmpty else { return }
+        importProgress = 0
+        importMessage = nil
+        Task { @MainActor in
+            await importPipeline(urls, origin: .files,
+                                 failureHint: "文件拷贝或格式不支持") { url, _, _ in url }
+        }
+    }
+
     /// 导出：先渲染到临时文件，完成后写入系统相册，方便真机直接验证成片。
     func export() {
         exportProgress = 0
