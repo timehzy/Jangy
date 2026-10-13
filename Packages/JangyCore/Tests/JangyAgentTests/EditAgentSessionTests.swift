@@ -107,6 +107,15 @@ final class EditAgentSessionTests: XCTestCase {
         XCTAssertFalse(stub.requests[1].promptText.contains("手动修改"))
     }
 
+    func testSnapshotEventEncoding() throws {
+        let data = try JSONEncoder().encode(AgentEvent.snapshot(turn: 2, at: 1.5, path: "/tmp/a.png"))
+        let json = String(decoding: data, as: UTF8.self)
+        XCTAssertTrue(json.contains(#""event":"snapshot""#))
+        XCTAssertTrue(json.contains(#""turn":2"#))
+        XCTAssertTrue(json.contains(#""at":1.5"#))
+        XCTAssertTrue(json.contains(#""path":"\/tmp\/a.png""#))
+    }
+
     func testTurnLimitThrows() async throws {
         let context = makeContext()
         // 空响应脚本：每轮都返回空白 → nudge 一次后抛 emptyResponse

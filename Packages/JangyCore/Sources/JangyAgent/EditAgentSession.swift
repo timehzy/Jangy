@@ -80,6 +80,9 @@ public final class EditAgentSession {
     }
 
     /// 跑一条用户指令，返回消耗轮次。LLM 接入错误原样抛出，由调用方归类。
+    ///
+    /// 单飞约定：同一时间只允许一条指令在跑；并发 send 会使 transcript 交错
+    /// （框架不串行化 respond），调用方负责串行化（CLI 单次调用 / App 侧 UI 运行中禁用输入）。
     @discardableResult
     public func send(_ instruction: String) async throws -> Int {
         context.resetToolCallCount()
@@ -140,6 +143,8 @@ public final class EditAgentSession {
             }
             throw AgentRunError.turnLimitExceeded(turns: configuration.maxTurns)
         } catch {
+            // 取消路径上这次读仍能完成（调度器无 throwing 挂起点）；必须取到，
+            // 否则外部修改检测会把本次的部分编辑误判为用户手动编辑
             lastPlanAtSendEnd = await context.plan
             throw error
         }
