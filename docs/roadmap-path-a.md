@@ -44,6 +44,8 @@
 
 ### P2
 
+- [ ] **导出帧快照单帧直渲（路线 B）**（`agent`，Kadr fork）：路线 A（导全片再抽帧）每次快照付一次全片导出；触发条件 = Agent 自检链路被导出耗时卡住，或 App 内要交互式「预览 vs 导出真值」比对。做法：fork 上给 `Video` 加导出保真单帧渲染入口（`CompositionBuilder.build` + `OverlayRenderer.buildLayerTree` 挂 animationTool + `AVAssetImageGenerator`），需先验证自定义 compositor / animationTool 过 image generator 的行为（CATextLayer 隐形同类风险区）；护栏用例已就位（`testFrameSnapshotMatchesExportedTruth`）
+  - 验收：单帧渲染 <1s 且通过快照==真值锚定用例；`FrameSnapshotter` 内部换实现、对外 API 不变
 - [x] **「文件 App 导入」通道**（✅ 2026-10-13，真机验收通过）：UIDocumentPicker（asCopy 系统代拷，免 security-scope 管理）多选导入 → 素材库落盘 → 追加时间线全链路，`AssetOrigin.files` 落地；AppModel 导入尾部抽为 `importPipeline` 两渠道共用（相册渠道行为等价重构，77 测试全绿）；真机验收覆盖多选导入、预览/导出、单撤销步回退、相册导入回归
   - 验收：文件 App 多选导入 → 素材库落盘 → 追加时间线全链路 ✅；设计 spec `docs/superpowers/specs/2026-10-13-files-import-design.md`，实现计划 `docs/superpowers/plans/2026-10-13-files-import.md`
 - [ ] **字幕预览近似的正式版决策**（`人工` 决策 + `agent` 执行）：Kadr overlay 仅导出时烧录，POC 用 SwiftUI Text 叠加层近似——「所见即所导」对字幕降级为「预览近似」——**2026-10-13 移入「正式版启动」v1 任务 2**
@@ -84,7 +86,7 @@ v1 头两个任务（均为 `人工` 决策项，决策后交 `agent` 执行）�
 2. **字幕预览决策**（✅ 2026-10-13 已拍板，自 P2 移入）：**接受近似，但收窄定义为「字幕时间对位示意层」**。调研结论：业界专业编辑器（LumaFusion/VN/剪映）收敛于「自定义合成器、预览导出同一渲染管线」；混合 UI 叠加路线在真实产品中存活但天花板低（drift 投诉 + 复杂度上限）。决策：
    - **UI 合成预览只承担字幕**（静态；v1 不做字幕动画），定位是时间对位示意——不承诺像素一致，只承诺时间/位置模板正确。字幕是唯一例外的理由：预览诉求是时间对位而非像素保真，且文字恰是 UI 渲染优于烧录预览的内容类型
    - **UI 口禁入清单**：贴纸/水印（静态也暂不）、属性动画、资产驱动动画。各自正确路径：几何变换（裁剪/旋转）与多镜头/PiP 走 videoComposition（预览原生精确，转场双轨已验证此管线）；动态贴纸走 HEVC-with-alpha 视频轨道（LumaFusion 同款路线）；程序化特效（粒子/shader）v1 不做
-   - **护栏**：导出帧快照入口（当前时间点走导出管线渲一帧），人工比对 + 给 Agent 链路留自检工具
+   - **护栏**：导出帧快照入口（当前时间点走导出管线渲一帧），人工比对 + 给 Agent 链路留自检工具（✅ 2026-10-13 路线 A 落地：`FrameSnapshotter`（JangyCore）+ CLI `snapshot` 子命令，完整导出临时 mp4 后零容差抽帧 PNG，多 `--at` 共享一次导出；e2e 锚定「快照帧 ≈ 全片导出同刻抽帧」。单帧直渲优化见 P2 backlog）
    - **未来触发条件**：出现第一个「必须精确预览」的效果（滤镜/调色、HDR 字幕观感投诉等）→ 启动自定义 `AVVideoCompositing` 专项（动 Kadr fork 渲染管线，预览导出共享合成器，弃 CoreAnimationTool 路线）；`PreviewBridge` 抽象已为此预留
 3. **代码起点决策**（✅ 2026-10-13 已拍板）：**基于 POC 直接演进，不新开工程/仓库**。理由：POC 三层分层本就是为正式版设计的（状态层纯 Swift / Kadr 收敛引擎适配层 / App 壳薄），v1 任务（剪辑 Agent、素材库管理 UI、导出帧快照）全为增量，无一项需推翻现有结构；86 测试 + CLI 契约 + e2e + git 历史/已知坑记录是 Agent 链路与后续开发的地基，重写纯损耗。配套「正式版化收口」清单（随 v1 首个任务一起做）：
    - **命名去 POC 化**（✅ 2026-10-13）：同步完成目录结构标准化（布局：xcodeproj 提根 + `Packages/`，标准 iOS App 工程结构）。最终命名：包与模块 `KadrPOC`/`POCCore` → `Packages/JangyCore`（`JangyCore`）、CLI `kadrpoc-cli` → `jangy-cli`、App target `JangyPOC` → `Jangy`（`Jangy.xcodeproj` 提根、源码 `Jangy/`、bundle ID `com.haozhenyi.Jangy`、@main `JangyApp`）；CI / .vscode / 活文档同步，docs/superpowers 历史文档保留旧名（时间快照不改）。验证：86 测试全绿 + CLI 冒烟 + xcodebuild 模拟器构建通过

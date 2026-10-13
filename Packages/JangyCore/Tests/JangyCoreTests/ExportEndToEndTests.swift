@@ -1,9 +1,7 @@
 import XCTest
 import AVFoundation
 import CoreGraphics
-#if canImport(AppKit)
-import AppKit
-#endif
+import ImageIO
 @testable import JangyCore
 @testable import JangyTestSupport
 
@@ -134,6 +132,43 @@ final class ExportEndToEndTests: XCTestCase {
         XCTAssertEqual(duration, 5.0, accuracy: 0.3, "无转场拼接时长应为两段之和 5s")
     }
 
+    /// 帧快照 == 导出真值：快照入口产出的帧与全片导出后同时刻抽帧应几乎逐像素一致。
+    /// 这是「快照可当真值用」的锚定用例——若将来快照实现改单帧直渲（路线 B），本用例即护栏。
+    func testFrameSnapshotMatchesExportedTruth() async throws {
+        let plan = SamplePlan.make()
+        let truth = try await exportToFile(plan, name: "truth.mp4")
+        let (truthPixels, w, h) = try frameRGBA(AVURLAsset(url: truth), at: 1.0)
+
+        let frames = try await FrameSnapshotter.snapshots(plan: plan, resolver: resolver, at: [1.0])
+        let png = try XCTUnwrap(frames[1.0])
+        let source = try XCTUnwrap(CGImageSourceCreateWithData(png as CFData, nil))
+        let image = try XCTUnwrap(CGImageSourceCreateImageAtIndex(source, 0, nil))
+        XCTAssertEqual(image.width, w)
+        XCTAssertEqual(image.height, h)
+        let (shotPixels, _, _) = rgba(image)
+
+        // 同一台机器同一编码器对同一 composition 的两次导出应逐像素一致；
+        // 留容差吸收编码器非确定性，避免误报
+        var diffs = 0
+        for i in 0..<shotPixels.count where abs(Int(shotPixels[i]) - Int(truthPixels[i])) > 8 {
+            diffs += 1
+        }
+        XCTAssertLessThan(Double(diffs) / Double(shotPixels.count), 0.001,
+                          "帧快照与导出真值应几乎逐像素一致")
+    }
+
+    /// 超出渲染时长的时刻在导出前即被拒绝（不许为非法输入白跑一次导出）。
+    func testSnapshotRejectsOutOfRangeTime() async throws {
+        let plan = SamplePlan.make()
+        do {
+            _ = try await FrameSnapshotter.snapshots(plan: plan, resolver: resolver, at: [999])
+            XCTFail("超出渲染时长的时刻应被拒绝")
+        } catch FrameSnapshotter.Failure.timeOutOfRange(let t, let duration) {
+            XCTAssertEqual(t, 999)
+            XCTAssertEqual(duration, plan.renderedDuration, accuracy: 0.001)
+        }
+    }
+
     /// 素材表 + 片段的便捷构造：每段素材在登记表里有对应条目（v2 引用模型）。
     private static func makePlan(clips: [(file: String, range: ClosedRange<TimeInterval>, speed: Double)]) -> EditPlan {
         var assets: [AssetItem] = []
@@ -177,14 +212,12 @@ final class ExportEndToEndTests: XCTestCase {
         return (Int(pixels[o]), Int(pixels[o + 1]), Int(pixels[o + 2]))
     }
 
-    /// AVAssetImageGenerator 抽帧并重绘到已知 RGBA8 布局，消除像素格式差异。
+    /// 抽帧并重绘到已知 RGBA8 布局，消除像素格式差异。
     private func frameRGBA(_ asset: AVAsset, at seconds: Double) throws -> ([UInt8], Int, Int) {
-        let gen = AVAssetImageGenerator(asset: asset)
-        gen.appliesPreferredTrackTransform = true
-        // 零容差：默认容差会取最近关键帧（近似帧），导致核对帧取错片段
-        gen.requestedTimeToleranceBefore = .zero
-        gen.requestedTimeToleranceAfter = .zero
-        let cg = try gen.copyCGImage(at: CMTime(seconds: seconds, preferredTimescale: 600), actualTime: nil)
+        try rgba(FrameSnapshotter.frame(from: asset, at: seconds))
+    }
+
+    private func rgba(_ cg: CGImage) -> ([UInt8], Int, Int) {
         let w = cg.width, h = cg.height
         var pixels = [UInt8](repeating: 0, count: w * h * 4)
         let ctx = CGContext(data: &pixels, width: w, height: h, bitsPerComponent: 8,
@@ -194,24 +227,9 @@ final class ExportEndToEndTests: XCTestCase {
         return (pixels, w, h)
     }
 
-    /// 抽帧并编码 PNG 落盘（人工核对产物）。测试宿主为 macOS，用 NSBitmapImageRep。
+    /// 抽帧并编码 PNG 落盘（人工核对产物）。
     private func saveFramePNG(_ asset: AVAsset, at seconds: Double, to url: URL) throws {
-        #if canImport(AppKit)
-        let gen = AVAssetImageGenerator(asset: asset)
-        gen.appliesPreferredTrackTransform = true
-        // 零容差：默认容差会取最近关键帧（近似帧），导致核对帧取错片段
-        gen.requestedTimeToleranceBefore = .zero
-        gen.requestedTimeToleranceAfter = .zero
-        let cg = try gen.copyCGImage(at: CMTime(seconds: seconds, preferredTimescale: 600), actualTime: nil)
-        let rep = NSBitmapImageRep(cgImage: cg)
-        guard let png = rep.representation(using: .png, properties: [:]) else {
-            XCTFail("PNG 编码失败: \(url.lastPathComponent)")
-            return
-        }
-        try png.write(to: url)
-        #else
-        throw XCTSkip("抽帧落盘仅在 macOS 测试宿主支持")
-        #endif
+        try FrameSnapshotter.pngData(FrameSnapshotter.frame(from: asset, at: seconds)).write(to: url)
     }
 
     /// Packages/JangyCore/TestArtifacts/（已 gitignore）。由本文件路径定位包根，与测试工作目录解耦。
