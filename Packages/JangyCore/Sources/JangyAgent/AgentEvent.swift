@@ -13,11 +13,12 @@ public enum AgentEvent: Encodable, Sendable {
     case assistant(turn: Int, content: String)
     case toolCall(turn: Int, name: String, arguments: String)
     case toolResult(turn: Int, name: String, status: String, summary: String)
+    case snapshot(turn: Int, at: TimeInterval, path: String)
     case done(turns: Int, planPath: String?, exported: String?)
     case error(kind: ErrorKind, message: String)
 
     private enum CodingKeys: String, CodingKey {
-        case event, instruction, model, hasInitialPlan, turn, content, name, arguments, status, summary, turns, planPath, exported, kind, message
+        case event, instruction, model, hasInitialPlan, turn, content, name, arguments, status, summary, turns, planPath, exported, kind, message, at, path
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -43,6 +44,11 @@ public enum AgentEvent: Encodable, Sendable {
             try container.encode(name, forKey: .name)
             try container.encode(status, forKey: .status)
             try container.encode(summary, forKey: .summary)
+        case .snapshot(let turn, let at, let path):
+            try container.encode("snapshot", forKey: .event)
+            try container.encode(turn, forKey: .turn)
+            try container.encode(at, forKey: .at)
+            try container.encode(path, forKey: .path)
         case .done(let turns, let planPath, let exported):
             try container.encode("done", forKey: .event)
             try container.encode(turns, forKey: .turns)

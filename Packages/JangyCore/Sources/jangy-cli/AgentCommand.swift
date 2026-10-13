@@ -65,7 +65,7 @@ struct Agent: AsyncParsableCommand {
             framesDirectory: URL(fileURLWithPath: frames),
             maxToolCalls: maxToolCalls
         )
-        let runner = EditAgentRunner(
+        let session = EditAgentSession(
             context: context,
             configuration: AgentRunConfiguration(
                 model: model,
@@ -79,7 +79,7 @@ struct Agent: AsyncParsableCommand {
 
         let turns: Int
         do {
-            turns = try await runner.run(instruction: instruction)
+            turns = try await session.send(instruction)
         } catch AgentRunError.turnLimitExceeded(let limit) {
             CLIError.stderr("轮次耗尽（\(limit)）仍未收尾")
             emit(.error(kind: .turnLimit, message: "turn limit \(limit) exceeded"))
