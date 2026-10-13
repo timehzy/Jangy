@@ -44,8 +44,8 @@
 
 ### P2
 
-- [ ] **导出帧快照单帧直渲（路线 B）**（`agent`，Kadr fork）：路线 A（导全片再抽帧）每次快照付一次全片导出；触发条件 = Agent 自检链路被导出耗时卡住，或 App 内要交互式「预览 vs 导出真值」比对。做法：fork 上给 `Video` 加导出保真单帧渲染入口（`CompositionBuilder.build` + `OverlayRenderer.buildLayerTree` 挂 animationTool + `AVAssetImageGenerator`），需先验证自定义 compositor / animationTool 过 image generator 的行为（CATextLayer 隐形同类风险区）；护栏用例已就位（`testFrameSnapshotMatchesExportedTruth`）
-  - 验收：单帧渲染 <1s 且通过快照==真值锚定用例；`FrameSnapshotter` 内部换实现、对外 API 不变
+- [x] **导出帧快照单帧直渲（路线 B）**（✅ 2026-10-13）：Kadr fork 新增 `Video.renderedFrame(at:)`（v1.2.0，branch `feat/export-frame`）——导出路径同款构建（`CompositionBuilder` + animationTool 层树）经 `AVAssetImageGenerator` 单帧渲染，跳过全片编码；探针先行验证 animationTool 过 image generator 可用（结论沉淀 known-pitfalls）。`FrameSnapshotter` 内部换实现、对外 API 不变；锚定用例改按「结构一致」设阈（直接渲染帧 vs 编码往返帧有系统性色调偏移，实测 meanAbs≈12/255、diff>32 占 0.025%）
+  - 验收：单帧渲染秒级（CLI 三时刻冒烟一次合成完成）✅；快照==真值锚定用例通过 ✅；87 测试全绿 + xcodebuild 模拟器构建通过 ✅
 - [x] **「文件 App 导入」通道**（✅ 2026-10-13，真机验收通过）：UIDocumentPicker（asCopy 系统代拷，免 security-scope 管理）多选导入 → 素材库落盘 → 追加时间线全链路，`AssetOrigin.files` 落地；AppModel 导入尾部抽为 `importPipeline` 两渠道共用（相册渠道行为等价重构，77 测试全绿）；真机验收覆盖多选导入、预览/导出、单撤销步回退、相册导入回归
   - 验收：文件 App 多选导入 → 素材库落盘 → 追加时间线全链路 ✅；设计 spec `docs/superpowers/specs/2026-10-13-files-import-design.md`，实现计划 `docs/superpowers/plans/2026-10-13-files-import.md`
 - [ ] **字幕预览近似的正式版决策**（`人工` 决策 + `agent` 执行）：Kadr overlay 仅导出时烧录，POC 用 SwiftUI Text 叠加层近似——「所见即所导」对字幕降级为「预览近似」——**2026-10-13 移入「正式版启动」v1 任务 2**

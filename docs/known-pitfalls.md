@@ -4,6 +4,7 @@
 
 ## 引擎行为
 
+- **AVAssetImageGenerator 可渲 animationTool（2026-10-13 探针验证）**：挂导出式 videoComposition（含 `AVVideoCompositionCoreAnimationTool` 层树 + `CAKeyframeAnimation` 时间窗，beginTime=`AVCoreAnimationBeginTimeAtZero`）抽帧，overlay 按时间窗正确显隐——`Video.renderedFrame(at:)`（fork v1.2.0）即建于此。但**直接渲染帧 ≠ 导出解码帧**：无编码压缩痕迹，且与 HEVC 编码往返存在系统性色调偏移（样例红底帧实测全图 meanAbs≈12/255，diff>32 像素仅 0.025% 且集中在字幕抗锯齿边缘）——比对断言要按「结构一致」设阈（大差异占比），不能逐像素近似
 - **字幕不进预览**：Kadr 官方明确 overlay 仅导出时烧录（`AVVideoCompositionCoreAnimationTool`），`makePlayerItem()` 预览无字幕；App 用 SwiftUI Text 叠加层按播放器时间近似显示（降级登记与约束见架构公约 §6.4）
 - **转场重叠语义**：dissolve 与相邻片段全额重叠（扣 duration），fade 不重叠（各占相邻片段内 duration/2，总长不变）——渲染时长 ≠ `Video.duration` 求和值（样例工程实测 9.5s vs 10.5s，与 Kadr CompositionBuilder `overlap(during:)` 一致）；时长口径约束见架构公约 §3.3
 - **预览 player 生命周期**：旧 player 的回收依赖 dealloc（时机不受控），`PlayerController.rebuild()` 不主动停旧实例会出现「界面无播放器却有声音」的孤儿播放；rebuild 的 await 期间可能又来一次 rebuild。生命周期约束见架构公约 §6.3
