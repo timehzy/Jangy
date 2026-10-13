@@ -1,0 +1,24 @@
+Packages/JangyCore/Package.swift
+  s_aee63377c92767::t_2920e7c35e9c66 10-11
+Jangy.xcodeproj/project.pbxproj
+  s_aee63377c92767::t_e7faf2fb58c479 76
+  s_aee63377c92767::t_00e1f88e15042f 32
+  s_aee63377c92767::t_da7dc58337b1d8 366-369
+  s_aee63377c92767::t_351bcfe754c110 11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "aa19960e57c5f5efa22abdbb5a2b2f223f3349ac",
+  "prompts": {},
+  "sessions": {
+    "s_aee63377c92767": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "09bc7dbb-0862-42e2-be3e-5e892ffa5207",
+        "model": "k3"
+      },
+      "human_author": "Michael <yiliforever@qq.com>"
+    }
+  }
+}
