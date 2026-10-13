@@ -1,0 +1,28 @@
+docs/architecture-covenant.md
+  s_aee63377c92767::t_b8979edcbe9528 115
+  s_aee63377c92767::t_d5f7d4e53f35cb 50
+docs/superpowers/specs/2026-10-13-agent-app-integration-design.md
+  s_aee63377c92767::t_dc2a9019fe842c 27
+  s_aee63377c92767::t_fd15bfeeb8b2ff 12
+AGENTS.md
+  s_aee63377c92767::t_719522d259a249 61
+  s_aee63377c92767::t_f806272fc4fead 40-42
+docs/roadmap-path-a.md
+  s_aee63377c92767::t_77cd6fdf8610c8 120-128
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "747aa726bd21628998acc34e9d5df1ceeaad1326",
+  "prompts": {},
+  "sessions": {
+    "s_aee63377c92767": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "09bc7dbb-0862-42e2-be3e-5e892ffa5207",
+        "model": "k3"
+      },
+      "human_author": "Michael <yiliforever@qq.com>"
+    }
+  }
+}
