@@ -29,7 +29,7 @@ struct ContentView: View {
                 .disabled(model.importProgress != nil || model.agent.isRunning)
                 Button("新建") { showResetConfirm = true }.disabled(model.agent.isRunning)
                 Button("Agent") { showAgent = true }
-                    .disabled(!model.agent.isConfigured)
+                    .disabled(!model.agent.isConfigured || model.importProgress != nil)
                 Button("导出") { showExportPanel = true }
                     .disabled(model.exportProgress != nil || model.agent.isRunning)
             }

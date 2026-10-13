@@ -114,7 +114,7 @@ public final class AgentRunContext: @unchecked Sendable {
     }
 
     /// 每条指令开始时重置步数计数（上限语义 = 防单次指令失控的兜底，不跨指令累计）。
-    /// 由 session 层在每条指令（send）开始时调用（Task 4/6 接线）。
+    /// 由 session 层在每条指令（send）开始时调用。
     public func resetToolCallCount() {
         lock.lock()
         defer { lock.unlock() }

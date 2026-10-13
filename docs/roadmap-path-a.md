@@ -126,3 +126,4 @@ v1 头两个任务（均为 `人工` 决策项，决策后交 `agent` 执行）�
   - **凭据**：本期本地文件注入（Application Support/Jangy/agent-config.json），产品化发布前再议
   - **公约回填**：§6.2 白名单登记「剪辑 Agent 任务」（流式呈现，不以 spinner 呈现）
   - 验收：125 测试全绿 + App 模拟器构建通过 + CLI 冒烟无回归 + 真 key 冒烟（单指令链路）
+  - 遗留：追问链路（同 session 连发指令）live 验证并入模拟器手动验证（CLI 是单指令进程，验不了 session 复用；stub 测试已覆盖 transcript 保留与提示注入）；sheet 三档 fraction（0.35/0.55/0.8）待模拟器调校确认；快照卡片主线程同步读图（MB 级 PNG）开发期可接受，后续可换缓存/异步加载
