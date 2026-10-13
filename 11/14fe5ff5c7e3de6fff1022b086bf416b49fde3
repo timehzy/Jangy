@@ -1,0 +1,26 @@
+AGENTS.md
+  s_ef7071ef496c43::t_03e9c2f27e3085 7
+docs/poc-verification-checklist.md
+  s_ef7071ef496c43::t_3fd01c19fd9026 71,73-76
+  s_ef7071ef496c43::t_9312f3a72247e6 51,55
+docs/roadmap-path-a.md
+  s_ef7071ef496c43::t_a3d5e477675f8f 49
+  s_ef7071ef496c43::t_7ad8777bb01ccd 89
+  s_ef7071ef496c43::t_7b49233e28c234 65-77
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "1114fe5ff5c7e3de6fff1022b086bf416b49fde3",
+  "prompts": {},
+  "sessions": {
+    "s_ef7071ef496c43": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2887ceb0-a715-4103-b027-039d82699266",
+        "model": "k3"
+      },
+      "human_author": "Michael <yiliforever@qq.com>"
+    }
+  }
+}
