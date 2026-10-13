@@ -14,9 +14,30 @@ public final class EditStore {
         self.undoStack = UndoStack(initial: initial)
     }
 
-    public var canUndo: Bool { undoStack.canUndo }
-    public var canRedo: Bool { undoStack.canRedo }
+    public var canUndo: Bool { groupBase == nil && undoStack.canUndo }
+    public var canRedo: Bool { groupBase == nil && undoStack.canRedo }
     public var historyCount: Int { undoStack.snapshots.count }
+
+    /// 分组事务基线：非 nil 表示处于分组中，组内 apply 不压撤销栈。
+    private var groupBase: EditPlan?
+
+    /// 是否处于分组事务中（UI 据此禁用撤销/重做等编辑入口）。
+    public var isGrouping: Bool { groupBase != nil }
+
+    /// 开始分组事务：组内 apply 照常校验、照常改 plan，但不压撤销栈；
+    /// endGrouping 时若 plan 相对基线有变化，压一个撤销步。
+    /// 不嵌套：分组中再次调用为 no-op。
+    public func beginGrouping() {
+        guard groupBase == nil else { return }
+        groupBase = plan
+    }
+
+    /// 结束分组事务：plan 有变化则压一步；无变化（空组/全失败）不压。
+    public func endGrouping() {
+        guard let base = groupBase else { return }
+        groupBase = nil
+        if plan != base { undoStack.push(plan) }
+    }
 
     @discardableResult
     public func apply(_ mutate: (inout EditPlan) -> Void) -> Result<EditPlan, ValidationFailure> {
@@ -24,16 +45,18 @@ public final class EditStore {
         mutate(&next)
         let issues = validator.validate(next)
         guard issues.isEmpty else { return .failure(ValidationFailure(issues: issues)) }
-        undoStack.push(next)
+        if groupBase == nil { undoStack.push(next) }  // 组内不压栈，endGrouping 统一收
         plan = next
         return .success(next)
     }
 
     public func undo() {
+        guard groupBase == nil else { return }
         if let restored = undoStack.undo() { plan = restored }
     }
 
     public func redo() {
+        guard groupBase == nil else { return }
         if let restored = undoStack.redo() { plan = restored }
     }
 
