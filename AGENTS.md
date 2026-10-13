@@ -4,7 +4,7 @@
 
 ## 项目是什么
 
-iOS 视频剪辑 App（SwiftUI + AVFoundation），当前为 Kadr POC 阶段：用 [Kadr](https://github.com/SteliyanH/kadr) DSL 引擎验证「多段拼接 + 转场 + 变速 + 字幕 + headless 导出」最小闭环。架构分三层：
+iOS 视频剪辑 App（SwiftUI + AVFoundation），基于 [Kadr](https://github.com/SteliyanH/kadr) DSL 引擎（已验证「多段拼接 + 转场 + 变速 + 字幕 + headless 导出」最小闭环）。**阶段状态（2026-10-13）：POC 技术验证已收口，进入正式版 v1 规划**——v1 范围与字幕预览两个决策项待拍板，见 [docs/roadmap-path-a.md](docs/roadmap-path-a.md)「正式版启动」。架构分三层：
 
 - **POCCore**（`KadrPOC/Sources/POCCore/`）：核心库
   - 编辑状态层（纯 Swift，无 AVFoundation 依赖）：`EditPlan`（v2：含素材登记表 `assets`，clip/字幕用 `assetID` 引用）/ `PlanClip` / `PlanTransition` / `AssetItem` / `EditStore` / `UndoStack` / `EditPlanValidator` / `TimelineDuration`（渲染时长口径：dissolve 重叠扣除、fade 不扣）

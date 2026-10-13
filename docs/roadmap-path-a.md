@@ -46,10 +46,7 @@
 
 - [x] **「文件 App 导入」通道**（✅ 2026-10-13，真机验收通过）：UIDocumentPicker（asCopy 系统代拷，免 security-scope 管理）多选导入 → 素材库落盘 → 追加时间线全链路，`AssetOrigin.files` 落地；AppModel 导入尾部抽为 `importPipeline` 两渠道共用（相册渠道行为等价重构，77 测试全绿）；真机验收覆盖多选导入、预览/导出、单撤销步回退、相册导入回归
   - 验收：文件 App 多选导入 → 素材库落盘 → 追加时间线全链路 ✅；设计 spec `docs/superpowers/specs/2026-10-13-files-import-design.md`，实现计划 `docs/superpowers/plans/2026-10-13-files-import.md`
-- [ ] **App 内素材库管理 UI**（`agent`）：网格/缩略图/删除未引用素材；kadr-photos 有 `assets(in:)` 相册列举可用，缩略图需自建 PHImageManager + 缓存
-  - 验收：素材库网格展示 + 删除未引用素材后 plan 完整性校验通过
-- [ ] **字幕预览近似的正式版决策**（`人工` 决策 + `agent` 执行）：Kadr overlay 仅导出时烧录，POC 用 SwiftUI Text 叠加层近似——「所见即所导」对字幕降级为「预览近似」
-  - 验收：决策记录（接受近似 / 出精确预览技术方案）
+- [ ] **字幕预览近似的正式版决策**（`人工` 决策 + `agent` 执行）：Kadr overlay 仅导出时烧录，POC 用 SwiftUI Text 叠加层近似——「所见即所导」对字幕降级为「预览近似」——**2026-10-13 移入「正式版启动」v1 任务 2**
 - [x] **转场重叠语义的时长口径统一**（✅ 2026-10-13）：渲染时长 ≠ `Video.duration` 求和值（实测 9.5s vs 10.5s）。口径统一收进 POCCore `TimelineDuration.swift`：`EditPlan.renderedDuration` = Σ 片段输出时长（源区间/倍速）− Σ 转场重叠量（dissolve 全额重叠、fade 不重叠，与 Kadr CompositionBuilder `overlap(during:)` 一致）；`EditPlanValidator` 转场适配检查改用同一 `outputDuration`。UI 侧 TimelineView 总时长与单片段输出时长均走此口径；e2e 时长断言改为锚定 `renderedDuration`（与真实导出产物互相锚定，样例 9.5s 锚点由 `TimelineDurationTests` 固定）
   - 验收：App 各处时长展示与导出实测时长一致 ✅（85 测试全绿 + App 模拟器编译通过）
 - [x] **导出管线 HDR→SDR 降级选项**（✅ 2026-10-13，真机验收通过）：HDR 直通已定调为特性，但分享到不支持 HDR 平台的发灰问题需导出侧提供 SDR 降级（SDR 路径 POC 已验证：Kadr Codec.h264 或 709 composition）。实现：新增 `ExportOptions`（POCCore 状态层，struct 预留扩展）承载导出配置；SDR 档映射为同几何/帧率的 `Codec.h264` preset，由 AVAssetExportSession 自动色调映射到 BT.709；`ExportRunner`/`ExportVerifier` 透传配置，SDR 档校验编码 avc1；App 侧点「导出」先弹 `ExportPanel` 配置面板（HDR 开关默认开启），确认后才导出；e2e 新增 SDR 专项（avc1 + 分辨率/时长不变）
@@ -65,6 +62,19 @@
 ### 已关闭
 
 - [x] ~~HDR 直通产品决策~~ → 已定调为特性（2026-10-09，见「已定论的结论」）
+- [x] ~~App 内素材库管理 UI~~ → 2026-10-13 移入「正式版启动」v1 范围候选（理由：纯表现层功能，不验证技术风险、不阻塞技术决策；删除正确性已被 `DraftStore.verify` 完整性守卫覆盖；缩略图缓存与正式版时间线 UI 共建避免返工）
+
+## 正式版启动（v1 规划）
+
+> 2026-10-13 入口判断：技术验证阶段的门已全部关闭（POC 五关键字 ☑、P0/P1 全清、P2 技术项全过且真机验收通过、86 测试全绿、POC 清单遗留项全部收口），可以进入正式版开发。剩余 P3 项（4K HDR 流畅度 / iOS 17 覆盖率 / SwiftPM 身份冲突）均为发布前门槛或外部触发项，不阻塞开发入口。
+
+v1 头两个任务（均为 `人工` 决策项，决策后交 `agent` 执行）：
+
+1. **v1 范围决策**（待拍板）：从差异化候选（音频 kadr-audio / 拍摄 NextLevel / MCP 化，见「落地顺序」#5）与已推迟项中圈定 v1 范围。已确定纳入候选：
+   - **App 内素材库管理 UI**（自 P2 移入）：网格/缩略图/删除未引用素材；kadr-photos 有 `assets(in:)` 相册列举可用，缩略图需自建 PHImageManager + 缓存。**约束：不晚于首个对外发布版本**——导入走 asCopy 落盘占 sandbox，无删除入口则用户存储只增不减
+   - 验收（移入时沿用）：素材库网格展示 + 删除未引用素材后 plan 完整性校验通过
+2. **字幕预览近似的正式版决策**（自 P2 移入）：接受近似 / 出精确预览技术方案。**建议早定**——若选精确预览则影响预览层架构，越晚定返工越多
+   - 验收：决策记录（接受近似 / 出精确预览技术方案）
 
 ## 素材导入选型记录（2026-10-09）
 
@@ -76,4 +86,4 @@
 
 ## 下一步任务的入口
 
-任务 #4 已完成（2026-10-09）：backlog 定级见上节。下一个任务从 backlog P0/P1（上游 issue、首次启动阻塞治理——agent 可直接做；真机验证项需人配合）或 #5（音频/拍摄/MCP 化）中排。进会话后先读 [AGENTS.md](../AGENTS.md)，关键约束：编辑必经 `EditStore.apply`、素材引用走 `assets` 登记表 + `assetID`、Kadr 依赖收敛在引擎适配层、CLI stdout 只走结构化 JSON、草稿读写必经 `DraftStore`。
+任务 #4 已完成（2026-10-09）：backlog 定级见上节。**2026-10-13 更新：技术验证阶段已收口，下一个任务从「正式版启动（v1 规划）」的两个决策项开始**（v1 范围决策、字幕预览决策，均待人工拍板）。进会话后先读 [AGENTS.md](../AGENTS.md)，关键约束：编辑必经 `EditStore.apply`、素材引用走 `assets` 登记表 + `assetID`、Kadr 依赖收敛在引擎适配层、CLI stdout 只走结构化 JSON、草稿读写必经 `DraftStore`。
