@@ -1,0 +1,34 @@
+Jangy/JangyApp.swift
+  s_2b80962f00adbd::t_95b03cb83b6a0c 12
+Jangy/AppModel.swift
+  s_2b80962f00adbd::t_ecca10ec954a56 214
+Packages/JangyCore/Tests/JangyCoreTests/ExportEndToEndTests.swift
+  s_2b80962f00adbd::t_e74daf34d4b7e3 216-221
+.github/workflows/ios.yml
+  s_2b80962f00adbd::t_b894c5ad87e16b 10-11,16-17,20,27
+.vscode/settings.json
+  s_2b80962f00adbd::t_b1e4b446eae692 2-3
+Packages/JangyCore/Package.swift
+  s_2b80962f00adbd::t_14a7091cae2ad2 5-9
+  s_2b80962f00adbd::t_1ddfb7a286572c 22-38
+.vscode/launch.json
+  s_2b80962f00adbd::t_77af441017199a 7-9,11,17-19,21,24
+Packages/JangyCore/Sources/jangy-cli/JangyCLI.swift
+  s_2b80962f00adbd::t_276117cf04e041 3-9
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "34b24eb7985ad4d5759ff1b04f4c10e48d9397e3",
+  "prompts": {},
+  "sessions": {
+    "s_2b80962f00adbd": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "73bc6a4a-a28d-4a02-9272-48b1f1a42215",
+        "model": "k3"
+      },
+      "human_author": "Michael <yiliforever@qq.com>"
+    }
+  }
+}
