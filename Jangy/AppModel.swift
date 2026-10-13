@@ -21,6 +21,8 @@ final class AppModel {
     var importProgress: Double?
     var importMessage: String?
     var lastIssues: [ValidationIssue]?
+    /// 剪辑 Agent 入口（L1）：sheet 对话 UI 的数据源；凭据缺失时 isConfigured = false。
+    private(set) var agent: AgentController!
     /// 草稿相关提示：恢复失败原因 / 完整性报告 / 保存失败
     var draftMessage: String?
 
@@ -31,6 +33,12 @@ final class AppModel {
         self.importer = AssetImporter(directory: resolver.directory)
         self.draftStore = draftStore
         self.draftMessage = restoreNotice
+        agent = AgentController(
+            store: store,
+            resolver: resolver,
+            credentials: AgentCredentials.load(from: resolver.directory),
+            onAppliedEdit: { [weak self] in self?.handleAgentAppliedEdit() }
+        )
         verifyDraftIntegrity()
     }
 
@@ -67,6 +75,13 @@ final class AppModel {
         case .failure(let failure):
             lastIssues = failure.issues
         }
+    }
+
+    /// Agent 工具每步编辑落 plan 后的联动：与手动编辑同一条下行路径（预览重建 + 防抖落盘）。
+    private func handleAgentAppliedEdit() {
+        lastIssues = nil
+        player.rebuild()
+        scheduleAutosave()
     }
 
     func undo() { lastIssues = nil; store.undo(); player.rebuild(); scheduleAutosave() }
