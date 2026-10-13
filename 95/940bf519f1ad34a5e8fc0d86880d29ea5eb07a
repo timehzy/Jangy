@@ -1,0 +1,22 @@
+App/JangyPOC/JangyPOC/ContentView.swift
+  s_281e1d6627946e::t_7c68ff8a802abd 25-26
+  s_281e1d6627946e::t_6d987c1c66b231 7
+  s_281e1d6627946e::t_374725edacba5d 67-73
+  s_281e1d6627946e::t_ef1d4aa9061181 14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "95940bf519f1ad34a5e8fc0d86880d29ea5eb07a",
+  "prompts": {},
+  "sessions": {
+    "s_281e1d6627946e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8a0c7b8e-8927-4254-b70a-d4b0121711b3",
+        "model": "k3"
+      },
+      "human_author": "Michael <yiliforever@qq.com>"
+    }
+  }
+}
