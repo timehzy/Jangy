@@ -1,0 +1,34 @@
+docs/architecture-covenant.md
+  s_7feba62a309209::t_2436433015a00b 1-2,4-38,40-62,65,69-113,115-128,130-133
+  s_7feba62a309209::t_18ec9a637c29ae 3
+  s_7feba62a309209::t_17b9d7c0fc1824 63-64
+  s_7feba62a309209::t_cbe43316db7d0f 129
+  s_7feba62a309209::t_48af1cd982d4f3 66-68
+  s_7feba62a309209::t_257802f437bb4f 39
+  s_7feba62a309209::t_7e4a2237402c5a 134-136
+  s_7feba62a309209::t_f16b25089832cf 114
+AGENTS.md
+  s_7feba62a309209::t_7d561dd189af3e 39-41
+  s_7feba62a309209::t_0badf28cc0e95f 32-34
+  s_7feba62a309209::t_2f38710c91fe47 56
+  s_7feba62a309209::t_337433275e9b2e 7,9,11-13
+  s_7feba62a309209::t_19838f3781a4a9 55
+docs/known-pitfalls.md
+  s_7feba62a309209::t_20d13d218403f6 1-19
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "e98a3c49d0a82c1f5a19b89ba4eaa5f43642c358",
+  "prompts": {},
+  "sessions": {
+    "s_7feba62a309209": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f5159b6a-7b11-45be-a1e8-508bcb34d0ab",
+        "model": "k3"
+      },
+      "human_author": "Michael <yiliforever@qq.com>"
+    }
+  }
+}
