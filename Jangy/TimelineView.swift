@@ -25,6 +25,9 @@ struct TimelineView: View {
                         Button("删除", role: .destructive) { delete(index) }
                     }
                     .buttonStyle(.bordered)
+                    // Agent 运行中禁用：分组期间手动编辑会并入 Agent 撤销组，
+                    // 破坏整任务一步撤销语义（与操作条同款锁定）
+                    .disabled(model.agent.isRunning)
                 }
             }
         }
