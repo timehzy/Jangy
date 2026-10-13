@@ -1,0 +1,28 @@
+Packages/JangyCore/Tests/JangyCoreTests/ExportEndToEndTests.swift
+  s_bd9efac78efb48::t_6c88dd8cd766e4 163
+  s_bd9efac78efb48::t_03d902ce5e8182 135-142,156-159,161-162,164-172
+Packages/JangyCore/Sources/JangyCore/FrameSnapshotter.swift
+  s_bd9efac78efb48::t_20cb63556f333f 7,13-18,28,39-40,43,48
+docs/known-pitfalls.md
+  s_bd9efac78efb48::t_38a3fe27dbff80 7
+docs/roadmap-path-a.md
+  s_bd9efac78efb48::t_d0a5a7f945ae30 47-48
+Packages/JangyCore/Package.swift
+  s_bd9efac78efb48::t_3ca173654545ba 12-14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "92896a98825ccc465e66a9557f19a60ff337e7dd",
+  "prompts": {},
+  "sessions": {
+    "s_bd9efac78efb48": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7b0a8312-b1f7-4362-9823-4c0707582503",
+        "model": "k3"
+      },
+      "human_author": "Michael <yiliforever@qq.com>"
+    }
+  }
+}
