@@ -1,0 +1,47 @@
+Packages/JangyCore/Tests/JangyAgentTests/AgentToolsTests.swift
+  s_aee63377c92767::t_47d5c17eb71e15 157-159
+  s_aee63377c92767::t_76eb94311ce48f 97-99
+  s_aee63377c92767::t_30b47a1e574974 176-177
+  s_aee63377c92767::t_1815a025b80611 242-243
+  s_aee63377c92767::t_089910d85d8a3e 111-112
+  s_aee63377c92767::t_082b4fd92487ad 80-81
+  s_aee63377c92767::t_cdb2d771f9a96e 45,47
+  s_aee63377c92767::t_41ca55e7ffb3b1 66-67,69-70
+  s_aee63377c92767::t_af22091b9745a4 139-140
+  s_aee63377c92767::t_251e48faae3e4d 218-219,224-225
+  s_aee63377c92767::t_4b809b96c1e739 198-199
+  s_aee63377c92767::t_708d42615e2d4b 124-125
+  s_aee63377c92767::t_ed8503ea75d995 55-56
+  s_aee63377c92767::t_56f7ee2e5999a3 167-168
+Packages/JangyCore/Sources/jangy-cli/AgentCommand.swift
+  s_aee63377c92767::t_bffff86e77e419 94
+Packages/JangyCore/Tests/JangyAgentTests/AgentRunContextTests.swift
+  s_aee63377c92767::t_5a7e2bc023674f 1-30,32-75
+  s_aee63377c92767::t_407ed73988b3ee 31
+Packages/JangyCore/Sources/JangyAgent/AgentTools.swift
+  s_aee63377c92767::t_25ee8d54aef98e 107
+  s_aee63377c92767::t_50badc05bd941a 162,176,179,194-199
+  s_aee63377c92767::t_96dbce33bd417f 226,236,242
+  s_aee63377c92767::t_fb083febf9c0a9 484,508
+  s_aee63377c92767::t_904210eb8ab9fd 542
+  s_aee63377c92767::t_baee9f86237f32 124
+  s_aee63377c92767::t_a10e3ac5f7724a 279,315,354,391,441,490
+Packages/JangyCore/Sources/JangyAgent/AgentRunContext.swift
+  s_aee63377c92767::t_40b9a603b1edf7 4-31,34-36,57-62,64,69-73,77-78,81-88,90,93-94,96-103,114-118
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "d87c6a815be34da9340074bcb4ca0bb1ad3549dd",
+  "prompts": {},
+  "sessions": {
+    "s_aee63377c92767": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "09bc7dbb-0862-42e2-be3e-5e892ffa5207",
+        "model": "k3"
+      },
+      "human_author": "Michael <yiliforever@qq.com>"
+    }
+  }
+}
