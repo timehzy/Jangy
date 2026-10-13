@@ -42,8 +42,9 @@ final class AgentToolsTests: XCTestCase {
         let result = try await GetPlanTool(context: context).call(parsed: .init())
         let envelope = try decodeEnvelope(result)
         XCTAssertEqual(envelope.status, "ok")
+        let plan = await context.plan
         // 样例锚点：3/1 + 3/0.5 + 2/2 − dissolve 0.5 = 9.5
-        XCTAssertEqual(context.plan.renderedDuration, 9.5, accuracy: 0.001)
+        XCTAssertEqual(plan.renderedDuration, 9.5, accuracy: 0.001)
     }
 
     func testListAssetsReturnsRegistry() async throws {
@@ -51,7 +52,8 @@ final class AgentToolsTests: XCTestCase {
         let result = try await ListAssetsTool(context: context).call(parsed: .init())
         let envelope = try decodeEnvelope(result)
         XCTAssertEqual(envelope.status, "ok")
-        XCTAssertEqual(context.plan.assets.count, 4)
+        let assets = (await context.plan).assets
+        XCTAssertEqual(assets.count, 4)
     }
 
     // MARK: - add_clip
@@ -61,10 +63,11 @@ final class AgentToolsTests: XCTestCase {
         let result = try await AddClipTool(context: context)
             .call(parsed: .init(fileName: "clip1.mp4", rangeStart: 0, rangeEnd: 1, speed: nil))
         XCTAssertEqual(try decodeEnvelope(result).status, "ok")
-        XCTAssertEqual(context.plan.clips.count, 4)
+        let plan = await context.plan
+        XCTAssertEqual(plan.clips.count, 4)
         // 复用登记，不重复追加
-        XCTAssertEqual(context.plan.assets.count, 4)
-        XCTAssertEqual(context.plan.clips.last?.assetID, SamplePlan.assetID1)
+        XCTAssertEqual(plan.assets.count, 4)
+        XCTAssertEqual(plan.clips.last?.assetID, SamplePlan.assetID1)
     }
 
     func testAddClipMissingFileReturnsError() async throws {
@@ -74,7 +77,8 @@ final class AgentToolsTests: XCTestCase {
         let envelope = try decodeEnvelope(result)
         XCTAssertEqual(envelope.status, "error")
         XCTAssertTrue(envelope.message?.contains("素材文件不存在") == true)
-        XCTAssertEqual(context.plan.clips.count, 3, "失败不留痕")
+        let plan = await context.plan
+        XCTAssertEqual(plan.clips.count, 3, "失败不留痕")
     }
 
     func testAddClipRegistersAndProbesRealFile() async throws {
@@ -90,8 +94,9 @@ final class AgentToolsTests: XCTestCase {
         let result = try await AddClipTool(context: context)
             .call(parsed: .init(fileName: absolutePath, rangeStart: 0, rangeEnd: 2, speed: 1.5))
         XCTAssertEqual(try decodeEnvelope(result).status, "ok")
-        XCTAssertEqual(context.plan.assets.count, 5, "未登记素材在同一次编辑内登记")
-        let registered = context.plan.assets.first { $0.fileName == absolutePath }
+        let plan = await context.plan
+        XCTAssertEqual(plan.assets.count, 5, "未登记素材在同一次编辑内登记")
+        let registered = plan.assets.first { $0.fileName == absolutePath }
         XCTAssertEqual(registered?.duration ?? 0, 4.0, accuracy: 0.5, "登记时探测元数据")
     }
 
@@ -103,7 +108,8 @@ final class AgentToolsTests: XCTestCase {
         let envelope = try decodeEnvelope(result)
         XCTAssertEqual(envelope.status, "error")
         XCTAssertTrue(envelope.issues?.contains { $0.path == "clips[3].range" } == true)
-        XCTAssertEqual(context.plan.clips.count, 3, "校验失败不落 plan")
+        let plan = await context.plan
+        XCTAssertEqual(plan.clips.count, 3, "校验失败不落 plan")
     }
 
     // MARK: - split_clip
@@ -115,7 +121,8 @@ final class AgentToolsTests: XCTestCase {
             .call(parsed: .init(clipID: clip1, at: 1.5))
         XCTAssertEqual(try decodeEnvelope(result).status, "ok")
 
-        let clips = context.plan.clips
+        let plan = await context.plan
+        let clips = plan.clips
         XCTAssertEqual(clips.count, 4)
         XCTAssertEqual(clips[0].range, 0...1.5)
         XCTAssertNil(clips[0].transitionAfter, "前半段不再挂转场")
@@ -129,7 +136,8 @@ final class AgentToolsTests: XCTestCase {
         let result = try await SplitClipTool(context: context)
             .call(parsed: .init(clipID: clip1, at: 3.0))
         XCTAssertEqual(try decodeEnvelope(result).status, "error")
-        XCTAssertEqual(context.plan.clips.count, 3)
+        let plan = await context.plan
+        XCTAssertEqual(plan.clips.count, 3)
     }
 
     func testUnknownClipIDReturnsError() async throws {
@@ -146,8 +154,9 @@ final class AgentToolsTests: XCTestCase {
         let result = try await TrimClipTool(context: context)
             .call(parsed: .init(clipID: clip1, rangeStart: 1, rangeEnd: 2.5))
         XCTAssertEqual(try decodeEnvelope(result).status, "ok")
-        XCTAssertEqual(context.plan.clips[0].range, 1...2.5)
-        XCTAssertEqual(context.plan.renderedDuration, 8.0, accuracy: 0.001)
+        let plan = await context.plan
+        XCTAssertEqual(plan.clips[0].range, 1...2.5)
+        XCTAssertEqual(plan.renderedDuration, 8.0, accuracy: 0.001)
     }
 
     func testTrimClipEmptyRangeFailsValidation() async throws {
@@ -155,7 +164,8 @@ final class AgentToolsTests: XCTestCase {
         let result = try await TrimClipTool(context: context)
             .call(parsed: .init(clipID: clip1, rangeStart: 2, rangeEnd: 1))
         XCTAssertEqual(try decodeEnvelope(result).status, "error")
-        XCTAssertEqual(context.plan.clips[0].range, 0...3, "失败不留痕")
+        let plan = await context.plan
+        XCTAssertEqual(plan.clips[0].range, 0...3, "失败不留痕")
     }
 
     func testMoveClipReorders() async throws {
@@ -163,7 +173,8 @@ final class AgentToolsTests: XCTestCase {
         let result = try await MoveClipTool(context: context)
             .call(parsed: .init(clipID: clip3, toIndex: 0))
         XCTAssertEqual(try decodeEnvelope(result).status, "ok")
-        XCTAssertEqual(context.plan.clips.map(\.assetID),
+        let plan = await context.plan
+        XCTAssertEqual(plan.clips.map(\.assetID),
                        [SamplePlan.assetID3, SamplePlan.assetID1, SamplePlan.assetID2])
     }
 
@@ -184,7 +195,8 @@ final class AgentToolsTests: XCTestCase {
         let result = try await RemoveClipTool(context: context)
             .call(parsed: .init(clipID: clip3))
         XCTAssertEqual(try decodeEnvelope(result).status, "error")
-        XCTAssertEqual(context.plan.clips.count, 1)
+        let resultingPlan = await context.plan
+        XCTAssertEqual(resultingPlan.clips.count, 1)
     }
 
     // MARK: - set_speed / set_transition
@@ -203,12 +215,14 @@ final class AgentToolsTests: XCTestCase {
         var result = try await SetTransitionTool(context: context)
             .call(parsed: .init(clipID: clip2, type: "fade", duration: 0.3))
         XCTAssertEqual(try decodeEnvelope(result).status, "ok")
-        XCTAssertEqual(context.plan.clips[1].transitionAfter, .fade(duration: 0.3))
+        var plan = await context.plan
+        XCTAssertEqual(plan.clips[1].transitionAfter, .fade(duration: 0.3))
 
         result = try await SetTransitionTool(context: context)
             .call(parsed: .init(clipID: clip2, type: "none", duration: nil))
         XCTAssertEqual(try decodeEnvelope(result).status, "ok")
-        XCTAssertNil(context.plan.clips[1].transitionAfter)
+        plan = await context.plan
+        XCTAssertNil(plan.clips[1].transitionAfter)
     }
 
     func testSetTransitionUnknownTypeReturnsError() async throws {
@@ -225,7 +239,8 @@ final class AgentToolsTests: XCTestCase {
         let result = try await SetCaptionsTool(context: context)
             .call(parsed: .init(fileName: "sample.srt", fontSize: 30, isBold: false, enabled: true))
         XCTAssertEqual(try decodeEnvelope(result).status, "ok")
-        XCTAssertEqual(context.plan.captions?.style, CaptionStyle(fontSize: 30, isBold: false))
+        let plan = await context.plan
+        XCTAssertEqual(plan.captions?.style, CaptionStyle(fontSize: 30, isBold: false))
     }
 
     func testSetCaptionsRejectsNonSRT() async throws {

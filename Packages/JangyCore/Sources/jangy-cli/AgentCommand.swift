@@ -91,7 +91,7 @@ struct Agent: AsyncParsableCommand {
         }
 
         // 收尾：最终 plan 过全量校验（结构 + 素材存在性），失败 exit 2
-        let finalPlan = context.plan
+        let finalPlan = await context.plan
         let issues = EditPlanValidator().validate(finalPlan)
             + EditPlanValidator().validateAssets(finalPlan, resolver: resolver)
         guard issues.isEmpty else {

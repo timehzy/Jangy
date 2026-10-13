@@ -104,7 +104,7 @@ struct GetPlanTool: DefensiveAgentTool {
 
     func call(parsed _: Args) async throws -> String {
         if let limit = AgentToolCommon.stepLimitIfExceeded(context) { return limit }
-        let plan = context.plan
+        let plan = await context.plan
         return ToolEnvelope.ok(Payload(renderedDuration: plan.renderedDuration, plan: plan))
     }
 }
@@ -121,7 +121,7 @@ struct ListAssetsTool: DefensiveAgentTool {
 
     func call(parsed _: Args) async throws -> String {
         if let limit = AgentToolCommon.stepLimitIfExceeded(context) { return limit }
-        return ToolEnvelope.ok(Payload(assets: context.plan.assets))
+        return ToolEnvelope.ok(Payload(assets: (await context.plan).assets))
     }
 }
 
@@ -159,7 +159,7 @@ struct AddClipTool: DefensiveAgentTool {
         }
 
         // 登记素材：已登记则复用；未登记先探测元数据（文件不存在直接报错，免得到引擎期才炸）
-        let existing = context.plan.assets.first { $0.fileName == args.fileName }
+        let existing = await context.plan.assets.first { $0.fileName == args.fileName }
         var asset = existing
         if asset == nil {
             guard context.resolver.exists(AssetItem(kind: .video, fileName: args.fileName)) else {
@@ -173,30 +173,30 @@ struct AddClipTool: DefensiveAgentTool {
         }
         guard let asset else { return ToolEnvelope.error("素材登记失败") }
         let rate = args.speed ?? 1.0
+        let existingFileNames = Set(await context.plan.assets.map(\.fileName))
 
         // 登记 + 追加必须在同一次 apply（公约：单事务、单撤销步）
-        return context.locked { store in
-            var outcome: (clipID: UUID, assetID: UUID, isNew: Bool)!
+        return await context.withStore { store in
             let result = store.apply { plan in
                 let assetID: UUID
-                let isNew: Bool
                 if let registered = plan.assets.first(where: { $0.fileName == asset.fileName }) {
                     assetID = registered.id
-                    isNew = false
                 } else {
                     plan.assets.append(asset)
                     assetID = asset.id
-                    isNew = true
                 }
                 let clip = PlanClip(assetID: assetID,
                                     range: args.rangeStart...args.rangeEnd,
                                     speed: .flat(rate))
                 plan.clips.append(clip)
-                outcome = (clip.id, assetID, isNew)
             }
             return ToolEnvelope.applied(result) { plan in
-                Payload(clipID: outcome.clipID.uuidString, assetID: outcome.assetID.uuidString,
-                        registeredNewAsset: outcome.isNew, renderedDuration: plan.renderedDuration)
+                // 从结果 plan 反查刚追加的 clip（末尾）与素材登记状态，避免 @Sendable 闭包捕获可变变量
+                let clip = plan.clips.last!
+                let registered = plan.assets.first { $0.fileName == asset.fileName }!
+                return Payload(clipID: clip.id.uuidString, assetID: registered.id.uuidString,
+                               registeredNewAsset: !existingFileNames.contains(asset.fileName),
+                               renderedDuration: plan.renderedDuration)
             }
         }
     }
@@ -223,7 +223,7 @@ struct SplitClipTool: DefensiveAgentTool {
 
     func call(parsed args: Args) async throws -> String {
         if let limit = AgentToolCommon.stepLimitIfExceeded(context) { return limit }
-        return context.locked { store in
+        return await context.withStore { store in
             let index: Int
             switch AgentToolCommon.clipIndex(store.plan, clipID: args.clipID) {
             case .success(let i): index = i
@@ -233,16 +233,15 @@ struct SplitClipTool: DefensiveAgentTool {
             guard args.at > clip.range.lowerBound, args.at < clip.range.upperBound else {
                 return ToolEnvelope.error("分割点 \(args.at) 须严格落在片段源区间 \(clip.range.lowerBound)–\(clip.range.upperBound) 内")
             }
-            var secondID: UUID!
+            let secondID = UUID()
             let result = store.apply { plan in
                 var first = plan.clips[index]
                 var second = plan.clips[index]
                 first.range = clip.range.lowerBound...args.at
                 first.transitionAfter = nil
-                second.id = UUID()
+                second.id = secondID
                 second.range = args.at...clip.range.upperBound
                 plan.clips.replaceSubrange(index...index, with: [first, second])
-                secondID = second.id
             }
             return ToolEnvelope.applied(result) { plan in
                 Payload(firstClipID: args.clipID, secondClipID: secondID.uuidString,
@@ -277,7 +276,7 @@ struct TrimClipTool: DefensiveAgentTool {
         guard args.rangeStart < args.rangeEnd else {
             return ToolEnvelope.error("区间不能为空：rangeStart（\(args.rangeStart)）须小于 rangeEnd（\(args.rangeEnd)）")
         }
-        return context.locked { store in
+        return await context.withStore { store in
             let index: Int
             switch AgentToolCommon.clipIndex(store.plan, clipID: args.clipID) {
             case .success(let i): index = i
@@ -313,7 +312,7 @@ struct MoveClipTool: DefensiveAgentTool {
 
     func call(parsed args: Args) async throws -> String {
         if let limit = AgentToolCommon.stepLimitIfExceeded(context) { return limit }
-        return context.locked { store in
+        return await context.withStore { store in
             let index: Int
             switch AgentToolCommon.clipIndex(store.plan, clipID: args.clipID) {
             case .success(let i): index = i
@@ -352,7 +351,7 @@ struct RemoveClipTool: DefensiveAgentTool {
 
     func call(parsed args: Args) async throws -> String {
         if let limit = AgentToolCommon.stepLimitIfExceeded(context) { return limit }
-        return context.locked { store in
+        return await context.withStore { store in
             let index: Int
             switch AgentToolCommon.clipIndex(store.plan, clipID: args.clipID) {
             case .success(let i): index = i
@@ -389,7 +388,7 @@ struct SetSpeedTool: DefensiveAgentTool {
 
     func call(parsed args: Args) async throws -> String {
         if let limit = AgentToolCommon.stepLimitIfExceeded(context) { return limit }
-        return context.locked { store in
+        return await context.withStore { store in
             let index: Int
             switch AgentToolCommon.clipIndex(store.plan, clipID: args.clipID) {
             case .success(let i): index = i
@@ -439,7 +438,7 @@ struct SetTransitionTool: DefensiveAgentTool {
         default:
             return ToolEnvelope.error("未知转场类型 '\(args.type)'；支持：dissolve / fade / none")
         }
-        return context.locked { store in
+        return await context.withStore { store in
             let index: Int
             switch AgentToolCommon.clipIndex(store.plan, clipID: args.clipID) {
             case .success(let i): index = i
@@ -482,14 +481,13 @@ struct SetCaptionsTool: DefensiveAgentTool {
         guard args.fileName.lowercased().hasSuffix(".srt") else {
             return ToolEnvelope.error("仅支持 SRT 字幕文件: \(args.fileName)")
         }
-        guard context.plan.assets.contains(where: { $0.fileName == args.fileName })
+        guard await context.plan.assets.contains(where: { $0.fileName == args.fileName })
             || context.resolver.exists(AssetItem(kind: .subtitle, fileName: args.fileName))
         else {
             return ToolEnvelope.error("字幕文件不存在: \(args.fileName)。请用 list_assets 查看可用素材")
         }
 
-        return context.locked { store in
-            var captionAssetID: UUID!
+        return await context.withStore { store in
             let result = store.apply { plan in
                 let assetID: UUID
                 if let registered = plan.assets.first(where: { $0.fileName == args.fileName }) {
@@ -505,10 +503,9 @@ struct SetCaptionsTool: DefensiveAgentTool {
                     isEnabled: args.enabled ?? true,
                     style: CaptionStyle(fontSize: args.fontSize ?? 48, isBold: args.isBold ?? true)
                 )
-                captionAssetID = assetID
             }
             return ToolEnvelope.applied(result) { plan in
-                Payload(captionAssetID: captionAssetID.uuidString,
+                Payload(captionAssetID: plan.captions?.assetID.uuidString ?? "",
                         isEnabled: plan.captions?.isEnabled ?? false)
             }
         }
@@ -542,7 +539,7 @@ struct SnapshotTool: DefensiveAgentTool {
         guard !args.times.isEmpty else {
             return ToolEnvelope.error("至少指定一个快照时刻")
         }
-        let plan = context.plan
+        let plan = await context.plan
         do {
             let frames = try await FrameSnapshotter.snapshots(plan: plan, resolver: context.resolver, at: args.times)
             let dir = context.framesDirectory
