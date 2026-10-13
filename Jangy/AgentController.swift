@@ -35,8 +35,9 @@ final class AgentController {
     private let onAppliedEdit: () -> Void
     private var session: EditAgentSession?
     private var runTask: Task<Void, Never>?
-    /// 待回填状态的工具卡片：key = turn:name
-    private var pendingToolItems: [String: UUID] = [:]
+    /// 待回填状态的工具卡片：key = turn:name，值 FIFO 队列——同一轮同名工具可多次调用，
+    /// 单值会被覆盖导致卡片状态交叉，故一对多、toolResult 取最旧匹配。
+    private var pendingToolItems: [String: [UUID]] = [:]
 
     init(store: EditStore, resolver: AssetResolver, credentials: AgentCredentials?,
          onAppliedEdit: @escaping () -> Void) {
@@ -50,9 +51,18 @@ final class AgentController {
     func send(_ text: String) {
         let instruction = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !instruction.isEmpty, !isRunning, let credentials else { return }
+        // baseURL 解析失败不再静默回退官方端点：显式报错，避免把真实流量打到错误端点之外的地方
+        if let baseURLString = credentials.baseURL, URL(string: baseURLString) == nil {
+            items.append(AgentChatItem(content: .error("凭据 baseURL 格式错误：\(baseURLString)")))
+            return
+        }
+        // 清掉上一轮（可能因取消残留）的 pending 条目，避免脏键串扰本轮回填
+        pendingToolItems.removeAll()
         items.append(AgentChatItem(content: .user(instruction)))
         isRunning = true
-        // 整任务一步撤销（spec 拍板 #1）：分组边界 = 一条指令的完整 run
+        // 整任务一步撤销（spec 拍板 #1）：分组边界 = 一条指令的完整 run。
+        // 契约：分组期间的手动编辑会并入本组撤销步，正确性依赖 UI 层在运行中
+        // 禁用全部编辑入口（Task 7 接线，store.isGrouping 已为此暴露）。
         store.beginGrouping()
         let session = self.session ?? makeSession(credentials: credentials)
         self.session = session
@@ -99,6 +109,8 @@ final class AgentController {
             ),
             hasInitialPlan: !store.plan.clips.isEmpty,
             onEvent: { [weak self] event in
+                // 事件顺序依赖 MainActor 队列 FIFO（发射端串行发射）：
+                // toolResult 对 toolCall 卡片的回填依赖此保序，换并发分发会交叉。
                 Task { @MainActor in self?.handle(event) }
             }
         )
@@ -117,11 +129,14 @@ final class AgentController {
                                                     summary: Self.truncate(arguments),
                                                     status: .pending))
             items.append(item)
-            pendingToolItems["\(turn):\(name)"] = item.id
+            pendingToolItems["\(turn):\(name)", default: []].append(item.id)
         case .toolResult(let turn, let name, let status, let summary):
             let key = "\(turn):\(name)"
-            guard let id = pendingToolItems.removeValue(forKey: key),
-                  let index = items.firstIndex(where: { $0.id == id }) else { return }
+            guard var pending = pendingToolItems[key], !pending.isEmpty,
+                  let id = pending.first else { return }
+            pending.removeFirst()
+            pendingToolItems[key] = pending.isEmpty ? nil : pending
+            guard let index = items.firstIndex(where: { $0.id == id }) else { return }
             items[index].content = .tool(name: name, summary: Self.truncate(summary),
                                          status: status == "ok" ? .ok : .error)
         case .snapshot(_, let at, let path):

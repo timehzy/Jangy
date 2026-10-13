@@ -22,7 +22,9 @@ final class AppModel {
     var importMessage: String?
     var lastIssues: [ValidationIssue]?
     /// 剪辑 Agent 入口（L1）：sheet 对话 UI 的数据源；凭据缺失时 isConfigured = false。
-    private(set) var agent: AgentController!
+    let agent: AgentController
+    /// Agent 编辑联动闭包的绑定盒（见 init 内注释）。
+    private let agentEditHook: AgentEditHook
     /// 草稿相关提示：恢复失败原因 / 完整性报告 / 保存失败
     var draftMessage: String?
 
@@ -33,12 +35,20 @@ final class AppModel {
         self.importer = AssetImporter(directory: resolver.directory)
         self.draftStore = draftStore
         self.draftMessage = restoreNotice
+        // 联动闭包的延迟绑定盒：let agent 赋值完成前 self 未完全初始化，
+        // 逃逸闭包无法捕获 self；先捕获盒（本地 let），赋值完成后再绑定真实闭包。
+        let hook = AgentEditHook()
         agent = AgentController(
             store: store,
             resolver: resolver,
             credentials: AgentCredentials.load(from: resolver.directory),
-            onAppliedEdit: { [weak self] in self?.handleAgentAppliedEdit() }
+            onAppliedEdit: { [hook] in
+                // didApply 已在 MainActor 调度块内同步触发，直接联动即可
+                hook.body()
+            }
         )
+        agentEditHook = hook
+        hook.body = { [weak self] in self?.handleAgentAppliedEdit() }
         verifyDraftIntegrity()
     }
 
@@ -66,26 +76,30 @@ final class AppModel {
         }
     }
 
-    func edit(_ mutate: (inout EditPlan) -> Void) {
-        switch store.apply(mutate) {
-        case .success:
-            lastIssues = nil
-            player.rebuild()
-            scheduleAutosave()
-        case .failure(let failure):
-            lastIssues = failure.issues
-        }
-    }
-
-    /// Agent 工具每步编辑落 plan 后的联动：与手动编辑同一条下行路径（预览重建 + 防抖落盘）。
-    private func handleAgentAppliedEdit() {
+    /// plan 变更后的统一下行联动：校验提示清零 + 预览重建 + 防抖落盘。
+    /// 手动编辑（edit/undo/redo）与 Agent 编辑（handleAgentAppliedEdit）共用。
+    private func afterPlanMutation() {
         lastIssues = nil
         player.rebuild()
         scheduleAutosave()
     }
 
-    func undo() { lastIssues = nil; store.undo(); player.rebuild(); scheduleAutosave() }
-    func redo() { lastIssues = nil; store.redo(); player.rebuild(); scheduleAutosave() }
+    func edit(_ mutate: (inout EditPlan) -> Void) {
+        switch store.apply(mutate) {
+        case .success:
+            afterPlanMutation()
+        case .failure(let failure):
+            lastIssues = failure.issues
+        }
+    }
+
+    /// Agent 工具每步编辑落 plan 后的联动：与手动编辑同一条下行路径。
+    private func handleAgentAppliedEdit() {
+        afterPlanMutation()
+    }
+
+    func undo() { store.undo(); afterPlanMutation() }
+    func redo() { store.redo(); afterPlanMutation() }
 
     /// 新建草稿：经 EditStore.apply 整体替换为空时间线（单撤销步，可撤销），
     /// autosave 随即覆盖旧 draft.json。素材文件保留在素材库，登记表清空即不再引用。
@@ -215,6 +229,12 @@ final class AppModel {
         }
         try? FileManager.default.removeItem(at: url)
     }
+}
+
+/// Agent 编辑联动闭包的延迟绑定盒：AppModel init 期间 let agent 赋值完成前
+/// self 未完全初始化，逃逸闭包不能捕获 self；经盒转发，赋值完成后再绑定真实闭包。
+final class AgentEditHook {
+    var body: () -> Void = {}
 }
 
 /// 预览播放器：plan 变化 → PreviewBridge 重建 playerItem；周期性时间观察驱动字幕叠加层。
