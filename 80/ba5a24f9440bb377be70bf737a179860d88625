@@ -1,0 +1,25 @@
+App/JangyPOC/JangyPOC/ExportPanel.swift
+  s_a116ca15e3cef2::t_61cb836f57e4da 1-38
+App/JangyPOC/JangyPOC/AppModel.swift
+  s_a116ca15e3cef2::t_fdc641179dc467 180-181,188,196
+App/JangyPOC/JangyPOC/ContentView.swift
+  s_a116ca15e3cef2::t_869b2288957229 29
+  s_a116ca15e3cef2::t_2f3808b55a6160 75-79
+  s_a116ca15e3cef2::t_229c675c10c2b9 9
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "80ba5a24f9440bb377be70bf737a179860d88625",
+  "prompts": {},
+  "sessions": {
+    "s_a116ca15e3cef2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f3b06295-0ff6-4d18-8951-a075309b17d2",
+        "model": "k3"
+      },
+      "human_author": "Michael <yiliforever@qq.com>"
+    }
+  }
+}
