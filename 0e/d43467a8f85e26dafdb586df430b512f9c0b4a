@@ -1,0 +1,19 @@
+App/JangyPOC/JangyPOC/FilesPicker.swift
+  s_281e1d6627946e::t_231ca3ba2fc4cf 1-37
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "0ed43467a8f85e26dafdb586df430b512f9c0b4a",
+  "prompts": {},
+  "sessions": {
+    "s_281e1d6627946e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8a0c7b8e-8927-4254-b70a-d4b0121711b3",
+        "model": "k3"
+      },
+      "human_author": "Michael <yiliforever@qq.com>"
+    }
+  }
+}
