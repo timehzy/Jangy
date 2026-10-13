@@ -86,6 +86,12 @@ v1 头两个任务（均为 `人工` 决策项，决策后交 `agent` 执行）�
    - **UI 口禁入清单**：贴纸/水印（静态也暂不）、属性动画、资产驱动动画。各自正确路径：几何变换（裁剪/旋转）与多镜头/PiP 走 videoComposition（预览原生精确，转场双轨已验证此管线）；动态贴纸走 HEVC-with-alpha 视频轨道（LumaFusion 同款路线）；程序化特效（粒子/shader）v1 不做
    - **护栏**：导出帧快照入口（当前时间点走导出管线渲一帧），人工比对 + 给 Agent 链路留自检工具
    - **未来触发条件**：出现第一个「必须精确预览」的效果（滤镜/调色、HDR 字幕观感投诉等）→ 启动自定义 `AVVideoCompositing` 专项（动 Kadr fork 渲染管线，预览导出共享合成器，弃 CoreAnimationTool 路线）；`PreviewBridge` 抽象已为此预留
+3. **代码起点决策**（✅ 2026-10-13 已拍板）：**基于 POC 直接演进，不新开工程/仓库**。理由：POC 三层分层本就是为正式版设计的（状态层纯 Swift / Kadr 收敛引擎适配层 / App 壳薄），v1 任务（剪辑 Agent、素材库管理 UI、导出帧快照）全为增量，无一项需推翻现有结构；86 测试 + CLI 契约 + e2e + git 历史/已知坑记录是 Agent 链路与后续开发的地基，重写纯损耗。配套「正式版化收口」清单（随 v1 首个任务一起做）：
+   - **命名去 POC 化**：包 `KadrPOC` → 正式名、`kadrpoc-cli` → 正式名、App target `JangyPOC` → `Jangy`、bundle ID / display name 定版（机械改动，主要风险在 xcodeproj / SwiftPM 引用）
+   - **POC 专属代码隔离**：`AssetSynthesizer` / `SamplePlan` / 样例素材入口移 debug-only 或独立 target，不进正式产物
+   - **模拟器微扰**：`breakRenderSizeEquality` 发布前改 `targetEnvironment(simulator)` 条件编译（沿 P1 既定口径）
+   - **`SilentAudio` 兜底**：上游 [#204](https://github.com/SteliyanH/kadr/pull/204) 合并后评估移除
+   - **不动**：CLI stdout JSON 契约、draft.json 格式、测试套件、三层依赖方向（Agent 链路与自动化依赖）
 
 ## 素材导入选型记录（2026-10-09）
 
@@ -97,4 +103,4 @@ v1 头两个任务（均为 `人工` 决策项，决策后交 `agent` 执行）�
 
 ## 下一步任务的入口
 
-任务 #4 已完成（2026-10-09）：backlog 定级见上节。**2026-10-13 更新：技术验证阶段已收口，「正式版启动（v1 规划）」两项人工决策均已拍板**——v1 范围（拍摄出局 / 音频后置 / 剪辑 Agent 入 v1）+ 字幕预览（UI 口冻结为字幕对位示意层）。v1 进入执行阶段，任务从「正式版启动」节圈定范围里排（素材库管理 UI、剪辑 Agent headless 链路、导出帧快照等）。进会话后先读 [AGENTS.md](../AGENTS.md)，关键约束：编辑必经 `EditStore.apply`、素材引用走 `assets` 登记表 + `assetID`、Kadr 依赖收敛在引擎适配层、CLI stdout 只走结构化 JSON、草稿读写必经 `DraftStore`。
+任务 #4 已完成（2026-10-09）：backlog 定级见上节。**2026-10-13 更新：技术验证阶段已收口，「正式版启动（v1 规划）」三项决策均已拍板**——v1 范围（拍摄出局 / 音频后置 / 剪辑 Agent 入 v1）、字幕预览（UI 口冻结为字幕对位示意层）、代码起点（基于 POC 直接演进 + 正式版化收口）。v1 进入执行阶段，任务从「正式版启动」节圈定范围里排（命名收口、素材库管理 UI、剪辑 Agent headless 链路、导出帧快照等）。进会话后先读 [AGENTS.md](../AGENTS.md)，关键约束：编辑必经 `EditStore.apply`、素材引用走 `assets` 登记表 + `assetID`、Kadr 依赖收敛在引擎适配层、CLI stdout 只走结构化 JSON、草稿读写必经 `DraftStore`。
