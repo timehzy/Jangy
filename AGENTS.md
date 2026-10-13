@@ -8,7 +8,8 @@ iOS 视频剪辑 App（SwiftUI + AVFoundation），基于 [Kadr](https://github.
 
 - **JangyCore**（`Packages/JangyCore/Sources/JangyCore/`）：核心库（编辑状态 + 引擎适配 + 基础设施）
 - **JangyTestSupport**（`Packages/JangyCore/Sources/JangyTestSupport/`）：测试脚手架（`SamplePlan` 样例工程 + `AssetSynthesizer` 测试素材合成器），仅测试与 CLI 依赖，App 不链接、不进正式产物
-- **jangy-cli**（`Packages/JangyCore/Sources/jangy-cli/`）：Agent 链路 headless 验证入口，五子命令 `sample` / `validate` / `export` / `snapshot` / `genassets`
+- **JangyAgent**（`Packages/JangyCore/Sources/JangyAgent/`）：剪辑 Agent（工具层 = 原子编辑工具集 + 编排层 = agent loop），L1 意图的 headless 消费方，App 与 CLI 共用
+- **jangy-cli**（`Packages/JangyCore/Sources/jangy-cli/`）：Agent 链路 headless 验证入口，六子命令 `sample` / `validate` / `export` / `snapshot` / `genassets` / `agent`
 - **App 壳**（`Jangy/`，根目录 `Jangy.xcodeproj`）：SwiftUI 表现层，本地 SwiftPM 引用 `Packages/JangyCore` 包
 
 **架构与工程约束的唯一事实源是 [docs/architecture-covenant.md](docs/architecture-covenant.md)**（分层、数据流、建模、联动、预览规则、CLI 契约等一律以它为准），动手改代码前必读；本文件不复述其中的条款。
@@ -16,7 +17,7 @@ iOS 视频剪辑 App（SwiftUI + AVFoundation），基于 [Kadr](https://github.
 ## 常用命令
 
 ```bash
-# 测试（85 个，含导出端到端；全绿才算过）
+# 测试（111 个，含导出端到端；全绿才算过）
 cd Packages/JangyCore && swift test
 
 # CLI 冒烟
@@ -25,6 +26,12 @@ swift run jangy-cli sample
 swift run jangy-cli validate <plan.json> --assets ./Assets
 swift run jangy-cli export <plan.json> -o out.mp4 --assets ./Assets
 swift run jangy-cli snapshot <plan.json> --at 1.0 --assets ./Assets -o ./Frames
+
+# 剪辑 Agent 冒烟（凭据在 .agent-env.local（gitignore，找维护者要）；不打真实 API 的用例都在 swift test 里）
+source .agent-env.local
+swift run jangy-cli agent "把第二段切成两半并加字幕" \
+  --plan draft.json -o final.json --export out.mp4 --assets ./Assets \
+  --base-url "$JANGY_AGENT_BASE_URL" --model "$JANGY_AGENT_MODEL"
 
 # 模拟器手动验证要样例内容时，往 App 沙盒播种（App 首启即空时间线，不再自带样例）：
 # APP_DIR=$(模拟器上本 App 的 Application Support/Jangy 目录)

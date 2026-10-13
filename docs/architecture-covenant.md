@@ -47,6 +47,7 @@
 | `AssetResolver` / `DraftStore` / `PlanLoader` | L2 基础设施 | DraftStore 属 L2 持久化 |
 | `EngineBridge` / `PreviewBridge` / `ExportRunner` / `PhotosBridge` / `AssetImporter` / `CaptionImageRenderer` | L3 | |
 | App 壳全部 SwiftUI + `AppModel` | L0/L1 | AppModel 目前是 L1 雏形，正式版拆出 Interaction 层 |
+| `AgentToolSet` / `EditAgentRunner` / `AgentRunContext`（`JangyAgent` target） | L1 headless 消费方 | 剪辑 Agent：工具层（原子编辑 → `EditStore.apply`，校验失败结构化回喂）+ 编排层（agent loop + snapshot 视觉自检）；App 与 CLI 共用 |
 | `AssetSynthesizer` / `SamplePlan`（`JangyTestSupport` target） | 测试脚手架 | 不分层：仅测试与 CLI 依赖，App 不链接，不进正式产物 |
 | **待建** | L1 | Interaction 层（手势→意图翻译）当前尚不存在独立模块 |
 | **待建** | L2 | 原语事件 + reactor 注册表（见 §4） |
@@ -127,7 +128,7 @@ v1 范围：**导入 + 剪辑 + 导出保元数据**；球形交互预览进 bac
 
 1. L2（领域模型 + 联动）纯 Swift 可测，**单元测试全覆盖**；reactor 联动必须有「分割变速段」「分割横跨字幕」等场景用例。
 2. L3 引擎行为以 e2e 导出产物断言为准（沿用现有 TestArtifacts 抽帧核对）。
-3. **CLI 输出契约**：stdout 只走结构化 JSON/JSONL；日志、错误、人工可读信息一律 stderr。exit code：0 成功 / 1 JSON 解码失败 / 2 语义校验失败 / 3 引擎错误。自动化链路依赖此契约，改动须保持。Agent 链路是 L1 意图的 headless 消费方，与 UI 共用操作集。
+3. **CLI 输出契约**：stdout 只走结构化 JSON/JSONL；日志、错误、人工可读信息一律 stderr。exit code：0 成功 / 1 JSON 解码失败 / 2 语义校验失败 / 3 引擎错误 / 4 LLM 接入错误（`agent` 子命令：key 缺失、网络/API 报错、轮次耗尽）。自动化链路依赖此契约，改动须保持。Agent 链路是 L1 意图的 headless 消费方，与 UI 共用操作集。
 4. 公约合规检查纳入 code review 清单：依赖方向、import 收敛、写入口唯一、loading 白名单、降级登记表。
 
 ## 8. 修订流程

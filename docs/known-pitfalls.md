@@ -2,6 +2,13 @@
 
 > 排障事实知识库：记录症状的根因与背景，按主题分组。**约束条款不在这里**——凡已被立规的条目，规则以 [架构公约](architecture-covenant.md) 为准，本文只留成因事实并指向公约章节。构建/编译期高频坑在 [AGENTS.md](../AGENTS.md)。
 
+## LLM 接入（AnyLanguageModel）
+
+- **Anthropic provider 一次 respond = 一次 HTTP 请求，不内部续轮**（2026-10-13 wire 报文实证）：模型返回 tool_use 后，provider 执行工具、把 toolCalls + toolOutput 入 transcript 就返回了，**不会**自动发第二个请求让模型消化结果——续轮是调用方职责，`EditAgentRunner` 的 outer loop 就是 agent loop 本体（「本轮有工具调用 → 必须续轮」是硬规则，否则会像初版一样工具调完就静默收工）。README 说的「自动 tool loop」只适用于 MLX/llama.cpp 等本地 provider
+- **`max_tokens` 缺省 1024**（`GenerationOptions.maximumResponseTokens ?? 1024`）：思维链模型（K2.8 thinking-only、Claude extended thinking）思考先烧预算，1024 极易在思考中途截断 → 返回空 content + 无 tool call → 表现为「模型静默收工」。必须显式放大（`AgentRunConfiguration.maxResponseTokens` 默认 32768）
+- **String 工具输出会被收进 structure 段**：`String` 是 `ConvertibleToGeneratedContent`，`Tool.makeOutputSegments` 优先走 structure 分支而非 text——宿主侧解析 `Transcript.ToolOutput` 要兼顾 `.structure`（还原方式：`try? String(content)`），只看 `.text` 会拿到空串
+- **Kimi coding 端点（api.kimi.com/coding/）实测**（2026-10-13）：Anthropic 兼容，`x-api-key` 与 `Bearer` 均接受；`GET /v1/models` 可用；图片输入（base64 image block）正常，snapshot 视觉自检回喂链路已验证（模型能准确描述烧录字幕与画面内容）
+
 ## 引擎行为
 
 - **AVAssetImageGenerator 可渲 animationTool（2026-10-13 探针验证）**：挂导出式 videoComposition（含 `AVVideoCompositionCoreAnimationTool` 层树 + `CAKeyframeAnimation` 时间窗，beginTime=`AVCoreAnimationBeginTimeAtZero`）抽帧，overlay 按时间窗正确显隐——`Video.renderedFrame(at:)`（fork v1.2.0）即建于此。但**直接渲染帧 ≠ 导出解码帧**：无编码压缩痕迹，且与 HEVC 编码往返存在系统性色调偏移（样例红底帧实测全图 meanAbs≈12/255，diff>32 像素仅 0.025% 且集中在字幕抗锯齿边缘）——比对断言要按「结构一致」设阈（大差异占比），不能逐像素近似

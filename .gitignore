@@ -61,3 +61,6 @@ fastlane/Preview.html
 fastlane/screenshots/**/*.png
 fastlane/test_output
 .DS_Store
+
+# Agent 本地凭据（LLM API key，永不入库）
+.agent-env.local

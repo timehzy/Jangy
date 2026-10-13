@@ -107,3 +107,13 @@ v1 头两个任务（均为 `人工` 决策项，决策后交 `agent` 执行）�
 ## 下一步任务的入口
 
 任务 #4 已完成（2026-10-09）：backlog 定级见上节。**2026-10-13 更新：技术验证阶段已收口，「正式版启动（v1 规划）」三项决策均已拍板**——v1 范围（拍摄出局 / 音频后置 / 剪辑 Agent 入 v1）、字幕预览（UI 口冻结为字幕对位示意层）、代码起点（基于 POC 直接演进 + 正式版化收口）。v1 进入执行阶段：命名收口与 POC 专属代码隔离已完成（见上节收口清单），任务从「正式版启动」节圈定范围里排（素材库管理 UI、剪辑 Agent headless 链路、导出帧快照等）。进会话后先读 [AGENTS.md](../AGENTS.md)，关键约束：编辑必经 `EditStore.apply`、素材引用走 `assets` 登记表 + `assetID`、Kadr 依赖收敛在引擎适配层、CLI stdout 只走结构化 JSON、草稿读写必经 `DraftStore`。
+
+**v1 任务进度**：
+
+- [x] **剪辑 Agent headless 链路**（✅ 2026-10-13，按「正式版启动」三层拆分落地）：
+  - **LLM 接入**：调研选型 [AnyLanguageModel](https://github.com/huggingface/AnyLanguageModel)（FoundationModels 同 API 的 provider 抽象，Anthropic/OpenAI/端侧可换，部署下限 iOS 17/macOS 14 与本包一致）；Anthropic 官方 `ClaudeForFoundationModels` 因要求 OS 27 beta 出局（OS 达标后可一行切换）。验证项全过：baseURL 可自定义 / 内置 8 轮 tool round 上限 + 重复签名中止 / ToolExecutionDelegate 观察钩子 / Swift 6.3 本机满足 / LanguageModel 协议开放可 stub。依赖走内部镜像 `timehzy/AnyLanguageModel`（fork 自 huggingface，与 kadr 同款风险缓解），约束 `from: "0.16.0"`
+  - **工具层**（`JangyAgent` target，公约 L1 headless 消费方）：11 个原子编辑工具（get_plan / list_assets / add_clip / split_clip / trim_clip / move_clip / remove_clip / set_speed / set_transition / set_captions / snapshot），全部经 `EditStore.apply`；**一切失败（参数错/领域错/校验错）都以 `{"status":"error","issues":[...]}` 信封回喂模型自纠**——防御性参数解析（GeneratedContent 收参 + 内部解码）保证工具不抛错炸轮（参考实现教训）
+  - **编排层**：agent loop = `EditAgentRunner` outer loop 本体（AnyLanguageModel 的 Anthropic provider 不内部续轮，一次 respond = 一次 HTTP 请求，续轮/终止判定/轮次上限全在 outer loop；行为依据见 known-pitfalls「LLM 接入」）；snapshot 图片经下一轮 `respond(to:images:)` 回喂（tool result 不能带图的兜底）；工具步数上限（默认 30）为框架无关兜底；`maxResponseTokens` 默认 32768（框架缺省 1024 会被思维链烧穿）；轮次耗尽显式报错不静默
+  - **CLI `agent` 子命令**：单轮任务制，`ANTHROPIC_API_KEY` 走 env，`--plan/--assets/--model/--base-url/--max-turns/-o/--export/--frames`；stdout JSONL 事件流（start/assistant/tool_call/tool_result/done/error）；exit code 新增 **4 = LLM 接入错误**（公约 §7.3 已回填）；最终 plan 序列化与 draft.json 同格式，可被 validate/export 子命令直接消费
+  - 验收：111 测试全绿（新增 24：工具层 21 + snapshot 工具 3）+ App 模拟器构建通过 + 五子命令冒烟无回归；**真 key live 冒烟通过**（2026-10-13，Kimi coding 端点 `kimi-for-coding`，凭据存 `.agent-env.local`（gitignore）：6 轮完成「切半 + 加速 + 字幕 + 快照自检」全链路，模型看图确认字幕烧录与画面内容，最终 plan 正确；首次冒烟暴露并修复两个编排层 bug——provider 不续轮导致静默收工、max_tokens 缺省过小）
+  - 遗留：App UI 接入（JangyAgent 已是 App 可链接形态）；Kimi/Claude 之外的模型表现评估

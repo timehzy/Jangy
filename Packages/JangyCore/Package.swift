@@ -17,6 +17,9 @@ let package = Package(
         // SwiftPM 按包身份去重，根包声明的 timehzy 镜像 URL 生效（与 kadr-captions 同款处理）
         .package(url: "https://github.com/timehzy/kadr-photos.git", .upToNextMinor(from: "0.11.0")),
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.5.0"),
+        // 剪辑 Agent 的 LLM 接入层：FoundationModels 同 API 的 provider 抽象（Anthropic/OpenAI/端侧可换）。
+        // 走内部镜像（fork 自 huggingface/AnyLanguageModel，与 kadr 同款依赖风险缓解）；版本约束保持不变。
+        .package(url: "https://github.com/timehzy/AnyLanguageModel.git", from: "0.16.0"),
     ],
     targets: [
         .target(
@@ -32,11 +35,20 @@ let package = Package(
             name: "JangyTestSupport",
             dependencies: ["JangyCore"]
         ),
+        // 剪辑 Agent：L1 意图的 headless 消费方（工具层 + 编排层），App 与 CLI 共用
+        .target(
+            name: "JangyAgent",
+            dependencies: [
+                "JangyCore",
+                .product(name: "AnyLanguageModel", package: "AnyLanguageModel"),
+            ]
+        ),
         .executableTarget(
             name: "jangy-cli",
             dependencies: [
                 "JangyCore",
                 "JangyTestSupport",
+                "JangyAgent",
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
             ]
         ),
@@ -44,6 +56,10 @@ let package = Package(
             name: "JangyCoreTests",
             dependencies: ["JangyCore", "JangyTestSupport"],
             resources: [.copy("Fixtures")]
+        ),
+        .testTarget(
+            name: "JangyAgentTests",
+            dependencies: ["JangyAgent", "JangyCore", "JangyTestSupport"]
         ),
     ]
 )

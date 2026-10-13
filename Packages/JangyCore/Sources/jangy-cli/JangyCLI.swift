@@ -8,11 +8,11 @@ struct JangyCLI: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "jangy-cli",
         abstract: "Jangy: EditPlan JSON → DSL → headless 导出",
-        subcommands: [Sample.self, Validate.self, Export.self, Snapshot.self, GenAssets.self]
+        subcommands: [Sample.self, Validate.self, Export.self, Snapshot.self, GenAssets.self, Agent.self]
     )
 }
 
-/// stdout 只走结构化数据；日志/错误走 stderr。exit code: 0 成功 / 1 JSON 解码失败 / 2 语义校验失败 / 3 引擎错误。
+/// stdout 只走结构化数据；日志/错误走 stderr。exit code: 0 成功 / 1 JSON 解码失败 / 2 语义校验失败 / 3 引擎错误 / 4 LLM 接入错误（agent 子命令）。
 enum CLIError {
     static func stderr(_ text: String) {
         FileHandle.standardError.write(Data((text + "\n").utf8))

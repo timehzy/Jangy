@@ -1,0 +1,587 @@
+import AnyLanguageModel
+import Foundation
+import JangyCore
+
+// MARK: - 工具结果信封
+
+/// 工具结果 JSON 信封：模型与宿主（CLI 事件流）都能消费。
+/// 一切失败（参数错、领域错、校验错）都以 {"status":"error",...} 数据返回让模型自纠——
+/// 工具内抛错会被框架包成 ToolCallError 在 respond 处 rethrow 炸掉整轮（参考实现教训），
+/// 因此本文件所有工具的 call 都不向外抛错。
+enum ToolEnvelope {
+    private struct Ok<Payload: Encodable>: Encodable {
+        let status = "ok"
+        let payload: Payload
+    }
+    private struct Err: Encodable {
+        let status = "error"
+        let message: String
+        let issues: [ValidationIssue]?
+    }
+
+    static func ok(_ payload: some Encodable) -> String {
+        encode(Ok(payload: payload))
+    }
+
+    static func error(_ message: String, issues: [ValidationIssue]? = nil) -> String {
+        encode(Err(message: message, issues: issues))
+    }
+
+    /// apply 结果 → 信封：校验失败回 {"status":"error","issues":[...]}（path 形如 clips[1].speed）。
+    static func applied(_ result: Result<EditPlan, ValidationFailure>, payload: (EditPlan) -> some Encodable) -> String {
+        switch result {
+        case .success(let plan):
+            return ok(payload(plan))
+        case .failure(let failure):
+            return error("校验未通过，请根据 issues 修正后重试", issues: failure.issues)
+        }
+    }
+
+    private static func encode<T: Encodable>(_ value: T) -> String {
+        let data = (try? JSONEncoder().encode(value)) ?? Data()
+        return String(decoding: data, as: UTF8.self)
+    }
+}
+
+/// 工具公共件：步数闸门 + clip 查找。
+enum AgentToolCommon {
+    struct LookupError: Error {
+        let message: String
+    }
+
+    /// 步数闸门：超限后返回收尾提示（非 nil 表示应直接返回该结果，不再执行）。
+    static func stepLimitIfExceeded(_ context: AgentRunContext) -> String? {
+        context.admitToolCall()
+            ? nil
+            : ToolEnvelope.error("已达到工具调用步数上限（\(context.maxToolCalls)），请停止调用工具，用文字总结已完成的编辑")
+    }
+
+    /// clipID 字符串 → clips 下标；失败返回错误信封文本。
+    static func clipIndex(_ plan: EditPlan, clipID: String) -> Result<Int, LookupError> {
+        guard let uuid = UUID(uuidString: clipID),
+              let index = plan.clips.firstIndex(where: { $0.id == uuid })
+        else {
+            return .failure(LookupError(message: ToolEnvelope.error("找不到片段 \(clipID)，请先用 get_plan 获取当前片段 ID")))
+        }
+        return .success(index)
+    }
+}
+
+/// 防御性参数解析：工具统一以 GeneratedContent 收参、内部解码为 @Generable 结构体，
+/// 解码失败回落为错误信封而不是抛错（避免框架把参数错升级成整轮失败）。
+/// schema 仍由 @Generable 结构体生成，模型看到的参数契约不受影响。
+protocol DefensiveAgentTool: Tool where Arguments == GeneratedContent {
+    associatedtype Args: Generable
+    func call(parsed args: Args) async throws -> String
+}
+
+extension DefensiveAgentTool {
+    var parameters: GenerationSchema { Args.generationSchema }
+
+    func call(arguments: GeneratedContent) async throws -> String {
+        do {
+            return try await call(parsed: Args(arguments))
+        } catch {
+            return ToolEnvelope.error("工具参数无法解析：\(error.localizedDescription)。请严格按参数 schema 修正后重试")
+        }
+    }
+}
+
+// MARK: - 读工具
+
+struct GetPlanTool: DefensiveAgentTool {
+    let context: AgentRunContext
+    let name = "get_plan"
+    let description = "读取当前时间线的完整 EditPlan JSON 和渲染总时长 renderedDuration（秒）。开始编辑前、或不确定当前状态时调用。"
+
+    @Generable
+    struct Args {}
+
+    struct Payload: Encodable {
+        let renderedDuration: TimeInterval
+        let plan: EditPlan
+    }
+
+    func call(parsed _: Args) async throws -> String {
+        if let limit = AgentToolCommon.stepLimitIfExceeded(context) { return limit }
+        let plan = context.plan
+        return ToolEnvelope.ok(Payload(renderedDuration: plan.renderedDuration, plan: plan))
+    }
+}
+
+struct ListAssetsTool: DefensiveAgentTool {
+    let context: AgentRunContext
+    let name = "list_assets"
+    let description = "列出素材登记表（id/kind/fileName/时长/分辨率）。引用素材前先确认它已登记或知道文件名。"
+
+    @Generable
+    struct Args {}
+
+    struct Payload: Encodable { let assets: [AssetItem] }
+
+    func call(parsed _: Args) async throws -> String {
+        if let limit = AgentToolCommon.stepLimitIfExceeded(context) { return limit }
+        return ToolEnvelope.ok(Payload(assets: context.plan.assets))
+    }
+}
+
+// MARK: - 编辑工具
+
+struct AddClipTool: DefensiveAgentTool {
+    let context: AgentRunContext
+    let name = "add_clip"
+    let description = "把素材追加为时间线末尾的片段。fileName 未登记时会在同一次编辑里自动登记（先探测素材元数据）。"
+
+    @Generable
+    struct Args {
+        @Guide(description: "素材文件名（相对素材目录），如 clip1.mp4")
+        let fileName: String
+        @Guide(description: "源区间起点（秒，相对素材自身时间轴）")
+        let rangeStart: Double
+        @Guide(description: "源区间终点（秒）")
+        let rangeEnd: Double
+        @Guide(description: "变速倍率，0.25–4.0，缺省 1.0")
+        let speed: Double?
+    }
+
+    struct Payload: Encodable {
+        let clipID: String
+        let assetID: String
+        let registeredNewAsset: Bool
+        let renderedDuration: TimeInterval
+    }
+
+    func call(parsed args: Args) async throws -> String {
+        if let limit = AgentToolCommon.stepLimitIfExceeded(context) { return limit }
+        // ClosedRange 构造下界>上界会运行时 trap，必须先拦（校验器的「区间不能为空」只挡合法 Range）
+        guard args.rangeStart < args.rangeEnd else {
+            return ToolEnvelope.error("区间不能为空：rangeStart（\(args.rangeStart)）须小于 rangeEnd（\(args.rangeEnd)）")
+        }
+
+        // 登记素材：已登记则复用；未登记先探测元数据（文件不存在直接报错，免得到引擎期才炸）
+        let existing = context.plan.assets.first { $0.fileName == args.fileName }
+        var asset = existing
+        if asset == nil {
+            guard context.resolver.exists(AssetItem(kind: .video, fileName: args.fileName)) else {
+                return ToolEnvelope.error("素材文件不存在: \(args.fileName)。请用 list_assets 查看可用素材")
+            }
+            let metadata = await AssetImporter.probeMetadata(of: context.resolver.resolve(fileName: args.fileName))
+            asset = AssetItem(kind: .video, fileName: args.fileName, origin: .files,
+                              duration: metadata.duration, pixelWidth: metadata.pixelWidth,
+                              pixelHeight: metadata.pixelHeight, hasAudio: metadata.hasAudio,
+                              importedAt: Date())
+        }
+        guard let asset else { return ToolEnvelope.error("素材登记失败") }
+        let rate = args.speed ?? 1.0
+
+        // 登记 + 追加必须在同一次 apply（公约：单事务、单撤销步）
+        return context.locked { store in
+            var outcome: (clipID: UUID, assetID: UUID, isNew: Bool)!
+            let result = store.apply { plan in
+                let assetID: UUID
+                let isNew: Bool
+                if let registered = plan.assets.first(where: { $0.fileName == asset.fileName }) {
+                    assetID = registered.id
+                    isNew = false
+                } else {
+                    plan.assets.append(asset)
+                    assetID = asset.id
+                    isNew = true
+                }
+                let clip = PlanClip(assetID: assetID,
+                                    range: args.rangeStart...args.rangeEnd,
+                                    speed: .flat(rate))
+                plan.clips.append(clip)
+                outcome = (clip.id, assetID, isNew)
+            }
+            return ToolEnvelope.applied(result) { plan in
+                Payload(clipID: outcome.clipID.uuidString, assetID: outcome.assetID.uuidString,
+                        registeredNewAsset: outcome.isNew, renderedDuration: plan.renderedDuration)
+            }
+        }
+    }
+}
+
+struct SplitClipTool: DefensiveAgentTool {
+    let context: AgentRunContext
+    let name = "split_clip"
+    let description = "在源区间内的指定时刻把片段切成两段。变速等片段属性两段都保留；原片段尾部转场归后半段。"
+
+    @Generable
+    struct Args {
+        @Guide(description: "片段 ID（get_plan 返回的 clip id）")
+        let clipID: String
+        @Guide(description: "分割点（秒，相对素材自身时间轴，须严格落在片段源区间内部）")
+        let at: Double
+    }
+
+    struct Payload: Encodable {
+        let firstClipID: String
+        let secondClipID: String
+        let renderedDuration: TimeInterval
+    }
+
+    func call(parsed args: Args) async throws -> String {
+        if let limit = AgentToolCommon.stepLimitIfExceeded(context) { return limit }
+        return context.locked { store in
+            let index: Int
+            switch AgentToolCommon.clipIndex(store.plan, clipID: args.clipID) {
+            case .success(let i): index = i
+            case .failure(let error): return error.message
+            }
+            let clip = store.plan.clips[index]
+            guard args.at > clip.range.lowerBound, args.at < clip.range.upperBound else {
+                return ToolEnvelope.error("分割点 \(args.at) 须严格落在片段源区间 \(clip.range.lowerBound)–\(clip.range.upperBound) 内")
+            }
+            var secondID: UUID!
+            let result = store.apply { plan in
+                var first = plan.clips[index]
+                var second = plan.clips[index]
+                first.range = clip.range.lowerBound...args.at
+                first.transitionAfter = nil
+                second.id = UUID()
+                second.range = args.at...clip.range.upperBound
+                plan.clips.replaceSubrange(index...index, with: [first, second])
+                secondID = second.id
+            }
+            return ToolEnvelope.applied(result) { plan in
+                Payload(firstClipID: args.clipID, secondClipID: secondID.uuidString,
+                        renderedDuration: plan.renderedDuration)
+            }
+        }
+    }
+}
+
+struct TrimClipTool: DefensiveAgentTool {
+    let context: AgentRunContext
+    let name = "trim_clip"
+    let description = "修改片段的源区间（裁剪）。区间须在素材时长内且非空。"
+
+    @Generable
+    struct Args {
+        @Guide(description: "片段 ID")
+        let clipID: String
+        @Guide(description: "新区间起点（秒，相对素材自身时间轴）")
+        let rangeStart: Double
+        @Guide(description: "新区间终点（秒）")
+        let rangeEnd: Double
+    }
+
+    struct Payload: Encodable {
+        let clipID: String
+        let renderedDuration: TimeInterval
+    }
+
+    func call(parsed args: Args) async throws -> String {
+        if let limit = AgentToolCommon.stepLimitIfExceeded(context) { return limit }
+        guard args.rangeStart < args.rangeEnd else {
+            return ToolEnvelope.error("区间不能为空：rangeStart（\(args.rangeStart)）须小于 rangeEnd（\(args.rangeEnd)）")
+        }
+        return context.locked { store in
+            let index: Int
+            switch AgentToolCommon.clipIndex(store.plan, clipID: args.clipID) {
+            case .success(let i): index = i
+            case .failure(let error): return error.message
+            }
+            let result = store.apply { plan in
+                plan.clips[index].range = args.rangeStart...args.rangeEnd
+            }
+            return ToolEnvelope.applied(result) { plan in
+                Payload(clipID: args.clipID, renderedDuration: plan.renderedDuration)
+            }
+        }
+    }
+}
+
+struct MoveClipTool: DefensiveAgentTool {
+    let context: AgentRunContext
+    let name = "move_clip"
+    let description = "把片段移动到时间线的另一个位置（按下标）。"
+
+    @Generable
+    struct Args {
+        @Guide(description: "片段 ID")
+        let clipID: String
+        @Guide(description: "目标下标（0 起）")
+        let toIndex: Int
+    }
+
+    struct Payload: Encodable {
+        let clipOrder: [String]
+        let renderedDuration: TimeInterval
+    }
+
+    func call(parsed args: Args) async throws -> String {
+        if let limit = AgentToolCommon.stepLimitIfExceeded(context) { return limit }
+        return context.locked { store in
+            let index: Int
+            switch AgentToolCommon.clipIndex(store.plan, clipID: args.clipID) {
+            case .success(let i): index = i
+            case .failure(let error): return error.message
+            }
+            guard store.plan.clips.indices.contains(args.toIndex) else {
+                return ToolEnvelope.error("目标下标 \(args.toIndex) 越界（当前共 \(store.plan.clips.count) 个片段）")
+            }
+            let result = store.apply { plan in
+                let clip = plan.clips.remove(at: index)
+                plan.clips.insert(clip, at: args.toIndex)
+            }
+            return ToolEnvelope.applied(result) { plan in
+                Payload(clipOrder: plan.clips.map { $0.id.uuidString },
+                        renderedDuration: plan.renderedDuration)
+            }
+        }
+    }
+}
+
+struct RemoveClipTool: DefensiveAgentTool {
+    let context: AgentRunContext
+    let name = "remove_clip"
+    let description = "删除片段。被删片段尾部的转场一并消失；前一片段若挂着指向它的转场会被校验拦下，需先移除该转场。"
+
+    @Generable
+    struct Args {
+        @Guide(description: "片段 ID")
+        let clipID: String
+    }
+
+    struct Payload: Encodable {
+        let renderedDuration: TimeInterval
+        let remainingClips: Int
+    }
+
+    func call(parsed args: Args) async throws -> String {
+        if let limit = AgentToolCommon.stepLimitIfExceeded(context) { return limit }
+        return context.locked { store in
+            let index: Int
+            switch AgentToolCommon.clipIndex(store.plan, clipID: args.clipID) {
+            case .success(let i): index = i
+            case .failure(let error): return error.message
+            }
+            let result = store.apply { plan in
+                plan.clips.remove(at: index)
+            }
+            return ToolEnvelope.applied(result) { plan in
+                Payload(renderedDuration: plan.renderedDuration, remainingClips: plan.clips.count)
+            }
+        }
+    }
+}
+
+struct SetSpeedTool: DefensiveAgentTool {
+    let context: AgentRunContext
+    let name = "set_speed"
+    let description = "设置片段变速倍率（0.25–4.0）。变速改变该片段的输出时长，从而影响总时长与转场适配。"
+
+    @Generable
+    struct Args {
+        @Guide(description: "片段 ID")
+        let clipID: String
+        @Guide(description: "变速倍率，0.25–4.0")
+        let rate: Double
+    }
+
+    struct Payload: Encodable {
+        let clipID: String
+        let rate: Double
+        let renderedDuration: TimeInterval
+    }
+
+    func call(parsed args: Args) async throws -> String {
+        if let limit = AgentToolCommon.stepLimitIfExceeded(context) { return limit }
+        return context.locked { store in
+            let index: Int
+            switch AgentToolCommon.clipIndex(store.plan, clipID: args.clipID) {
+            case .success(let i): index = i
+            case .failure(let error): return error.message
+            }
+            let result = store.apply { plan in
+                plan.clips[index].speed = .flat(args.rate)
+            }
+            return ToolEnvelope.applied(result) { plan in
+                Payload(clipID: args.clipID, rate: args.rate,
+                        renderedDuration: plan.renderedDuration)
+            }
+        }
+    }
+}
+
+struct SetTransitionTool: DefensiveAgentTool {
+    let context: AgentRunContext
+    let name = "set_transition"
+    let description = "设置或移除片段尾部的转场。dissolve 与相邻片段全额重叠（扣总时长）；fade 不重叠。转场时长不能超过相邻两段中较短者的输出时长。"
+
+    @Generable
+    struct Args {
+        @Guide(description: "片段 ID（转场挂在该片段尾部，最后一段不能挂转场）")
+        let clipID: String
+        @Guide(description: "转场类型：dissolve / fade / none（none = 移除转场）")
+        let type: String
+        @Guide(description: "转场时长（秒），type 为 none 时忽略，缺省 0.5")
+        let duration: Double?
+    }
+
+    struct Payload: Encodable {
+        let clipID: String
+        let renderedDuration: TimeInterval
+    }
+
+    func call(parsed args: Args) async throws -> String {
+        if let limit = AgentToolCommon.stepLimitIfExceeded(context) { return limit }
+        let transition: PlanTransition?
+        switch args.type {
+        case "none":
+            transition = nil
+        case "dissolve":
+            transition = .dissolve(duration: args.duration ?? 0.5)
+        case "fade":
+            transition = .fade(duration: args.duration ?? 0.5)
+        default:
+            return ToolEnvelope.error("未知转场类型 '\(args.type)'；支持：dissolve / fade / none")
+        }
+        return context.locked { store in
+            let index: Int
+            switch AgentToolCommon.clipIndex(store.plan, clipID: args.clipID) {
+            case .success(let i): index = i
+            case .failure(let error): return error.message
+            }
+            let result = store.apply { plan in
+                plan.clips[index].transitionAfter = transition
+            }
+            return ToolEnvelope.applied(result) { plan in
+                Payload(clipID: args.clipID, renderedDuration: plan.renderedDuration)
+            }
+        }
+    }
+}
+
+struct SetCaptionsTool: DefensiveAgentTool {
+    let context: AgentRunContext
+    let name = "set_captions"
+    let description = "设置外挂字幕（仅 SRT 文件），fileName 未登记时自动登记。enabled=false 关闭字幕显示。"
+
+    @Generable
+    struct Args {
+        @Guide(description: "字幕文件名（.srt，相对素材目录）")
+        let fileName: String
+        @Guide(description: "字号，缺省 48")
+        let fontSize: Double?
+        @Guide(description: "是否加粗，缺省 true")
+        let isBold: Bool?
+        @Guide(description: "是否启用，缺省 true")
+        let enabled: Bool?
+    }
+
+    struct Payload: Encodable {
+        let captionAssetID: String
+        let isEnabled: Bool
+    }
+
+    func call(parsed args: Args) async throws -> String {
+        if let limit = AgentToolCommon.stepLimitIfExceeded(context) { return limit }
+        guard args.fileName.lowercased().hasSuffix(".srt") else {
+            return ToolEnvelope.error("仅支持 SRT 字幕文件: \(args.fileName)")
+        }
+        guard context.plan.assets.contains(where: { $0.fileName == args.fileName })
+            || context.resolver.exists(AssetItem(kind: .subtitle, fileName: args.fileName))
+        else {
+            return ToolEnvelope.error("字幕文件不存在: \(args.fileName)。请用 list_assets 查看可用素材")
+        }
+
+        return context.locked { store in
+            var captionAssetID: UUID!
+            let result = store.apply { plan in
+                let assetID: UUID
+                if let registered = plan.assets.first(where: { $0.fileName == args.fileName }) {
+                    assetID = registered.id
+                } else {
+                    let asset = AssetItem(kind: .subtitle, fileName: args.fileName,
+                                          origin: .files, importedAt: Date())
+                    plan.assets.append(asset)
+                    assetID = asset.id
+                }
+                plan.captions = CaptionTrack(
+                    assetID: assetID,
+                    isEnabled: args.enabled ?? true,
+                    style: CaptionStyle(fontSize: args.fontSize ?? 48, isBold: args.isBold ?? true)
+                )
+                captionAssetID = assetID
+            }
+            return ToolEnvelope.applied(result) { plan in
+                Payload(captionAssetID: captionAssetID.uuidString,
+                        isEnabled: plan.captions?.isEnabled ?? false)
+            }
+        }
+    }
+}
+
+// MARK: - 视觉自检工具
+
+struct SnapshotTool: DefensiveAgentTool {
+    let context: AgentRunContext
+    let name = "snapshot"
+    let description = "以导出保真度渲染指定时刻的画面（含字幕烧录），用于视觉自检。时刻取合成时间轴秒数，须在 [0, renderedDuration] 内。渲染结果会在下一轮自动以图片附上供你检查。"
+
+    @Generable
+    struct Args {
+        @Guide(description: "快照时刻列表（秒，合成时间轴）")
+        let times: [Double]
+    }
+
+    struct FrameInfo: Encodable {
+        let at: Double
+        let path: String
+    }
+    struct Payload: Encodable {
+        let frames: [FrameInfo]
+        let note: String
+    }
+
+    func call(parsed args: Args) async throws -> String {
+        if let limit = AgentToolCommon.stepLimitIfExceeded(context) { return limit }
+        guard !args.times.isEmpty else {
+            return ToolEnvelope.error("至少指定一个快照时刻")
+        }
+        let plan = context.plan
+        do {
+            let frames = try await FrameSnapshotter.snapshots(plan: plan, resolver: context.resolver, at: args.times)
+            let dir = context.framesDirectory
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            var pending: [AgentRunContext.SnapshotFrame] = []
+            var infos: [FrameInfo] = []
+            for t in args.times {
+                guard let data = frames[t] else { continue }
+                let url = dir.appendingPathComponent(String(format: "t%.2f.png", t))
+                try data.write(to: url)
+                pending.append(.init(at: t, url: url, pngData: data))
+                infos.append(FrameInfo(at: t, path: url.path))
+            }
+            context.enqueueSnapshots(pending)
+            return ToolEnvelope.ok(Payload(frames: infos, note: "快照画面将在下一轮自动以图片附上，请检查字幕/转场等视觉效果是否符合预期"))
+        } catch FrameSnapshotter.Failure.timeOutOfRange(let t, let duration) {
+            return ToolEnvelope.error("时刻 \(t)s 超出渲染时长 \(duration)s，请用 get_plan 确认 renderedDuration 后重试")
+        } catch {
+            return ToolEnvelope.error("快照渲染失败: \(error.localizedDescription)")
+        }
+    }
+}
+
+// MARK: - 工具集装配
+
+public enum AgentToolSet {
+    public static func make(context: AgentRunContext) -> [any Tool] {
+        [
+            GetPlanTool(context: context),
+            ListAssetsTool(context: context),
+            AddClipTool(context: context),
+            SplitClipTool(context: context),
+            TrimClipTool(context: context),
+            MoveClipTool(context: context),
+            RemoveClipTool(context: context),
+            SetSpeedTool(context: context),
+            SetTransitionTool(context: context),
+            SetCaptionsTool(context: context),
+            SnapshotTool(context: context),
+        ]
+    }
+}
