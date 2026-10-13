@@ -100,49 +100,66 @@ final class AppModel {
         draftMessage = nil
     }
 
-    /// 从相册导入视频：授权 → 逐个解析（iCloud 自动下载）→ move 进素材库 →
-    /// 一次 apply 登记素材 + 追加片段（单撤销步）。失败的单个素材不阻断其余导入。
+    /// 两条导入渠道（相册/文件）共用的导入管线：来源标识 → 临时文件 URL（resolve 闭包，
+    /// 渠道差异只在这一步）→ 逐个 move 进素材库 → 一次 apply 登记素材 + 追加片段
+    /// （单撤销步）。失败的单个素材不阻断其余导入。
+    /// - Parameters:
+    ///   - origin: 登记到 AssetItem.origin 的渠道标识
+    ///   - failureHint: 失败汇总文案里的原因提示（按渠道区分）
+    ///   - resolve: 把来源标识解析成 importer 可接管的临时文件 URL；
+    ///     回调参数为 (来源, 序号, 总数)，供相册渠道换算 iCloud 下载细粒度进度
+    private func importPipeline<Source>(_ sources: [Source],
+                                        origin: AssetOrigin,
+                                        failureHint: String,
+                                        resolve: (Source, Int, Double) async throws -> URL) async {
+        let total = Double(sources.count)
+        var items: [AssetItem] = []
+        var failures = 0
+        for (index, source) in sources.enumerated() {
+            do {
+                let tempFile = try await resolve(source, index, total)
+                let item = try await importer.importVideo(from: tempFile, origin: origin)
+                items.append(item)
+            } catch {
+                failures += 1
+            }
+            importProgress = Double(index + 1) / total
+        }
+        if !items.isEmpty {
+            edit {
+                $0.assets.append(contentsOf: items)
+                for item in items {
+                    // duration 探测失败时不追加片段（避免 range 无依据），素材仍入库
+                    if let duration = item.duration {
+                        $0.clips.append(PlanClip(assetID: item.id, range: 0...duration))
+                    }
+                }
+            }
+        }
+        importProgress = nil
+        if failures > 0 {
+            importMessage = "\(failures) 个素材导入失败（\(failureHint)）"
+        }
+    }
+
+    /// 从相册导入视频：授权 → 逐个解析（iCloud 自动下载）→ 共用管线入库。
     func importVideos(assetIdentifiers: [String]) {
         guard !assetIdentifiers.isEmpty else { return }
         importProgress = 0
         importMessage = nil
-        let total = Double(assetIdentifiers.count)
         Task { @MainActor in
             guard await PhotosBridge.requestReadAccess() else {
                 importProgress = nil
                 importMessage = "没有相册读取权限（请在系统设置中允许访问相册）"
                 return
             }
-            var items: [AssetItem] = []
-            var failures = 0
-            for (index, identifier) in assetIdentifiers.enumerated() {
-                do {
-                    let tempFile = try await PhotosBridge.resolveVideoFile(assetIdentifier: identifier) { fraction in
-                        Task { @MainActor in
-                            self.importProgress = (Double(index) + fraction) / total
-                        }
-                    }
-                    let item = try await importer.importVideo(from: tempFile, origin: .photoLibrary)
-                    items.append(item)
-                } catch {
-                    failures += 1
-                }
-                importProgress = Double(index + 1) / total
-            }
-            if !items.isEmpty {
-                edit {
-                    $0.assets.append(contentsOf: items)
-                    for item in items {
-                        // duration 探测失败时不追加片段（避免 range 无依据），素材仍入库
-                        if let duration = item.duration {
-                            $0.clips.append(PlanClip(assetID: item.id, range: 0...duration))
-                        }
+            await importPipeline(assetIdentifiers, origin: .photoLibrary,
+                                 failureHint: "iCloud 下载或格式不支持") { identifier, index, total in
+                try await PhotosBridge.resolveVideoFile(assetIdentifier: identifier) { fraction in
+                    Task { @MainActor in
+                        self.importProgress = (Double(index) + fraction) / total
                     }
                 }
-            }
-            importProgress = nil
-            if failures > 0 {
-                importMessage = "\(failures) 个素材导入失败（iCloud 下载或格式不支持）"
             }
         }
     }
