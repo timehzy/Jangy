@@ -1,18 +1,19 @@
 # Jangy
 
-视频剪辑 App，iOS 原生技术实现（SwiftUI + AVFoundation）。当前处于 **Kadr POC 阶段**：基于 [Kadr](https://github.com/SteliyanH/kadr) DSL 引擎验证「多段拼接 + 转场 + 变速 + 字幕 + headless 导出」的最小闭环。
+视频剪辑 App，iOS 原生技术实现（SwiftUI + AVFoundation）。POC 技术验证已收口（2026-10-13），当前处于 **v1 正式版开发阶段**：基于 [Kadr](https://github.com/SteliyanH/kadr) DSL 引擎，决策记录见 [路线图](docs/roadmap-path-a.md)「正式版启动」。
 
 ## 仓库结构
 
 ```
-├── App/JangyPOC/          # iOS App 壳（SwiftUI，iOS 17+，Xcode 工程）
-│   └── JangyPOC/          #   表现层源码：预览/时间线/操作条/导出（本地引用 KadrPOC 包）
-├── KadrPOC/               # SwiftPM 包：POCCore 库 + kadrpoc-cli 可执行 + 64 个测试
-│   ├── Sources/POCCore/   #   编辑状态层（纯 Swift）+ 引擎适配层（唯一 import Kadr 的地方）
-│   ├── Sources/kadrpoc-cli/#   Agent 链路 headless 验证入口
-│   ├── Tests/POCCoreTests/#
-│   └── Assets/            #   测试素材（clip1-3.mp4 + sample.srt，可由 genassets 重新生成）
-└── docs/                  # 选型调研报告 / POC 验证清单 / 设计 spec 与计划
+├── Jangy.xcodeproj        # iOS App 工程（iOS 17+）
+├── Jangy/                 # App 壳源码（SwiftUI 表现层：预览/时间线/操作条/导出）
+├── Packages/
+│   └── JangyCore/         # SwiftPM 包：JangyCore 库 + jangy-cli 可执行 + 86 个测试
+│       ├── Sources/JangyCore/  # 编辑状态层（纯 Swift）+ 引擎适配层（唯一 import Kadr 的地方）
+│       ├── Sources/jangy-cli/  # Agent 链路 headless 验证入口
+│       ├── Tests/JangyCoreTests/
+│       └── Assets/        # 测试素材（clip1-3.mp4 + sample.srt，可由 genassets 重新生成）
+└── docs/                  # 选型调研报告 / POC 验证清单 / 路线图 / 设计 spec 与计划
 ```
 
 ## 技术栈
@@ -23,27 +24,27 @@ Swift 6.3 · Xcode 26.4 · SwiftPM · SwiftUI（iOS 17+）· [Kadr 1.0](https://
 
 ## 快速开始
 
-### 跑测试（64 个，含导出端到端）
+### 跑测试（86 个，含导出端到端）
 
 ```bash
-cd KadrPOC && swift test
+cd Packages/JangyCore && swift test
 ```
 
 ### CLI 冒烟（headless 导出链路）
 
 ```bash
-cd KadrPOC
-swift run kadrpoc-cli genassets                 # 生成测试素材到 ./Assets
-swift run kadrpoc-cli sample                    # 输出内置演示 EditPlan JSON
-swift run kadrpoc-cli validate plan.json --assets ./Assets   # 结构 + 素材校验
-swift run kadrpoc-cli export plan.json -o out.mp4 --assets ./Assets
+cd Packages/JangyCore
+swift run jangy-cli genassets                 # 生成测试素材到 ./Assets
+swift run jangy-cli sample                    # 输出内置演示 EditPlan JSON
+swift run jangy-cli validate plan.json --assets ./Assets   # 结构 + 素材校验
+swift run jangy-cli export plan.json -o out.mp4 --assets ./Assets
 ```
 
 CLI 约定：stdout 只走结构化 JSON/JSONL，日志与错误走 stderr；exit code 0 成功 / 1 JSON 解码失败 / 2 语义校验失败 / 3 引擎错误。
 
 ### iOS App
 
-用 Xcode 打开 `App/JangyPOC/JangyPOC.xcodeproj`，选择真机或模拟器运行。首次启动会同步合成测试素材（阻塞数秒，仅一次）。功能：预览播放（字幕叠加层）、撤销/重做、字幕开关、**从相册导入视频素材**（PHPicker 多选，iCloud 自动下载，passthrough 优先保 HDR/高帧率）、导出到系统相册。
+用 Xcode 打开根目录 `Jangy.xcodeproj`，选择真机或模拟器运行。首次启动会在后台合成测试素材（仅一次）。功能：预览播放（字幕叠加层）、撤销/重做、字幕开关、**从相册导入视频素材**（PHPicker 多选，iCloud 自动下载，passthrough 优先保 HDR/高帧率）、导出到系统相册。
 
 ## 当前状态
 

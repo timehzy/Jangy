@@ -76,7 +76,7 @@ v1 头两个任务（均为 `人工` 决策项，决策后交 `agent` 执行）�
    - **MCP 化：改写为「剪辑 Agent」并入 v1**。理由：MCP 是跨产品工具互操作协议，App 内没有第二个消费方，内嵌 LLM 直接 function calling 即可，套 MCP 只多一层序列化开销；且剪辑真正难的是编排（镜头选择/节奏/叙事），不是工具调用——这是 Agent 本体问题。架构分三层：
      1. **工具层**：`EditStore` 操作封装为 agent-facing function schema（编辑必经 `EditStore.apply`，自带校验护栏）
      2. **编排层**：agent loop + 剪辑领域 prompt + `EditPlanValidator` 报错回喂的反馈环
-     3. **headless 先行**：kadrpoc-cli 扩展 agent 子命令，先跑通「自然语言 → EditPlan JSON → validate → export」全链路再进 App UI
+     3. **headless 先行**：`jangy-cli` 扩展 agent 子命令，先跑通「自然语言 → EditPlan JSON → validate → export」全链路再进 App UI
    - **MCP server：显式降级为未来分发渠道**（如桌面 AI 客户端远程驱动剪辑）；工具层设计干净后 MCP 只是一层薄包装
    - **已确定纳入候选**（不变）：
      - **App 内素材库管理 UI**（自 P2 移入）：网格/缩略图/删除未引用素材；kadr-photos 有 `assets(in:)` 相册列举可用，缩略图需自建 PHImageManager + 缓存。**约束：不晚于首个对外发布版本**——导入走 asCopy 落盘占 sandbox，无删除入口则用户存储只增不减
@@ -87,7 +87,7 @@ v1 头两个任务（均为 `人工` 决策项，决策后交 `agent` 执行）�
    - **护栏**：导出帧快照入口（当前时间点走导出管线渲一帧），人工比对 + 给 Agent 链路留自检工具
    - **未来触发条件**：出现第一个「必须精确预览」的效果（滤镜/调色、HDR 字幕观感投诉等）→ 启动自定义 `AVVideoCompositing` 专项（动 Kadr fork 渲染管线，预览导出共享合成器，弃 CoreAnimationTool 路线）；`PreviewBridge` 抽象已为此预留
 3. **代码起点决策**（✅ 2026-10-13 已拍板）：**基于 POC 直接演进，不新开工程/仓库**。理由：POC 三层分层本就是为正式版设计的（状态层纯 Swift / Kadr 收敛引擎适配层 / App 壳薄），v1 任务（剪辑 Agent、素材库管理 UI、导出帧快照）全为增量，无一项需推翻现有结构；86 测试 + CLI 契约 + e2e + git 历史/已知坑记录是 Agent 链路与后续开发的地基，重写纯损耗。配套「正式版化收口」清单（随 v1 首个任务一起做）：
-   - **命名去 POC 化**：包 `KadrPOC` → 正式名、`kadrpoc-cli` → 正式名、App target `JangyPOC` → `Jangy`、bundle ID / display name 定版（机械改动，主要风险在 xcodeproj / SwiftPM 引用）
+   - **命名去 POC 化**（✅ 2026-10-13）：同步完成目录结构标准化（布局：xcodeproj 提根 + `Packages/`，标准 iOS App 工程结构）。最终命名：包与模块 `KadrPOC`/`POCCore` → `Packages/JangyCore`（`JangyCore`）、CLI `kadrpoc-cli` → `jangy-cli`、App target `JangyPOC` → `Jangy`（`Jangy.xcodeproj` 提根、源码 `Jangy/`、bundle ID `com.haozhenyi.Jangy`、@main `JangyApp`）；CI / .vscode / 活文档同步，docs/superpowers 历史文档保留旧名（时间快照不改）。验证：86 测试全绿 + CLI 冒烟 + xcodebuild 模拟器构建通过
    - **POC 专属代码隔离**：`AssetSynthesizer` / `SamplePlan` / 样例素材入口移 debug-only 或独立 target，不进正式产物
    - **模拟器微扰**：`breakRenderSizeEquality` 发布前改 `targetEnvironment(simulator)` 条件编译（沿 P1 既定口径）
    - **`SilentAudio` 兜底**：上游 [#204](https://github.com/SteliyanH/kadr/pull/204) 合并后评估移除

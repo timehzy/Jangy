@@ -4,29 +4,29 @@
 
 ## 项目是什么
 
-iOS 视频剪辑 App（SwiftUI + AVFoundation），基于 [Kadr](https://github.com/SteliyanH/kadr) DSL 引擎（已验证「多段拼接 + 转场 + 变速 + 字幕 + headless 导出」最小闭环）。**阶段状态（2026-10-13）：POC 技术验证已收口，进入正式版 v1 规划**——v1 范围与字幕预览两个决策项待拍板，见 [docs/roadmap-path-a.md](docs/roadmap-path-a.md)「正式版启动」。架构分三层：
+iOS 视频剪辑 App（SwiftUI + AVFoundation），基于 [Kadr](https://github.com/SteliyanH/kadr) DSL 引擎（已验证「多段拼接 + 转场 + 变速 + 字幕 + headless 导出」最小闭环）。**阶段状态（2026-10-13）：POC 技术验证已收口，v1 正式版进入执行阶段**——范围（拍摄出局/音频后置/剪辑 Agent 入 v1）、字幕预览（时间对位示意层）、代码起点（基于 POC 演进）三项决策已拍板，见 [docs/roadmap-path-a.md](docs/roadmap-path-a.md)「正式版启动」。架构分三层：
 
-- **POCCore**（`KadrPOC/Sources/POCCore/`）：核心库
+- **JangyCore**（`Packages/JangyCore/Sources/JangyCore/`）：核心库
   - 编辑状态层（纯 Swift，无 AVFoundation 依赖）：`EditPlan`（v2：含素材登记表 `assets`，clip/字幕用 `assetID` 引用）/ `PlanClip` / `PlanTransition` / `AssetItem` / `EditStore` / `UndoStack` / `EditPlanValidator` / `TimelineDuration`（渲染时长口径：dissolve 重叠扣除、fade 不扣）
   - 引擎适配层（**唯一允许 `import Kadr` / `import KadrCaptions` / `import KadrPhotos` 的地方**）：`EngineBridge` / `PreviewBridge` / `ExportRunner` / `PhotosBridge`
   - 基础设施：`AssetResolver` / `AssetSynthesizer`（AVAssetWriter 生成测试素材）/ `AssetImporter`（外部文件入库 + 元数据探测）/ `DraftStore`（草稿原子落盘/恢复/完整性校验，格式 = EditPlan JSON）/ `PlanLoader` / `SamplePlan` / `SilentAudio` / `CaptionImageRenderer`
-- **kadrpoc-cli**（`KadrPOC/Sources/kadrpoc-cli/`）：Agent 链路 headless 验证入口，四子命令 `sample` / `validate` / `export` / `genassets`
-- **App 壳**（`App/JangyPOC/`）：SwiftUI 表现层，薄——只做状态装配与 UI，业务逻辑一律在 POCCore。本地 SwiftPM 引用 KadrPOC 包
+- **jangy-cli**（`Packages/JangyCore/Sources/jangy-cli/`）：Agent 链路 headless 验证入口，四子命令 `sample` / `validate` / `export` / `genassets`
+- **App 壳**（`Jangy/`，根目录 `Jangy.xcodeproj`）：SwiftUI 表现层，薄——只做状态装配与 UI，业务逻辑一律在 JangyCore。本地 SwiftPM 引用 `Packages/JangyCore` 包
 
 ## 常用命令
 
 ```bash
-# 测试（74 个，含导出端到端；全绿才算过）
-cd KadrPOC && swift test
+# 测试（86 个，含导出端到端；全绿才算过）
+cd Packages/JangyCore && swift test
 
 # CLI 冒烟
-swift run kadrpoc-cli genassets
-swift run kadrpoc-cli sample
-swift run kadrpoc-cli validate <plan.json> --assets ./Assets
-swift run kadrpoc-cli export <plan.json> -o out.mp4 --assets ./Assets
+swift run jangy-cli genassets
+swift run jangy-cli sample
+swift run jangy-cli validate <plan.json> --assets ./Assets
+swift run jangy-cli export <plan.json> -o out.mp4 --assets ./Assets
 
 # App 编译验证
-xcodebuild -project App/JangyPOC/JangyPOC.xcodeproj -scheme JangyPOC \
+xcodebuild -project Jangy.xcodeproj -scheme Jangy \
   -destination 'generic/platform=iOS Simulator' build
 ```
 
@@ -39,14 +39,14 @@ xcodebuild -project App/JangyPOC/JangyPOC.xcodeproj -scheme JangyPOC \
 - **草稿读写必经 `DraftStore`**：draft.json 与素材同目录，原子写入 + schema 版本守卫（过新拒绝加载，不静默丢字段）。不要在 App 层手写 draft.json；素材完整性问题经 `verify` 报告显式上报，不静默丢弃
 - **命名避让**：模型层用 `PlanClip` / `PlanTransition`，因为 Kadr 有同名 `Clip` 协议与 `Transition` 枚举，同模块会歧义
 - **提交信息用中文**，风格参照 `git log`（如 `App: 导出改为写入系统相册（…）`）；代码注释同样用中文
-- **生成产物入库**：App 产物目录是 `.gitignore` 的；`KadrPOC/.gitignore` 忽略 `.build/` 与 `TestArtifacts/`（e2e 抽帧核对图不入库）
+- **生成产物入库**：App 产物目录是 `.gitignore` 的；`Packages/JangyCore/.gitignore` 忽略 `.build/` 与 `TestArtifacts/`（e2e 抽帧核对图不入库）
 
 ## 已知坑
 
 - **Xcode 26 SDK 改了 `PHAssetCreationRequest.addResource` 的导入签名**：新 SDK 是 `addResource(with:fileURL:options:)`，旧文档里的 `addResource(_:fileURL:options:)` 编不过
 - **字幕不进预览**：Kadr 官方明确 overlay 仅导出时烧录（`AVVideoCompositionCoreAnimationTool`），`makePlayerItem()` 预览无字幕。App 用 SwiftUI Text 叠加层按播放器时间近似显示——「所见即所导」对字幕降级为「预览近似」
 - **转场重叠语义**：dissolve 与相邻片段全额重叠（扣 duration），fade 不重叠（各占相邻片段内 duration/2，总长不变）——渲染时长 ≠ `Video.duration` 求和值（样例工程实测 9.5s vs 10.5s）。输出时长口径统一走 `EditPlan.renderedDuration`（`TimelineDuration.swift`，与 Kadr CompositionBuilder `overlap(during:)` 一致）；UI 展示、e2e 断言都锚它，不要「修正」成求和值，也不要另写求和
-- **App 启动素材合成已异步化**（2026-10-12）：`JangyPOCApp.init` 只做目录/草稿装配，合成由 `AppModel.prepareAssets()` 后台执行（`AssetSynthesizer.synthesizeAsync`），期间 `isPreparingAssets` 门禁导入/导出，完成后才重建预览 + 完整性核对；合成失败显式上报（跳过完整性核对，避免「素材缺失」报告盖住根因）
+- **App 启动素材合成已异步化**（2026-10-12）：`JangyApp.init` 只做目录/草稿装配，合成由 `AppModel.prepareAssets()` 后台执行（`AssetSynthesizer.synthesizeAsync`），期间 `isPreparingAssets` 门禁导入/导出，完成后才重建预览 + 完整性核对；合成失败显式上报（跳过完整性核对，避免「素材缺失」报告盖住根因）
 - **预览 player 生命周期**：`PlayerController.rebuild()` 换 player 前必须同步 `pause()` 旧实例 + 取消轮询 Task——旧 player 的回收依赖 dealloc（时机不受控），不主动停会出现「界面无播放器却有声音」的孤儿播放；轮询 Task 必须弱捕获 player，防止 Task 泄漏把旧 player 钉在内存里。rebuild 的 await 期间可能又来一次 rebuild，安装 player 前必须再查 `Task.isCancelled`；重建保留播放状态（旧 player 暂停/播完则新的不自动出声）
 - **转场预览直通怪癖（iOS 26 模拟器实测）**：转场路径（双视频轨 composition）中素材分辨率恰等于 preset renderSize 时，显示管线把解码 buffer 直通 CA image queue，像素格式被拒（-11800 / 底层 -19230）→ `AVPlayerItemFailedToPlayToEndTime`，播到转场即停；identity transform 微扰无效（判定基于尺寸相等），`PreviewBridge.breakRenderSizeEquality` 给 renderSize 加 0.5pt 规避。注意 `AVPlayerItem.videoComposition` setter 是 copy 语义，改完要 mutableCopy 赋回。真机已验证无此问题（2026-10-12），微扰为模拟器保留；正式版发布前再移除或按模拟器条件编译（见 roadmap backlog）
 - **iOS 26 SDK 弃用 `AVMutableVideoComposition` 族**（Swift 侧，提示用 `AVVideoComposition.Configuration`）：目前只是警告，Kadr 与本仓库都还在用；`AVMutableVideoCompositionLayerInstruction(assetTrackID:)` 的 Swift 导入已消失，要用 `init(assetTrack:)`
