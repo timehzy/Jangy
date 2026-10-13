@@ -7,6 +7,8 @@ let package = Package(
     products: [
         .library(name: "JangyCore", targets: ["JangyCore"]),
         .executable(name: "jangy-cli", targets: ["jangy-cli"]),
+        // 剪辑 Agent：App 链接入口（CLI 走 executable 直接依赖 target，不经 product）
+        .library(name: "JangyAgent", targets: ["JangyAgent"]),
     ],
     dependencies: [
         // Kadr 依赖走内部镜像（fork 自 SteliyanH/*），防上游单作者仓库变动；版本约束保持不变。

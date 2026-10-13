@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		44E03CF23077C1E70009DB62 /* JangyCore in Frameworks */ = {isa = PBXBuildFile; productRef = 44E03CF13077C1E70009DB62 /* JangyCore */; };
+		44E03CF43077C1E70009DB63 /* JangyAgent in Frameworks */ = {isa = PBXBuildFile; productRef = 44E03CF33077C1E70009DB63 /* JangyAgent */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -28,6 +29,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				44E03CF23077C1E70009DB62 /* JangyCore in Frameworks */,
+				44E03CF43077C1E70009DB63 /* JangyAgent in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -71,6 +73,7 @@
 			name = Jangy;
 			packageProductDependencies = (
 				44E03CF13077C1E70009DB62 /* JangyCore */,
+				44E03CF33077C1E70009DB63 /* JangyAgent */,
 			);
 			productName = Jangy;
 			productReference = 44E03CD03077C0D10009DB62 /* Jangy.app */;
@@ -359,6 +362,10 @@
 		44E03CF13077C1E70009DB62 /* JangyCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = JangyCore;
+		};
+		44E03CF33077C1E70009DB63 /* JangyAgent */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = JangyAgent;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
