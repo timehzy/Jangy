@@ -1,0 +1,21 @@
+Packages/JangyCore/Tests/JangyCoreTests/EditStoreGroupingTests.swift
+  s_aee63377c92767::t_78cd5fe3683dbc 1-72
+Packages/JangyCore/Sources/JangyCore/EditStore.swift
+  s_aee63377c92767::t_0f0ed3a58935e8 17-18,21-41,48,54,59
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "328c6d77e9b1ff4122baa0254edc7eb4096d3713",
+  "prompts": {},
+  "sessions": {
+    "s_aee63377c92767": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "09bc7dbb-0862-42e2-be3e-5e892ffa5207",
+        "model": "k3"
+      },
+      "human_author": "Michael <yiliforever@qq.com>"
+    }
+  }
+}
