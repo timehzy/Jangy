@@ -9,7 +9,8 @@ import KadrCaptions
 /// import Kadr / KadrCaptions 的地方（硬边界规则 1）。
 ///
 /// 注意：`Kadr.Video.duration` 是各 Clip.duration 的属性求和（转场全额计入），
-/// ≠ 渲染输出时长（dissolve 与相邻片段重叠，输出更短）；预览/导出不得用它当输出长度。
+/// ≠ 渲染输出时长（dissolve 与相邻片段重叠，输出更短）；输出长度口径统一走
+/// `EditPlan.renderedDuration`（见 TimelineDuration.swift），预览/导出/UI 不得用求和值。
 ///
 /// SRT cue 时间直接作为合成时间轴时间处理（约定：SRT 按渲染后的时间轴编写）。
 ///

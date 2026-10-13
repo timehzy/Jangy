@@ -7,9 +7,14 @@ struct TimelineView: View {
 
     var body: some View {
         List {
+            // 总时长用实测口径（dissolve 重叠扣除），与导出产物时长一致；
+            // 不要用片段源区间求和（转场全额计入会偏大）
+            Text("总时长 \(model.store.plan.renderedDuration, format: .number.precision(.fractionLength(1)))s")
+                .font(.caption)
+                .foregroundStyle(.secondary)
             ForEach(Array(model.store.plan.clips.enumerated()), id: \.element.id) { index, clip in
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("\(index + 1). \(displayName(for: clip))  [\(clip.range.lowerBound, format: .number.precision(.fractionLength(1)))–\(clip.range.upperBound, format: .number.precision(.fractionLength(1)))s]  \(clip.speed.rate, format: .number.precision(.fractionLength(2)))x")
+                    Text("\(index + 1). \(displayName(for: clip))  [\(clip.range.lowerBound, format: .number.precision(.fractionLength(1)))–\(clip.range.upperBound, format: .number.precision(.fractionLength(1)))s]  \(clip.speed.rate, format: .number.precision(.fractionLength(2)))x → \(clip.outputDuration, format: .number.precision(.fractionLength(1)))s")
                         .font(.callout)
                     HStack {
                         Button("裁剪") { toggleTrim(index) }

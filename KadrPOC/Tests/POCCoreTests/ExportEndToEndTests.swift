@@ -27,8 +27,9 @@ final class ExportEndToEndTests: XCTestCase {
 
     func testSamplePlanExportProducesFullyRenderedOutput() async throws {
         let output = assetsDir.appendingPathComponent("export.mp4")
+        let plan = SamplePlan.make()
         var sawDone = false
-        for try await event in ExportRunner.export(plan: SamplePlan.make(), resolver: resolver, to: output) {
+        for try await event in ExportRunner.export(plan: plan, resolver: resolver, to: output) {
             if case .done = event { sawDone = true }
         }
         XCTAssertTrue(sawDone, "导出流应以 done 结束")
@@ -51,8 +52,10 @@ final class ExportEndToEndTests: XCTestCase {
                       "应为 HEVC，实际 \(codec.map(ExportVerifier.fourCCString) ?? "nil")")
 
         // 4. 渲染时长 = 9.5s（dissolve 重叠扣除；passthrough 或时长错误都会偏）
+        //    断言锚定 EditPlan.renderedDuration——UI 时长展示与 e2e 共用同一口径，
+        //    此处把它与真实导出产物互相锚定（样例工程实测值 9.5s 由单测固定）
         let duration = try await CMTimeGetSeconds(asset.load(.duration))
-        XCTAssertEqual(duration, 9.5, accuracy: 0.2)
+        XCTAssertEqual(duration, plan.renderedDuration, accuracy: 0.2)
 
         // 5. 像素级：t=1.0 在 clip1（纯红）+ 字幕"第一段：开场"（0–2.5s）窗口内
         //    → 底部字幕区应存在白色文字像素（无字幕烧录时纯色帧为 0）
