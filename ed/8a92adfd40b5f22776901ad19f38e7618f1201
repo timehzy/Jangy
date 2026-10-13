@@ -1,0 +1,19 @@
+.github/workflows/ios.yml
+  s_4ec85dad947c7b::t_21563793528496 1,10-11,13-17,19-21,25,27-28
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "ed8a92adfd40b5f22776901ad19f38e7618f1201",
+  "prompts": {},
+  "sessions": {
+    "s_4ec85dad947c7b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "20e8470c-e3e9-42dd-bcba-43a7098b138a",
+        "model": "k3"
+      },
+      "human_author": "Michael <yiliforever@qq.com>"
+    }
+  }
+}
