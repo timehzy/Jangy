@@ -1,0 +1,21 @@
+docs/superpowers/specs/2026-10-13-agent-app-integration-design.md
+  s_aee63377c92767::t_4d86951b94391a 15
+  s_aee63377c92767::t_d3aab82e38d36b 27
+  s_aee63377c92767::t_86a69e32572e52 11-14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "9058eca9b5ddb807cb1838cf2738f54bbc8a194f",
+  "prompts": {},
+  "sessions": {
+    "s_aee63377c92767": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "09bc7dbb-0862-42e2-be3e-5e892ffa5207",
+        "model": "k3"
+      },
+      "human_author": "Michael <yiliforever@qq.com>"
+    }
+  }
+}
