@@ -1,0 +1,24 @@
+Jangy/ContentView.swift
+  s_aee63377c92767::t_9f4abd6bfcc694 85-87
+  s_aee63377c92767::t_c04e9a1fd0b738 18-19,24,29-32,34
+  s_aee63377c92767::t_8799081d1f3711 59-63
+  s_aee63377c92767::t_3afe3319ec6ce7 10
+Jangy/AgentChatView.swift
+  s_aee63377c92767::t_2ae926a07810e3 1-163
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "866484445d29457e49ce336790058d9847dfe883",
+  "prompts": {},
+  "sessions": {
+    "s_aee63377c92767": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "09bc7dbb-0862-42e2-be3e-5e892ffa5207",
+        "model": "k3"
+      },
+      "human_author": "Michael <yiliforever@qq.com>"
+    }
+  }
+}
