@@ -1,0 +1,32 @@
+KadrPOC/Sources/POCCore/EngineBridge.swift
+  s_a116ca15e3cef2::t_f77210d5fd7450 74-81
+  s_a116ca15e3cef2::t_d24eb6f933d601 28-30
+KadrPOC/Tests/POCCoreTests/ExportEndToEndTests.swift
+  s_a116ca15e3cef2::t_249df56093ceb3 87-117
+KadrPOC/Sources/POCCore/ExportVerifier.swift
+  s_a116ca15e3cef2::t_4c68553ee4ad36 79-82,85-87
+  s_a116ca15e3cef2::t_12c1305a9e0455 22-23
+  s_a116ca15e3cef2::t_95c057f096dfbb 49-50,52
+KadrPOC/Sources/POCCore/ExportRunner.swift
+  s_a116ca15e3cef2::t_1cb0052af1b65f 13-14
+  s_a116ca15e3cef2::t_40b65cd9eaa58d 30
+  s_a116ca15e3cef2::t_717a0332f99cf4 22
+KadrPOC/Sources/POCCore/ExportOptions.swift
+  s_a116ca15e3cef2::t_104ebdc217cc56 1-21
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "aec75d153f5a0d6ac7bb38f03bee083a6c564a06",
+  "prompts": {},
+  "sessions": {
+    "s_a116ca15e3cef2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f3b06295-0ff6-4d18-8951-a075309b17d2",
+        "model": "k3"
+      },
+      "human_author": "Michael <yiliforever@qq.com>"
+    }
+  }
+}
