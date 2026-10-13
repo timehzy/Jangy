@@ -1,0 +1,25 @@
+docs/known-pitfalls.md
+  s_aee63377c92767::t_c47b6fe53be266 7
+docs/roadmap-path-a.md
+  s_aee63377c92767::t_77bd225f536a5c 129
+Jangy/ContentView.swift
+  s_aee63377c92767::t_c18682c4f5678c 32
+Packages/JangyCore/Sources/JangyAgent/AgentRunContext.swift
+  s_aee63377c92767::t_99a8560d39965d 117
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "93dde976ca47cc4443e617b125699121fa100785",
+  "prompts": {},
+  "sessions": {
+    "s_aee63377c92767": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "09bc7dbb-0862-42e2-be3e-5e892ffa5207",
+        "model": "k3"
+      },
+      "human_author": "Michael <yiliforever@qq.com>"
+    }
+  }
+}
