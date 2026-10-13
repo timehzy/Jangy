@@ -1,0 +1,28 @@
+Jangy/AgentController.swift
+  s_aee63377c92767::t_8f5ef846d970a4 38-40
+  s_aee63377c92767::t_dac781ffe4530a 132,135-139
+  s_aee63377c92767::t_0c9332f9012c4b 54-60,63-65
+  s_aee63377c92767::t_f86b8bc0c55265 112-113
+Jangy/AppModel.swift
+  s_aee63377c92767::t_49a3e6fe956ac3 25
+  s_aee63377c92767::t_88da562dabcbdd 79-86,90,96,98,101-102
+  s_aee63377c92767::t_d88e67639c26fe 38-40,45-48,50-51
+  s_aee63377c92767::t_e8a20dfbddaf41 26-27
+  s_aee63377c92767::t_f3114345e2d092 234-239
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "4b3623716b4baeb6d1e17f04eef6ef8284d207a7",
+  "prompts": {},
+  "sessions": {
+    "s_aee63377c92767": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "09bc7dbb-0862-42e2-be3e-5e892ffa5207",
+        "model": "k3"
+      },
+      "human_author": "Michael <yiliforever@qq.com>"
+    }
+  }
+}
