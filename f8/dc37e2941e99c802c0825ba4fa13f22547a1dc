@@ -1,0 +1,22 @@
+docs/roadmap-path-a.md
+  s_bd9efac78efb48::t_1dffd9ad7a03fd 96
+  s_bd9efac78efb48::t_c402bf6906b8a3 37
+Packages/JangyCore/Sources/JangyCore/ExportVerifier.swift
+  s_bd9efac78efb48::t_8db43c492bcd26 7,13-16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "f8dc37e2941e99c802c0825ba4fa13f22547a1dc",
+  "prompts": {},
+  "sessions": {
+    "s_bd9efac78efb48": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7b0a8312-b1f7-4362-9823-4c0707582503",
+        "model": "k3"
+      },
+      "human_author": "Michael <yiliforever@qq.com>"
+    }
+  }
+}
