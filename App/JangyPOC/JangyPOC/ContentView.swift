@@ -4,13 +4,14 @@ import POCCore
 struct ContentView: View {
     var model: AppModel
     @State private var showPhotoPicker = false
+    @State private var showFilesPicker = false
     @State private var showResetConfirm = false
 
     var body: some View {
         VStack(spacing: 0) {
             PreviewView(player: model.player)
 
-            // 操作条：撤销/重做 + 字幕开关 + 相册导入 + 新建草稿 + 导出
+            // 操作条：撤销/重做 + 字幕开关 + 导入（相册/文件）+ 新建草稿 + 导出
             HStack {
                 Button("撤销") { model.undo() }.disabled(!model.store.canUndo)
                 Button("重做") { model.redo() }.disabled(!model.store.canRedo)
@@ -18,8 +19,11 @@ struct ContentView: View {
                 Button(model.store.plan.captions?.isEnabled == true ? "字幕：开" : "字幕：关") {
                     model.edit { $0.captions?.isEnabled.toggle() }
                 }
-                Button("导入") { showPhotoPicker = true }
-                    .disabled(model.isPreparingAssets || model.importProgress != nil)
+                Menu("导入") {
+                    Button("从相册导入") { showPhotoPicker = true }
+                    Button("从文件导入") { showFilesPicker = true }
+                }
+                .disabled(model.isPreparingAssets || model.importProgress != nil)
                 Button("新建") { showResetConfirm = true }
                 Button("导出") { model.export() }
                     .disabled(model.isPreparingAssets || model.exportProgress != nil)
@@ -57,6 +61,13 @@ struct ContentView: View {
             PhotoLibraryPicker { identifiers in
                 showPhotoPicker = false
                 model.importVideos(assetIdentifiers: identifiers)
+            }
+            .ignoresSafeArea()
+        }
+        .sheet(isPresented: $showFilesPicker) {
+            FilesPicker { urls in
+                showFilesPicker = false
+                model.importVideosFromFiles(urls: urls)
             }
             .ignoresSafeArea()
         }
