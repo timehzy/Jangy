@@ -9,6 +9,10 @@
 - **String 工具输出会被收进 structure 段**：`String` 是 `ConvertibleToGeneratedContent`，`Tool.makeOutputSegments` 优先走 structure 分支而非 text——宿主侧解析 `Transcript.ToolOutput` 要兼顾 `.structure`（还原方式：`try? String(content)`），只看 `.text` 会拿到空串
 - **Kimi coding 端点（api.kimi.com/coding/）实测**（2026-10-13）：Anthropic 兼容，`x-api-key` 与 `Bearer` 均接受；`GET /v1/models` 可用；图片输入（base64 image block）正常，snapshot 视觉自检回喂链路已验证（模型能准确描述烧录字幕与画面内容）
 
+### 剪辑 Agent：store 串行性前提
+
+- **DirectStoreScheduler 不强制串行**：`AgentRunContext.withStore` 的串行性建立在「provider 顺序执行工具调用（逐个 await Tool.call）」这一事实上——框架契约本身**允许并发触发** `Tool.call`，调度器内无锁保护，并发调用方触碰共享 EditStore 即数据竞争。Anthropic provider 实测顺序执行，但 **AnyLanguageModel 升级或换 provider 时必须复核这一点**；一旦存在并发触发可能，Direct 调度器须换成带串行化保护的实现（MainActorStoreScheduler 天然串行）
+
 ## 引擎行为
 
 - **AVAssetImageGenerator 可渲 animationTool（2026-10-13 探针验证）**：挂导出式 videoComposition（含 `AVVideoCompositionCoreAnimationTool` 层树 + `CAKeyframeAnimation` 时间窗，beginTime=`AVCoreAnimationBeginTimeAtZero`）抽帧，overlay 按时间窗正确显隐——`Video.renderedFrame(at:)`（fork v1.2.0）即建于此。但**直接渲染帧 ≠ 导出解码帧**：无编码压缩痕迹，且与 HEVC 编码往返存在系统性色调偏移（样例红底帧实测全图 meanAbs≈12/255，diff>32 像素仅 0.025% 且集中在字幕抗锯齿边缘）——比对断言要按「结构一致」设阈（大差异占比），不能逐像素近似

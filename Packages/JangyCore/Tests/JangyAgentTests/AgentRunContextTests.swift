@@ -28,6 +28,7 @@ final class AgentRunContextTests: XCTestCase {
 
     func testDidApplyFiresOnPlanChangeOnly() async {
         let store = makeStore()
+        // 依赖 Direct 调度器同执行域同步执行；换 MainActorStoreScheduler 会变真竞争
         nonisolated(unsafe) var fired: [EditPlan] = []
         let context = AgentRunContext(
             store: store,

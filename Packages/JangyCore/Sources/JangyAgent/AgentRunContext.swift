@@ -12,6 +12,8 @@ public protocol AgentStoreScheduler: Sendable {
 }
 
 /// CLI/测试用：当前线程原地执行。
+/// 硬前提：依赖调用方顺序执行（Anthropic provider 逐个 await 工具调用）；
+/// 并发调用方禁用此调度器（无串行化保护，并发触碰 EditStore 是数据竞争）。
 public struct DirectStoreScheduler: AgentStoreScheduler {
     public init() {}
     public func run<T: Sendable>(on context: AgentRunContext,
@@ -55,7 +57,7 @@ public final class AgentRunContext: @unchecked Sendable {
     /// 工具调用步数上限：防自动 tool loop 失控的框架无关兜底。
     public let maxToolCalls: Int
     /// plan 变化回调：在调度块内同步触发（App 侧天然已在 MainActor）。
-    public let didApply: (@Sendable (EditPlan) -> Void)?
+    private let didApply: (@Sendable (EditPlan) -> Void)?
 
     /// 仅经 scheduler 触碰；internal 供同模块调度器实现访问。
     let store: EditStore
@@ -112,6 +114,7 @@ public final class AgentRunContext: @unchecked Sendable {
     }
 
     /// 每条指令开始时重置步数计数（上限语义 = 防单次指令失控的兜底，不跨指令累计）。
+    /// 由 session 层在每条指令（send）开始时调用（Task 4/6 接线）。
     public func resetToolCallCount() {
         lock.lock()
         defer { lock.unlock() }

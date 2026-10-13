@@ -159,8 +159,9 @@ struct AddClipTool: DefensiveAgentTool {
         }
 
         // 登记素材：已登记则复用；未登记先探测元数据（文件不存在直接报错，免得到引擎期才炸）
-        let existing = await context.plan.assets.first { $0.fileName == args.fileName }
-        var asset = existing
+        let currentPlan = await context.plan
+        let existingFileNames = Set(currentPlan.assets.map(\.fileName))
+        var asset = currentPlan.assets.first { $0.fileName == args.fileName }
         if asset == nil {
             guard context.resolver.exists(AssetItem(kind: .video, fileName: args.fileName)) else {
                 return ToolEnvelope.error("素材文件不存在: \(args.fileName)。请用 list_assets 查看可用素材")
@@ -173,7 +174,6 @@ struct AddClipTool: DefensiveAgentTool {
         }
         guard let asset else { return ToolEnvelope.error("素材登记失败") }
         let rate = args.speed ?? 1.0
-        let existingFileNames = Set(await context.plan.assets.map(\.fileName))
 
         // 登记 + 追加必须在同一次 apply（公约：单事务、单撤销步）
         return await context.withStore { store in
