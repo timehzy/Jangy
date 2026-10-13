@@ -1,0 +1,19 @@
+docs/roadmap-path-a.md
+  s_a116ca15e3cef2::t_bdee7ff665f7af 55-56
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "b709b761008b2a00c588a548cd5ab6f2c4f81b55",
+  "prompts": {},
+  "sessions": {
+    "s_a116ca15e3cef2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f3b06295-0ff6-4d18-8951-a075309b17d2",
+        "model": "k3"
+      },
+      "human_author": "Michael <yiliforever@qq.com>"
+    }
+  }
+}
