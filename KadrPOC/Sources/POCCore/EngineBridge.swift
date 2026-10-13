@@ -25,7 +25,9 @@ public enum EngineBridge {
         public var description: String { "素材未登记: \(assetID)" }
     }
 
-    public static func makeComposition(from plan: EditPlan, resolver: AssetResolver) async throws -> Kadr.Video {
+    /// - Parameter options: 导出配置（仅导出链路关心 SDR 降级；预览走默认 HDR 直通）。
+    public static func makeComposition(from plan: EditPlan, resolver: AssetResolver,
+                                       options: ExportOptions = .default) async throws -> Kadr.Video {
         // 上游 Kadr bug 规避（trigger-avoidance，详见 ExportVerifier 注释）：
         // Kadr CompositionBuilder 无条件添加音频合成轨；素材无音频时该轨为空，
         // AVFoundation 兼容性检查对含空轨的 composition 一律返回 false，
@@ -69,7 +71,14 @@ public enum EngineBridge {
         // 显式映射而非静默丢弃：新增 OutputPreset case 时此处必须编译报错。
         let preset: Kadr.Preset
         switch plan.preset {
-        case .reelsAndShorts: preset = .reelsAndShorts
+        case .reelsAndShorts:
+            preset = options.hdrPassthrough
+                ? .reelsAndShorts
+                // SDR 降级：几何/帧率不变（同 1080x1920@30），编码换 H.264——
+                // AVAssetExportPresetHighestQuality 会把 BT.2020+HLG 自动色调映射到
+                // BT.709（POC 验证点③实测与 709 composition 路径产物逐像素一致）。
+                // 不用 .tiktok（同为 1080x1920@30 H.264）是刻意解耦语义档位名。
+                : .custom(width: 1080, height: 1920, frameRate: 30, codec: .h264)
         }
 
         // Kadr 1.x 校准：VideoBuilder 的 buildExpression 只接受单个 Clip，

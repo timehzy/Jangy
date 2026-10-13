@@ -10,7 +10,8 @@ public enum ExportEvent: Sendable, Equatable {
 
 public enum ExportRunner {
 
-    public static func export(plan: EditPlan, resolver: AssetResolver, to output: URL) -> AsyncThrowingStream<ExportEvent, Error> {
+    public static func export(plan: EditPlan, resolver: AssetResolver, to output: URL,
+                              options: ExportOptions = .default) -> AsyncThrowingStream<ExportEvent, Error> {
         AsyncThrowingStream { continuation in
             // exporter 在 Task 内、makeComposition 之后才创建；共享盒子让 onTermination
             // 也能取消 Kadr 导出（仅 cancel Task 时 Exporter 仍会在后台写盘）。
@@ -18,7 +19,7 @@ public enum ExportRunner {
             let task = Task {
                 do {
                     let start = Date()
-                    let video = try await EngineBridge.makeComposition(from: plan, resolver: resolver)
+                    let video = try await EngineBridge.makeComposition(from: plan, resolver: resolver, options: options)
                     let exporter = video.exporter(to: output)
                     exporterBox.exporter = exporter
                     for try await progress in exporter.run() {
@@ -26,7 +27,7 @@ public enum ExportRunner {
                     }
                     // 防静默 passthrough：Kadr 兼容性检查失败时会"成功"地产出
                     // 未渲染的码流拷贝（详见 ExportVerifier 注释）——交付前硬校验。
-                    try await ExportVerifier.verify(output: output, preset: plan.preset)
+                    try await ExportVerifier.verify(output: output, preset: plan.preset, options: options)
                     continuation.yield(.done(url: output, durationMs: Int(Date().timeIntervalSince(start) * 1000)))
                     continuation.finish()
                 } catch {

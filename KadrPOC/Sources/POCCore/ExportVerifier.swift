@@ -19,8 +19,8 @@ public enum ExportVerifier {
         case passthroughSuspected(reason: String)
     }
 
-    /// 校验导出产物与 preset 期望一致；不符则抛 `Failure.passthroughSuspected`。
-    public static func verify(output url: URL, preset: OutputPreset) async throws {
+    /// 校验导出产物与 preset + 导出配置期望一致；不符则抛 `Failure.passthroughSuspected`。
+    public static func verify(output url: URL, preset: OutputPreset, options: ExportOptions = .default) async throws {
         let asset = AVURLAsset(url: url)
         let videoTracks = try await asset.loadTracks(withMediaType: .video)
 
@@ -46,9 +46,10 @@ public enum ExportVerifier {
         let codec = try await track.load(.formatDescriptions)
             .map { CMFormatDescriptionGetMediaSubType($0) }
             .first
-        guard let codec, preset.expectedVideoCodecs.contains(codec) else {
+        let expectedCodecs = preset.expectedVideoCodecs(hdrPassthrough: options.hdrPassthrough)
+        guard let codec, expectedCodecs.contains(codec) else {
             throw Failure.passthroughSuspected(
-                reason: "输出编码 \(codec.map(fourCCString) ?? "未知") ≠ preset 期望 \(preset.expectedVideoCodecs.map(fourCCString))——疑似 Kadr 静默 passthrough"
+                reason: "输出编码 \(codec.map(fourCCString) ?? "未知") ≠ 期望 \(expectedCodecs.map(fourCCString))（\(options.hdrPassthrough ? "HDR 直通" : "SDR 降级")）——疑似 Kadr 静默 passthrough"
             )
         }
     }
@@ -75,11 +76,15 @@ extension OutputPreset {
         }
     }
 
-    /// 导出后校验用：期望的视频编码 FourCC（HEVC 允许 hvc1/hev1 两种封装）。
-    var expectedVideoCodecs: [FourCharCode] {
+    /// 导出后校验用：期望的视频编码 FourCC。HDR 直通走 HEVC（允许 hvc1/hev1 两种封装）；
+    /// SDR 降级走 H.264（EngineBridge 把 preset 映射为同几何的 Codec.h264，见该处注释）。
+    /// 显式 switch：新增 OutputPreset case 时此处必须编译报错。
+    func expectedVideoCodecs(hdrPassthrough: Bool) -> [FourCharCode] {
         switch self {
         case .reelsAndShorts:
-            return [ExportVerifier.fourCC("hvc1"), ExportVerifier.fourCC("hev1")]
+            return hdrPassthrough
+                ? [ExportVerifier.fourCC("hvc1"), ExportVerifier.fourCC("hev1")]
+                : [ExportVerifier.fourCC("avc1")]
         }
     }
 }

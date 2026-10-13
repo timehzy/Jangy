@@ -84,6 +84,37 @@ final class ExportEndToEndTests: XCTestCase {
         }
     }
 
+    /// SDR 降级专项：hdrPassthrough 关闭 → 分辨率/时长不变，编码从 HEVC 换 H.264（avc1）。
+    /// （色调映射本身的正确性依赖真 HDR 素材，合成素材是 SDR，不在此断言——
+    ///   POC 验证点③已实测 SDK 色调映射路径，真机显示验收见 roadmap P2。）
+    func testSDRDowngradeExportProducesH264() async throws {
+        let plan = SamplePlan.make()
+        let output = assetsDir.appendingPathComponent("export-sdr.mp4")
+        var sawDone = false
+        for try await event in ExportRunner.export(plan: plan, resolver: resolver, to: output,
+                                                   options: ExportOptions(hdrPassthrough: false)) {
+            if case .done = event { sawDone = true }
+        }
+        // done 本身已证明 ExportVerifier 的 SDR 期望（avc1）校验通过
+        XCTAssertTrue(sawDone, "SDR 导出流应以 done 结束")
+
+        let asset = AVURLAsset(url: output)
+        let videoTracks = try await asset.loadTracks(withMediaType: .video)
+        XCTAssertEqual(videoTracks.count, 1, "疑似 passthrough：输出应只有一条渲染后视频轨")
+
+        let track = videoTracks[0]
+        let codec = try await track.load(.formatDescriptions).map { CMFormatDescriptionGetMediaSubType($0) }.first
+        XCTAssertEqual(codec, ExportVerifier.fourCC("avc1"),
+                       "SDR 降级应为 H.264，实际 \(codec.map(ExportVerifier.fourCCString) ?? "nil")")
+
+        let size = try await track.load(.naturalSize).applying(track.load(.preferredTransform))
+        XCTAssertEqual(abs(size.width), 1080, accuracy: 2, "SDR 降级不改变分辨率")
+        XCTAssertEqual(abs(size.height), 1920, accuracy: 2, "SDR 降级不改变分辨率")
+
+        let duration = try await CMTimeGetSeconds(asset.load(.duration))
+        XCTAssertEqual(duration, plan.renderedDuration, accuracy: 0.2, "SDR 降级不改变渲染时长")
+    }
+
     /// 变速专项：clip2 0...3 @0.5x 单段 → 导出时长 ≈ 6.0s。
     /// 若变速未生效（按原速渲染）会量出 ~3s，直接红灯。
     func testSpeedChangeExportDuration() async throws {
