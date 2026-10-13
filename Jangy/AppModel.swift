@@ -23,8 +23,6 @@ final class AppModel {
     var lastIssues: [ValidationIssue]?
     /// 草稿相关提示：恢复失败原因 / 完整性报告 / 保存失败
     var draftMessage: String?
-    /// 合成素材准备中（首次启动数秒）。期间预览未就绪，导入/导出入口禁用。
-    var isPreparingAssets = true
 
     init(store: EditStore, resolver: AssetResolver, draftStore: DraftStore, restoreNotice: String? = nil) {
         self.store = store
@@ -33,26 +31,7 @@ final class AppModel {
         self.importer = AssetImporter(directory: resolver.directory)
         self.draftStore = draftStore
         self.draftMessage = restoreNotice
-        prepareAssets()
-    }
-
-    /// 启动后异步准备合成素材（幂等：已存在则秒过）。首屏渲染不等待它；
-    /// 完成后重建预览（此前素材缺失，PreviewBridge 装载会落空）并做草稿完整性核对。
-    /// 失败显式上报，不崩 App——草稿引用导入素材的场景仍可继续编辑。
-    private func prepareAssets() {
-        Task { @MainActor in
-            do {
-                _ = try await AssetSynthesizer.synthesizeAsync(into: resolver.directory)
-            } catch {
-                // 根因直接上报，跳过完整性核对（否则「素材缺失」报告会盖住合成失败原因）
-                isPreparingAssets = false
-                draftMessage = "测试素材合成失败: \(error.localizedDescription)"
-                return
-            }
-            isPreparingAssets = false
-            player.rebuild()
-            verifyDraftIntegrity()
-        }
+        verifyDraftIntegrity()
     }
 
     /// 启动后异步核对登记表与磁盘素材：缺失/漂移显式报告，不静默丢。
@@ -93,10 +72,10 @@ final class AppModel {
     func undo() { lastIssues = nil; store.undo(); player.rebuild(); scheduleAutosave() }
     func redo() { lastIssues = nil; store.redo(); player.rebuild(); scheduleAutosave() }
 
-    /// 新建草稿：经 EditStore.apply 整体替换为样例工程（单撤销步，可撤销），
+    /// 新建草稿：经 EditStore.apply 整体替换为空时间线（单撤销步，可撤销），
     /// autosave 随即覆盖旧 draft.json。素材文件保留在素材库，登记表清空即不再引用。
     func resetDraft() {
-        edit { $0 = SamplePlan.make() }
+        edit { $0 = EditPlan(clips: []) }
         draftMessage = nil
     }
 
@@ -182,7 +161,7 @@ final class AppModel {
         exportProgress = 0
         exportMessage = nil
         let out = FileManager.default.temporaryDirectory
-            .appendingPathComponent("poc-export-\(Int(Date().timeIntervalSince1970)).mp4")
+            .appendingPathComponent("jangy-export-\(Int(Date().timeIntervalSince1970)).mp4")
         Task {
             do {
                 for try await event in ExportRunner.export(plan: store.plan, resolver: resolver, to: out, options: options) {

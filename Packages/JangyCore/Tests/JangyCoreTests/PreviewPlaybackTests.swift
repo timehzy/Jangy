@@ -4,6 +4,7 @@ import UIKit
 #endif
 import XCTest
 @testable import JangyCore
+@testable import JangyTestSupport
 
 /// 预览播放回归：转场边界不停播。
 ///

@@ -8,8 +8,9 @@
 ├── Jangy.xcodeproj        # iOS App 工程（iOS 17+）
 ├── Jangy/                 # App 壳源码（SwiftUI 表现层：预览/时间线/操作条/导出）
 ├── Packages/
-│   └── JangyCore/         # SwiftPM 包：JangyCore 库 + jangy-cli 可执行 + 86 个测试
+│   └── JangyCore/         # SwiftPM 包：JangyCore 库 + jangy-cli 可执行 + 85 个测试
 │       ├── Sources/JangyCore/  # 编辑状态层（纯 Swift）+ 引擎适配层（唯一 import Kadr 的地方）
+│       ├── Sources/JangyTestSupport/  # 测试脚手架（样例工程/素材合成器），不进 App 产物
 │       ├── Sources/jangy-cli/  # Agent 链路 headless 验证入口
 │       ├── Tests/JangyCoreTests/
 │       └── Assets/        # 测试素材（clip1-3.mp4 + sample.srt，可由 genassets 重新生成）
@@ -24,7 +25,7 @@ Swift 6.3 · Xcode 26.4 · SwiftPM · SwiftUI（iOS 17+）· [Kadr 1.0](https://
 
 ## 快速开始
 
-### 跑测试（86 个，含导出端到端）
+### 跑测试（85 个，含导出端到端）
 
 ```bash
 cd Packages/JangyCore && swift test

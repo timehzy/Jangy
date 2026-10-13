@@ -26,16 +26,22 @@ let package = Package(
                 .product(name: "KadrPhotos", package: "kadr-photos"),
             ]
         ),
+        // POC/测试专属脚手架（样例工程、测试素材合成器）：仅测试与 CLI 依赖，不进 App 产物
+        .target(
+            name: "JangyTestSupport",
+            dependencies: ["JangyCore"]
+        ),
         .executableTarget(
             name: "jangy-cli",
             dependencies: [
                 "JangyCore",
+                "JangyTestSupport",
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
             ]
         ),
         .testTarget(
             name: "JangyCoreTests",
-            dependencies: ["JangyCore"],
+            dependencies: ["JangyCore", "JangyTestSupport"],
             resources: [.copy("Fixtures")]
         ),
     ]

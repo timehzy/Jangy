@@ -24,17 +24,13 @@ struct ContentView: View {
                     Button("从相册导入") { showPhotoPicker = true }
                     Button("从文件导入") { showFilesPicker = true }
                 }
-                .disabled(model.isPreparingAssets || model.importProgress != nil)
+                .disabled(model.importProgress != nil)
                 Button("新建") { showResetConfirm = true }
                 Button("导出") { showExportPanel = true }
-                    .disabled(model.isPreparingAssets || model.exportProgress != nil)
+                    .disabled(model.exportProgress != nil)
             }
             .padding(.horizontal)
 
-            if model.isPreparingAssets {
-                ProgressView { Text("正在准备素材…").font(.caption) }
-                    .padding(.horizontal)
-            }
             if let progress = model.importProgress {
                 ProgressView(value: progress) { Text("导入素材…").font(.caption) }
                     .padding(.horizontal)
@@ -77,7 +73,7 @@ struct ContentView: View {
                 model.export(options: options)
             }
         }
-        .confirmationDialog("新建草稿？当前时间线将重置为样例工程（可撤销）",
+        .confirmationDialog("新建草稿？当前时间线将清空（可撤销）",
                             isPresented: $showResetConfirm, titleVisibility: .visible) {
             Button("新建草稿", role: .destructive) { model.resetDraft() }
             Button("取消", role: .cancel) {}

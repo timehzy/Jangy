@@ -45,8 +45,9 @@
 | `EditPlan` / `PlanClip` / `AssetItem` / `TimelineDuration` | L2 | |
 | `EditStore` / `UndoStack` / `EditPlanValidator` | L2 | apply 是全库唯一写入口 |
 | `AssetResolver` / `DraftStore` / `PlanLoader` | L2 基础设施 | DraftStore 属 L2 持久化 |
-| `EngineBridge` / `PreviewBridge` / `ExportRunner` / `PhotosBridge` / `AssetImporter` / `AssetSynthesizer` / `CaptionImageRenderer` | L3 | |
+| `EngineBridge` / `PreviewBridge` / `ExportRunner` / `PhotosBridge` / `AssetImporter` / `CaptionImageRenderer` | L3 | |
 | App 壳全部 SwiftUI + `AppModel` | L0/L1 | AppModel 目前是 L1 雏形，正式版拆出 Interaction 层 |
+| `AssetSynthesizer` / `SamplePlan`（`JangyTestSupport` target） | 测试脚手架 | 不分层：仅测试与 CLI 依赖，App 不链接，不进正式产物 |
 | **待建** | L1 | Interaction 层（手势→意图翻译）当前尚不存在独立模块 |
 | **待建** | L2 | 原语事件 + reactor 注册表（见 §4） |
 
@@ -95,7 +96,7 @@
 
 ### 5.1 图片素材
 
-- 模型层按 §3.4 建「无源区间素材」；引擎层合固定时长帧序列（复用 AssetSynthesizer 能力）。
+- 模型层按 §3.4 建「无源区间素材」；引擎层合固定时长帧序列（写帧能力可移植自 `JangyTestSupport.AssetSynthesizer`）。
 - 图片 clip 支持的操作集与视频一致（分割/变速语义：变速 = 改 duration）。
 
 ### 5.2 全景视频（360°）
@@ -110,7 +111,7 @@ v1 范围：**导入 + 剪辑 + 导出保元数据**；球形交互预览进 bac
 ## 6. 所见即所得公约
 
 1. **同源规则**：预览与导出共用同一 composition 构建入口（现 `EngineBridge.makeComposition`）。禁止预览单独拼一套渲染逻辑。任何无法在预览中实时呈现的效果，不入 v1。
-2. **零 loading 白名单**：允许出现 loading 的操作仅有——素材导入（探测/转码）、导出、启动素材合成。**一切编辑操作禁止 loading**。
+2. **零 loading 白名单**：允许出现 loading 的操作仅有——素材导入（探测/转码）、导出。**一切编辑操作禁止 loading**。
 3. **增量重建**：编辑后预览更新优先就地修改 composition（AVMutableComposition 区间增删 + videoComposition 热更新），不做全量重建。注意已知坑：`AVPlayerItem.videoComposition` setter 是 copy 语义，改完要 mutableCopy 赋回。**player 生命周期规则**：换 player 前必须同步 `pause()` 旧实例 + 取消轮询 Task（旧 player 回收依赖 dealloc 时机不受控，不主动停会出现「界面无播放器却有声音」的孤儿播放）；轮询 Task 必须弱捕获 player；rebuild 的 await 期间可能又来一次 rebuild，安装 player 前必须再查 `Task.isCancelled`；重建保留播放状态（旧 player 暂停/播完则新的不自动出声）。
 4. **降级登记制**：预览允许近似的项目必须登记在下表，新降级项不进表不准合入。
 

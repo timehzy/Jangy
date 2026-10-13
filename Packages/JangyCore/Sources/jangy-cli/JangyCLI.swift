@@ -1,6 +1,7 @@
 import ArgumentParser
 import Foundation
 import JangyCore
+import JangyTestSupport
 
 @main
 struct JangyCLI: AsyncParsableCommand {

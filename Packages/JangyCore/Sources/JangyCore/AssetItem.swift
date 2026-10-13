@@ -7,7 +7,7 @@ public enum AssetKind: String, Codable, Sendable {
 
 /// 素材来源渠道。导入渠道会持续增加（相册/文件 App/拍摄……），分析与管理按此区分。
 public enum AssetOrigin: String, Codable, Sendable {
-    case synthesized    // AssetSynthesizer 生成的测试素材
+    case synthesized    // 测试素材合成器（JangyTestSupport.AssetSynthesizer）生成
     case photoLibrary   // 系统相册导入
     case files          // 文件 App 导入 / CLI 喂入
 }

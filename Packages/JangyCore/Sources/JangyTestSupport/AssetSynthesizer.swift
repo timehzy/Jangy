@@ -1,8 +1,10 @@
 import AVFoundation
 import CoreGraphics
+import JangyCore
 
 /// 用 AVAssetWriter 合成确定性测试素材：三段 4 秒纯色 720p 视频 + 一份 SRT。
 /// 无二进制资产进 git，CI/真机/CLI 随时可再生成。幂等：已存在则跳过。
+/// 仅测试与 CLI 使用（JangyTestSupport），不进 App 产物。
 public enum AssetSynthesizer {
 
     public static let clipFileNames = ["clip1.mp4", "clip2.mp4", "clip3.mp4"]
@@ -45,15 +47,7 @@ public enum AssetSynthesizer {
         return AssetResolver(directory: directory)
     }
 
-    /// 异步合成：重活（AVAssetWriter 逐帧写）放后台线程，不阻塞调用方。
-    /// App 启动路径用这个——首屏渲染不等待首次合成的数秒；幂等语义与同步版一致。
-    public static func synthesizeAsync(into directory: URL) async throws -> AssetResolver {
-        try await Task.detached(priority: .userInitiated) {
-            try synthesize(into: directory)
-        }.value
-    }
-
-    /// 合成单个纯色视频。internal 供测试用：回归测试需要非默认尺寸素材
+    /// 合成单个纯色视频。internal 供测试用（@testable）：回归测试需要非默认尺寸素材
     /// （如 1080x1920 == preset renderSize，触发转场预览的 identity-transform 路径）。
     static func writeSolidColorVideo(to url: URL, color: CGColor, seconds: Double,
                                      width: Int = 1280, height: Int = 720) throws {

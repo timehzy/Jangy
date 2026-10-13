@@ -1,6 +1,7 @@
 import XCTest
 import AVFoundation
 @testable import JangyCore
+@testable import JangyTestSupport
 
 /// AssetImporter 入库链路：move 落盘 + 元数据探测 + 登记项生成。
 final class AssetImporterTests: XCTestCase {

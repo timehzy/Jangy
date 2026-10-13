@@ -1,5 +1,6 @@
 import XCTest
 @testable import JangyCore
+@testable import JangyTestSupport
 
 /// DraftStore 落盘/恢复/schema 守卫/完整性校验。
 final class DraftStoreTests: XCTestCase {

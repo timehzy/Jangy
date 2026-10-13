@@ -88,7 +88,7 @@ v1 头两个任务（均为 `人工` 决策项，决策后交 `agent` 执行）�
    - **未来触发条件**：出现第一个「必须精确预览」的效果（滤镜/调色、HDR 字幕观感投诉等）→ 启动自定义 `AVVideoCompositing` 专项（动 Kadr fork 渲染管线，预览导出共享合成器，弃 CoreAnimationTool 路线）；`PreviewBridge` 抽象已为此预留
 3. **代码起点决策**（✅ 2026-10-13 已拍板）：**基于 POC 直接演进，不新开工程/仓库**。理由：POC 三层分层本就是为正式版设计的（状态层纯 Swift / Kadr 收敛引擎适配层 / App 壳薄），v1 任务（剪辑 Agent、素材库管理 UI、导出帧快照）全为增量，无一项需推翻现有结构；86 测试 + CLI 契约 + e2e + git 历史/已知坑记录是 Agent 链路与后续开发的地基，重写纯损耗。配套「正式版化收口」清单（随 v1 首个任务一起做）：
    - **命名去 POC 化**（✅ 2026-10-13）：同步完成目录结构标准化（布局：xcodeproj 提根 + `Packages/`，标准 iOS App 工程结构）。最终命名：包与模块 `KadrPOC`/`POCCore` → `Packages/JangyCore`（`JangyCore`）、CLI `kadrpoc-cli` → `jangy-cli`、App target `JangyPOC` → `Jangy`（`Jangy.xcodeproj` 提根、源码 `Jangy/`、bundle ID `com.haozhenyi.Jangy`、@main `JangyApp`）；CI / .vscode / 活文档同步，docs/superpowers 历史文档保留旧名（时间快照不改）。验证：86 测试全绿 + CLI 冒烟 + xcodebuild 模拟器构建通过
-   - **POC 专属代码隔离**：`AssetSynthesizer` / `SamplePlan` / 样例素材入口移 debug-only 或独立 target，不进正式产物
+   - **POC 专属代码隔离**（✅ 2026-10-13）：`AssetSynthesizer` / `SamplePlan` 移入新 target `JangyTestSupport`（仅测试与 jangy-cli 依赖，App 不可见 → 不进正式产物为硬保证）；App 侧样例引导整体删除（`prepareAssets` / `isPreparingAssets` 门禁 / 初始与「新建」的样例工程），首发空时间线或恢复草稿即正式版行为；`synthesizeAsync` 及其测试随删除（无消费方）。开发期想要样例内容可用 CLI 播种：往模拟器沙盒 `Application Support/Jangy/` 跑 `genassets --to <dir>` + `sample > <dir>/draft.json`。验证：85 测试全绿（减去的 1 个是随 `synthesizeAsync` 删除的用例）+ CLI 冒烟 + xcodebuild 模拟器构建通过
    - **模拟器微扰**：`breakRenderSizeEquality` 发布前改 `targetEnvironment(simulator)` 条件编译（沿 P1 既定口径）
    - **`SilentAudio` 兜底**：上游 [#204](https://github.com/SteliyanH/kadr/pull/204) 合并后评估移除
    - **不动**：CLI stdout JSON 契约、draft.json 格式、测试套件、三层依赖方向（Agent 链路与自动化依赖）
@@ -103,4 +103,4 @@ v1 头两个任务（均为 `人工` 决策项，决策后交 `agent` 执行）�
 
 ## 下一步任务的入口
 
-任务 #4 已完成（2026-10-09）：backlog 定级见上节。**2026-10-13 更新：技术验证阶段已收口，「正式版启动（v1 规划）」三项决策均已拍板**——v1 范围（拍摄出局 / 音频后置 / 剪辑 Agent 入 v1）、字幕预览（UI 口冻结为字幕对位示意层）、代码起点（基于 POC 直接演进 + 正式版化收口）。v1 进入执行阶段，任务从「正式版启动」节圈定范围里排（命名收口、素材库管理 UI、剪辑 Agent headless 链路、导出帧快照等）。进会话后先读 [AGENTS.md](../AGENTS.md)，关键约束：编辑必经 `EditStore.apply`、素材引用走 `assets` 登记表 + `assetID`、Kadr 依赖收敛在引擎适配层、CLI stdout 只走结构化 JSON、草稿读写必经 `DraftStore`。
+任务 #4 已完成（2026-10-09）：backlog 定级见上节。**2026-10-13 更新：技术验证阶段已收口，「正式版启动（v1 规划）」三项决策均已拍板**——v1 范围（拍摄出局 / 音频后置 / 剪辑 Agent 入 v1）、字幕预览（UI 口冻结为字幕对位示意层）、代码起点（基于 POC 直接演进 + 正式版化收口）。v1 进入执行阶段：命名收口与 POC 专属代码隔离已完成（见上节收口清单），任务从「正式版启动」节圈定范围里排（素材库管理 UI、剪辑 Agent headless 链路、导出帧快照等）。进会话后先读 [AGENTS.md](../AGENTS.md)，关键约束：编辑必经 `EditStore.apply`、素材引用走 `assets` 登记表 + `assetID`、Kadr 依赖收敛在引擎适配层、CLI stdout 只走结构化 JSON、草稿读写必经 `DraftStore`。

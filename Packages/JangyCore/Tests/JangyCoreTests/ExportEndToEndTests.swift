@@ -5,6 +5,7 @@ import CoreGraphics
 import AppKit
 #endif
 @testable import JangyCore
+@testable import JangyTestSupport
 
 /// 端到端导出回归：防 Kadr 静默 passthrough（空音频轨 → 兼容性检查 false →
 /// passthrough 拷贝）与字幕隐形（CATextLayer 不渲染）两大坑。

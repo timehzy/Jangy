@@ -3,6 +3,7 @@ import CoreMedia
 import Kadr
 import KadrCaptions
 @testable import JangyCore
+@testable import JangyTestSupport
 
 final class EngineBridgeTests: XCTestCase {
 

@@ -1,7 +1,8 @@
 import Foundation
+import JangyCore
 
 /// 内置演示工程：素材登记表（3 段合成视频 + 1 份字幕）+ 转场 + 变速 + 字幕，覆盖 POC 五个关键字。
-/// 固定 UUID 保证黄金 JSON 契约可比对。
+/// 固定 UUID 保证黄金 JSON 契约可比对。仅测试与 CLI 使用（JangyTestSupport），不进 App 产物。
 public enum SamplePlan {
     /// 登记表条目的固定 ID：clip1/clip2/clip3/sample.srt
     public static let assetID1 = UUID(uuidString: "aaaaaaaa-0000-0000-0000-000000000001")!

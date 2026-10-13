@@ -1,5 +1,6 @@
 import XCTest
 @testable import JangyCore
+@testable import JangyTestSupport
 
 /// 渲染时长口径（TimelineDuration.swift）：UI 时长展示与 e2e 断言共用的唯一口径，
 /// 必须与 Kadr CompositionBuilder 的转场重叠语义一致（dissolve 全额重叠、fade 不重叠）。

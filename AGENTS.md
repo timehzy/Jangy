@@ -7,6 +7,7 @@
 iOS 视频剪辑 App（SwiftUI + AVFoundation），基于 [Kadr](https://github.com/SteliyanH/kadr) DSL 引擎（已验证「多段拼接 + 转场 + 变速 + 字幕 + headless 导出」最小闭环）。**阶段状态（2026-10-13）：POC 技术验证已收口，v1 正式版进入执行阶段**——范围（拍摄出局/音频后置/剪辑 Agent 入 v1）、字幕预览（时间对位示意层）、代码起点（基于 POC 演进）三项决策已拍板，见 [docs/roadmap-path-a.md](docs/roadmap-path-a.md)「正式版启动」。仓库结构：
 
 - **JangyCore**（`Packages/JangyCore/Sources/JangyCore/`）：核心库（编辑状态 + 引擎适配 + 基础设施）
+- **JangyTestSupport**（`Packages/JangyCore/Sources/JangyTestSupport/`）：测试脚手架（`SamplePlan` 样例工程 + `AssetSynthesizer` 测试素材合成器），仅测试与 CLI 依赖，App 不链接、不进正式产物
 - **jangy-cli**（`Packages/JangyCore/Sources/jangy-cli/`）：Agent 链路 headless 验证入口，四子命令 `sample` / `validate` / `export` / `genassets`
 - **App 壳**（`Jangy/`，根目录 `Jangy.xcodeproj`）：SwiftUI 表现层，本地 SwiftPM 引用 `Packages/JangyCore` 包
 
@@ -15,7 +16,7 @@ iOS 视频剪辑 App（SwiftUI + AVFoundation），基于 [Kadr](https://github.
 ## 常用命令
 
 ```bash
-# 测试（86 个，含导出端到端；全绿才算过）
+# 测试（85 个，含导出端到端；全绿才算过）
 cd Packages/JangyCore && swift test
 
 # CLI 冒烟
@@ -23,6 +24,10 @@ swift run jangy-cli genassets
 swift run jangy-cli sample
 swift run jangy-cli validate <plan.json> --assets ./Assets
 swift run jangy-cli export <plan.json> -o out.mp4 --assets ./Assets
+
+# 模拟器手动验证要样例内容时，往 App 沙盒播种（App 首启即空时间线，不再自带样例）：
+# APP_DIR=$(模拟器上本 App 的 Application Support/Jangy 目录)
+swift run jangy-cli genassets --to "$APP_DIR" && swift run jangy-cli sample > "$APP_DIR/draft.json"
 
 # App 编译验证
 xcodebuild -project Jangy.xcodeproj -scheme Jangy \
