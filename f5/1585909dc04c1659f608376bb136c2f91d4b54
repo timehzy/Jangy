@@ -1,0 +1,27 @@
+Packages/JangyCore/Sources/JangyAgent/AgentRunContext.swift
+  s_aee63377c92767::t_0dfba974a6ae78 15-16
+  s_aee63377c92767::t_b8245888e46632 60
+  s_aee63377c92767::t_91d42a4ef135ad 117
+docs/known-pitfalls.md
+  s_aee63377c92767::t_7d62fcd1f7a2ca 12-15
+Packages/JangyCore/Tests/JangyAgentTests/AgentRunContextTests.swift
+  s_aee63377c92767::t_baabf06673d505 31
+Packages/JangyCore/Sources/JangyAgent/AgentTools.swift
+  s_aee63377c92767::t_763fbdf768b842 162-164
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "f51585909dc04c1659f608376bb136c2f91d4b54",
+  "prompts": {},
+  "sessions": {
+    "s_aee63377c92767": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "09bc7dbb-0862-42e2-be3e-5e892ffa5207",
+        "model": "k3"
+      },
+      "human_author": "Michael <yiliforever@qq.com>"
+    }
+  }
+}
