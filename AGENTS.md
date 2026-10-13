@@ -37,6 +37,9 @@ swift run jangy-cli agent "把第二段切成两半并加字幕" \
 # APP_DIR=$(模拟器上本 App 的 Application Support/Jangy 目录)
 swift run jangy-cli genassets --to "$APP_DIR" && swift run jangy-cli sample > "$APP_DIR/draft.json"
 
+# Agent 凭据播种（App 内用 Agent 时需要；字段对应 .agent-env.local 的三个变量）：
+# echo '{"baseURL":"...","model":"...","apiKey":"..."}' > "$APP_DIR/agent-config.json"
+
 # App 编译验证
 xcodebuild -project Jangy.xcodeproj -scheme Jangy \
   -destination 'generic/platform=iOS Simulator' build
@@ -55,6 +58,7 @@ xcodebuild -project Jangy.xcodeproj -scheme Jangy \
 
 - **iOS 26 SDK 弃用 `AVMutableVideoComposition` 族**（Swift 侧，提示用 `AVVideoComposition.Configuration`）：目前只是警告，Kadr 与本仓库都还在用；`AVMutableVideoCompositionLayerInstruction(assetTrackID:)` 的 Swift 导入已消失，要用 `init(assetTrack:)`
 - **SwiftPM 包身份冲突警告**：kadr-captions / kadr-photos 的 Package.swift 指向上游 `SteliyanH/kadr`，与根包的 `timehzy/kadr` 同身份——SwiftPM 目前仅警告（根包 URL 生效），官方提示未来版本会升级为 error。届时需在 fork 上改写依赖 URL 并打新 tag
+- **AnyLanguageModel 宏指纹信任**：JangyAgent 链进 App 后，首次在本机 xcodebuild 可能报 `Macro "AnyLanguageModelMacros" ... must be enabled`——机器级宏信任状态问题，非接线错误；xcodebuild 加 `-skipMacroValidation`，或在 Xcode GUI 里信任一次该 macro plugin
 
 ## 文档地图
 

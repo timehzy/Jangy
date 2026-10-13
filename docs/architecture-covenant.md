@@ -47,7 +47,7 @@
 | `AssetResolver` / `DraftStore` / `PlanLoader` | L2 基础设施 | DraftStore 属 L2 持久化 |
 | `EngineBridge` / `PreviewBridge` / `ExportRunner` / `PhotosBridge` / `AssetImporter` / `CaptionImageRenderer` | L3 | |
 | App 壳全部 SwiftUI + `AppModel` | L0/L1 | AppModel 目前是 L1 雏形，正式版拆出 Interaction 层 |
-| `AgentToolSet` / `EditAgentRunner` / `AgentRunContext`（`JangyAgent` target） | L1 headless 消费方 | 剪辑 Agent：工具层（原子编辑 → `EditStore.apply`，校验失败结构化回喂）+ 编排层（agent loop + snapshot 视觉自检）；App 与 CLI 共用 |
+| `AgentToolSet` / `EditAgentSession` / `AgentRunContext`（`JangyAgent` target） | L1 headless 消费方 | 剪辑 Agent：工具层（原子编辑 → `EditStore.apply`，校验失败结构化回喂）+ 编排层（连续对话 session，agent loop + snapshot 视觉自检）；App 与 CLI 共用 |
 | `AssetSynthesizer` / `SamplePlan`（`JangyTestSupport` target） | 测试脚手架 | 不分层：仅测试与 CLI 依赖，App 不链接，不进正式产物 |
 | **待建** | L1 | Interaction 层（手势→意图翻译）当前尚不存在独立模块 |
 | **待建** | L2 | 原语事件 + reactor 注册表（见 §4） |
@@ -112,7 +112,7 @@ v1 范围：**导入 + 剪辑 + 导出保元数据**；球形交互预览进 bac
 ## 6. 所见即所得公约
 
 1. **同源规则**：预览与导出共用同一 composition 构建入口（现 `EngineBridge.makeComposition`）。禁止预览单独拼一套渲染逻辑。任何无法在预览中实时呈现的效果，不入 v1。
-2. **零 loading 白名单**：允许出现 loading 的操作仅有——素材导入（探测/转码）、导出。**一切编辑操作禁止 loading**。
+2. **零 loading 白名单**：允许出现 loading 的操作仅有——素材导入（探测/转码）、导出、剪辑 Agent 任务。**一切编辑操作禁止 loading**。剪辑 Agent 任务的呈现方式：不以 spinner 呈现，以流式对话流呈现（assistant 文字/工具卡片实时下落）；任务期间编辑控件锁定（sheet 遮挡 + disabled）；预览随每步编辑实时重建。
 3. **增量重建**：编辑后预览更新优先就地修改 composition（AVMutableComposition 区间增删 + videoComposition 热更新），不做全量重建。注意已知坑：`AVPlayerItem.videoComposition` setter 是 copy 语义，改完要 mutableCopy 赋回。**player 生命周期规则**：换 player 前必须同步 `pause()` 旧实例 + 取消轮询 Task（旧 player 回收依赖 dealloc 时机不受控，不主动停会出现「界面无播放器却有声音」的孤儿播放）；轮询 Task 必须弱捕获 player；rebuild 的 await 期间可能又来一次 rebuild，安装 player 前必须再查 `Task.isCancelled`；重建保留播放状态（旧 player 暂停/播完则新的不自动出声）。
 4. **降级登记制**：预览允许近似的项目必须登记在下表，新降级项不进表不准合入。
 

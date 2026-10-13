@@ -117,3 +117,12 @@ v1 头两个任务（均为 `人工` 决策项，决策后交 `agent` 执行）�
   - **CLI `agent` 子命令**：单轮任务制，`ANTHROPIC_API_KEY` 走 env，`--plan/--assets/--model/--base-url/--max-turns/-o/--export/--frames`；stdout JSONL 事件流（start/assistant/tool_call/tool_result/done/error）；exit code 新增 **4 = LLM 接入错误**（公约 §7.3 已回填）；最终 plan 序列化与 draft.json 同格式，可被 validate/export 子命令直接消费
   - 验收：111 测试全绿（新增 24：工具层 21 + snapshot 工具 3）+ App 模拟器构建通过 + 五子命令冒烟无回归；**真 key live 冒烟通过**（2026-10-13，Kimi coding 端点 `kimi-for-coding`，凭据存 `.agent-env.local`（gitignore）：6 轮完成「切半 + 加速 + 字幕 + 快照自检」全链路，模型看图确认字幕烧录与画面内容，最终 plan 正确；首次冒烟暴露并修复两个编排层 bug——provider 不续轮导致静默收工、max_tokens 缺省过小）
   - 遗留：App UI 接入（JangyAgent 已是 App 可链接形态）；Kimi/Claude 之外的模型表现评估
+
+- [x] **剪辑 Agent App 接入**（✅ 2026-10-13，spec：[agent-app-integration-design](superpowers/specs/2026-10-13-agent-app-integration-design.md)）：
+  - **EditStore 合一**：AgentRunContext 改为注入共享 store + AgentStoreScheduler 调度器（App 回跳 MainActor，CLI 直通）；didApply 回调接预览重建 + autosave，Agent 每步编辑实时落到预览
+  - **整任务一步撤销**：EditStore 分组事务（beginGrouping/endGrouping），组内逐工具校验反馈保留、撤销栈只压一步（公约 §2.4 延伸拍板）
+  - **连续对话**：EditAgentRunner 重构为 EditAgentSession——LanguageModelSession 长活、transcript 跨 send 保留可追问；会话间隙 plan 被手动改过则新指令注入「先 get_plan 对齐」提示；工具步数上限逐指令重置
+  - **UI**：半屏 sheet（三档：露操作条/露时间线/只露预览 + 全屏态）+ iMessage 式对话流（气泡/工具卡片/snapshot 图）+ 运行中停止按钮；`AgentEvent` 增 `.snapshot` 事件（纯增量，CLI 契约不破）；运行中全部编辑入口锁定（操作条 + 时间线片段操作）
+  - **凭据**：本期本地文件注入（Application Support/Jangy/agent-config.json），产品化发布前再议
+  - **公约回填**：§6.2 白名单登记「剪辑 Agent 任务」（流式呈现，不以 spinner 呈现）
+  - 验收：125 测试全绿 + App 模拟器构建通过 + CLI 冒烟无回归 + 真 key 冒烟（单指令链路）
