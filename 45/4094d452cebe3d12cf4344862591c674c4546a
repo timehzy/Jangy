@@ -1,0 +1,28 @@
+README.md
+  s_d964f6a6e1e3c8::t_308558b3e9bc46 79
+  s_d964f6a6e1e3c8::t_3841fb80480c35 3
+AGENTS.md
+  s_d964f6a6e1e3c8::t_4be46b6f87bfaf 7
+  s_d964f6a6e1e3c8::t_c1e3987c9d7d43 71
+docs/roadmap-path-a.md
+  s_d964f6a6e1e3c8::t_8b927d89a1e181 45
+  s_d964f6a6e1e3c8::t_b4d805a9787dd9 4-6,8-29,31-44,46-85
+  s_d964f6a6e1e3c8::t_a71c8342ea15ed 7
+  s_d964f6a6e1e3c8::t_f5d94051c34479 30
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "454094d452cebe3d12cf4344862591c674c4546a",
+  "prompts": {},
+  "sessions": {
+    "s_d964f6a6e1e3c8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "abf158ae-dba8-4126-9785-9a85e1db81b2",
+        "model": "k3"
+      },
+      "human_author": "Michael <yiliforever@qq.com>"
+    }
+  }
+}
