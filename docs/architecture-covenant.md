@@ -44,7 +44,7 @@
 |---|---|---|
 | `EditPlan` / `PlanClip` / `AssetItem` / `TimelineDuration` | L2 | |
 | `EditStore` / `UndoStack` / `EditPlanValidator` | L2 | apply 是全库唯一写入口 |
-| `AssetResolver` / `DraftStore` / `PlanLoader` | L2 基础设施 | DraftStore 属 L2 持久化 |
+| `AssetResolver` / `ProjectStore` / `AssetLibrary` / `PlanLoader` | L2 基础设施 | ProjectStore 多项目持久化；AssetLibrary 全局素材登记表 |
 | `EngineBridge` / `PreviewBridge` / `ExportRunner` / `PhotosBridge` / `AssetImporter` / `CaptionImageRenderer` | L3 | |
 | App 壳全部 SwiftUI + `AppModel` | L0/L1 | AppModel 目前是 L1 雏形，正式版拆出 Interaction 层 |
 | `AgentToolSet` / `EditAgentSession` / `AgentRunContext`（`JangyAgent` target） | L1 headless 消费方 | 剪辑 Agent：工具层（原子编辑 → `EditStore.apply`，校验失败结构化回喂）+ 编排层（连续对话 session，agent loop + snapshot 视觉自检）；App 与 CLI 共用 |
@@ -66,7 +66,7 @@
 3. **时间口径统一**：渲染时长只认 `EditPlan.renderedDuration`——dissolve 与相邻片段全额重叠（扣 duration），fade 不重叠（各占相邻片段内 duration/2，总长不变）；与 Kadr CompositionBuilder `overlap(during:)` 一致，实测锚点 9.5s ≠ `Video.duration` 求和值 10.5s。UI 展示、e2e 断言都锚它；禁止「修正」成求和值，禁止另写求和。
 4. **无源区间素材**：图片等静态素材的 clip 无 source range，只有 duration；模型层显式建模（如 `PlanClip.source` 枚举：`.video(range)` / `.still(duration)`），不用魔法值（如 range 置零）表达。
 5. **schema 版本守卫**：plan/draft JSON 带 `version`，过新拒绝加载，不静默丢字段。
-6. **草稿读写必经 `DraftStore`**：draft.json 与素材同目录，原子写入 + 完整性校验；禁止在 App 层手写 draft.json；素材完整性问题经 `verify` 报告显式上报，不静默丢弃。
+6. **工程读写必经 `ProjectStore`**：`Projects/<uuid>/project.json`（plan 格式不变）+ `meta.json`，原子写入 + 完整性校验；禁止在 App 层手写 project.json；素材完整性问题经 `verify` 报告显式上报，不静默丢弃。素材实体归全局 `AssetLibrary`（`library.json` 登记表 + `Assets/`），项目只持有引用子集。
 7. **命名避让**：模型层用 `PlanClip` / `PlanTransition`——Kadr 有同名 `Clip` 协议与 `Transition` 枚举，同模块会歧义。新增模型类型命名前先查 Kadr 符号表。
 
 ## 4. 跨实体联动：原语事件 + reactor 注册表
