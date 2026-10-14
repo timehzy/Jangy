@@ -4,7 +4,7 @@
 
 ## 项目是什么
 
-iOS 视频剪辑 App（SwiftUI + AVFoundation），基于 [Kadr](https://github.com/SteliyanH/kadr) DSL 引擎（已验证「多段拼接 + 转场 + 变速 + 字幕 + headless 导出」最小闭环）。**阶段状态（2026-10-13）：POC 技术验证已收口，v1 正式版进入执行阶段**——范围（拍摄出局/音频后置/剪辑 Agent 入 v1）、字幕预览（时间对位示意层）、代码起点（基于 POC 演进）三项决策已拍板，见 [docs/roadmap-path-a.md](docs/roadmap-path-a.md)「正式版启动」。仓库结构：
+iOS 视频剪辑 App（SwiftUI + AVFoundation），基于 [Kadr](https://github.com/SteliyanH/kadr) DSL 引擎（已验证「多段拼接 + 转场 + 变速 + 字幕 + headless 导出」最小闭环）。**阶段状态（2026-10-13）：POC 技术验证已收口，v1 正式版进入执行阶段**——范围（拍摄出局/音频后置/剪辑 Agent 入 v1）、字幕预览（时间对位示意层）、代码起点（基于 POC 演进）三项决策已拍板，见 [docs/roadmap-path-a.md](docs/roadmap-path-a.md)「决策记录」。仓库结构：
 
 - **JangyCore**（`Packages/JangyCore/Sources/JangyCore/`）：核心库（编辑状态 + 引擎适配 + 基础设施）
 - **JangyTestSupport**（`Packages/JangyCore/Sources/JangyTestSupport/`）：测试脚手架（`SamplePlan` 样例工程 + `AssetSynthesizer` 测试素材合成器），仅测试与 CLI 依赖，App 不链接、不进正式产物
@@ -68,7 +68,7 @@ xcodebuild -project Jangy.xcodeproj -scheme Jangy \
 | [docs/research/iOS开源视频剪辑框架选型调研报告.md](docs/research/iOS开源视频剪辑框架选型调研报告.md) | 框架选型依据（为什么用 Kadr） |
 | [docs/research/图片编辑框架设计对比与借鉴分析.md](docs/research/图片编辑框架设计对比与借鉴分析.md) | 图片编辑框架借鉴分析 |
 | [docs/archive/poc-verification-checklist.md](docs/archive/poc-verification-checklist.md) | 真机手动验证清单 + POC 结论模板 |
-| [docs/roadmap-path-a.md](docs/roadmap-path-a.md) | 立项路线图：路径 A 落地顺序、backlog 定级（P0–P3 + 执行主体 + 验收标准） |
+| [docs/roadmap-path-a.md](docs/roadmap-path-a.md) | 立项路线图：待办 / 已完成 / 决策记录 |
 | [docs/architecture-covenant.md](docs/architecture-covenant.md) | **v1 架构公约（架构与工程约束唯一事实源）**：L0–L4 分层、单向数据流、clip 内禀属性建模、原语事件+reactor 联动、特殊素材范围、所见即所得硬规则 |
 | [docs/known-pitfalls.md](docs/known-pitfalls.md) | 已知坑（运行时/行为类）：引擎行为、预览、相册集成的排障事实库 |
 | [docs/superpowers/specs/2026-10-08-kadr-poc-skeleton-design.md](docs/superpowers/specs/2026-10-08-kadr-poc-skeleton-design.md) | POC 设计 spec |

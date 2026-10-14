@@ -1,6 +1,6 @@
 # Jangy
 
-视频剪辑 App，iOS 原生技术实现（SwiftUI + AVFoundation）。POC 技术验证已收口（2026-10-13），当前处于 **v1 正式版开发阶段**：基于 [Kadr](https://github.com/SteliyanH/kadr) DSL 引擎，决策记录见 [路线图](docs/roadmap-path-a.md)「正式版启动」。
+视频剪辑 App，iOS 原生技术实现（SwiftUI + AVFoundation）。POC 技术验证已收口（2026-10-13），当前处于 **v1 正式版开发阶段**：基于 [Kadr](https://github.com/SteliyanH/kadr) DSL 引擎，决策记录见 [路线图](docs/roadmap-path-a.md)「决策记录」。
 
 ## 仓库结构
 
@@ -76,7 +76,7 @@ CLI 约定：stdout 只走结构化 JSON/JSONL，日志与错误走 stderr；exi
 ## 文档
 
 - [架构公约（v1，架构约束唯一事实源）](docs/architecture-covenant.md)
-- [立项路线图（路径 A 落地计划 + v1 任务进度）](docs/roadmap-path-a.md)
+- [立项路线图（待办 / 已完成 / 决策记录）](docs/roadmap-path-a.md)
 - [已知坑（运行时/行为类排障事实库）](docs/known-pitfalls.md)
 - [iOS 开源视频剪辑框架选型调研报告](docs/research/iOS开源视频剪辑框架选型调研报告.md)
 - [图片编辑框架设计对比与借鉴分析](docs/research/图片编辑框架设计对比与借鉴分析.md)
