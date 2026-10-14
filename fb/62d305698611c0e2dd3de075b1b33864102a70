@@ -1,0 +1,42 @@
+Jangy/LibraryModel.swift
+  s_1d39d522f93be9::t_eac7430bcdaeff 155,163
+Jangy/LibraryView.swift
+  s_1d39d522f93be9::t_5f1d07fe2c1f94 3
+Jangy/EditorView.swift
+  s_1d39d522f93be9::t_b6f72dede33866 4-10,13-21,25-40,42,50-51,54-56,63,74,76-81,84,90-91,95,102-110
+  s_1d39d522f93be9::t_70101d12ff2301 52
+  s_1d39d522f93be9::t_a3ba928de215cd 85-89
+Jangy/ProjectListView.swift
+  s_1d39d522f93be9::t_f506a4b0c078bb 216
+  s_1d39d522f93be9::t_6c3c7cfbfba6e0 108
+  s_1d39d522f93be9::t_54d60bfeb585e6 50
+  s_1d39d522f93be9::t_209de075e9a801 127
+  s_1d39d522f93be9::t_7026373f5d1cc4 231
+  s_1d39d522f93be9::t_f6820ed6ddbf87 157-163
+  s_1d39d522f93be9::t_ff916b93411e47 11-13
+  s_1d39d522f93be9::t_07798445350361 64-66
+  s_1d39d522f93be9::t_ecd7be3f945f03 3
+Jangy/AppModel.swift
+  s_1d39d522f93be9::t_b20f179620c386 189-190,198-206,211-212
+Jangy/JangyApp.swift
+  s_1d39d522f93be9::t_afe478a46bc000 7-8,14,16-23,28-30
+Jangy/TimelineView.swift
+  s_1d39d522f93be9::t_d5d028ef34fc42 42-43
+  s_1d39d522f93be9::t_887f5d1f4babf5 4-6,9-11,14-16,19-25,28-38,40-41,46-80
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "fb62d305698611c0e2dd3de075b1b33864102a70",
+  "prompts": {},
+  "sessions": {
+    "s_1d39d522f93be9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0a83b637-b9a5-45c2-ab9a-085a23458a6e",
+        "model": "k3"
+      },
+      "human_author": null
+    }
+  }
+}
