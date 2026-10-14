@@ -48,22 +48,17 @@ struct AgentChatView: View {
     }
 
     private var messageList: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 10) {
-                    ForEach(controller.items) { item in
-                        bubble(for: item).id(item.id)
-                    }
-                }
-                .padding()
-            }
-            // 新消息从底部进入：追加后自动滚到底（iMessage 同款）
-            .onChange(of: controller.items.count) {
-                if let last = controller.items.last {
-                    withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 10) {
+                ForEach(controller.items) { item in
+                    bubble(for: item).id(item.id)
                 }
             }
+            .padding()
         }
+        // 底部锚定（iMessage 同款）：内容不足一屏时贴底而不是贴顶；
+        // 新消息从底部进入、把旧内容往上顶；用户上翻阅读时不拽动位置
+        .defaultScrollAnchor(.bottom)
     }
 
     @ViewBuilder
