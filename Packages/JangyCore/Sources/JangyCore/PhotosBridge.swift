@@ -1,6 +1,7 @@
 import AVFoundation
 import Foundation
 import Photos
+import UniformTypeIdentifiers
 import Kadr
 import KadrPhotos
 
@@ -52,5 +53,50 @@ public enum PhotosBridge {
             let clip = try await PhotosClipResolver.video(asset: asset, progress: progress)
             return clip.url
         }
+    }
+
+    /// 相册素材类型探测：picker 返回的 identifier → 素材类别（视频/图片）。
+    /// 解析不到 PHAsset 返回 nil（调用方按 video 路径走，会在 resolve 阶段报 assetNotFound）。
+    /// @MainActor：PhotoPickerResult.resolveAsset() 要求在主线程访问共享相册库。
+    @MainActor
+    public static func mediaType(of assetIdentifier: String) -> AssetKind? {
+        guard let asset = PhotoPickerResult(assetIdentifier: assetIdentifier).resolveAsset() else {
+            return nil
+        }
+        switch asset.mediaType {
+        case .image: return .image
+        case .video: return .video
+        default: return nil
+        }
+    }
+
+    /// 把相册图片解析成磁盘文件 URL（原始数据直出，不重编码）。
+    /// 产物在临时目录，调用方负责 move 进素材库。
+    @MainActor
+    public static func resolveImageFile(assetIdentifier: String,
+                                        progress: (@Sendable (Double) -> Void)? = nil) async throws -> URL {
+        guard let asset = PhotoPickerResult(assetIdentifier: assetIdentifier).resolveAsset() else {
+            throw BridgeError.assetNotFound(assetIdentifier)
+        }
+        let options = PHImageRequestOptions()
+        options.isNetworkAccessAllowed = true   // iCloud 素材自动下载
+        options.deliveryMode = .highQualityFormat
+        options.progressHandler = { fraction, _, _, _ in progress?(fraction) }
+
+        let (data, uti): (Data, String) = try await withCheckedThrowingContinuation { continuation in
+            PHImageManager.default().requestImageDataAndOrientation(for: asset, options: options) { data, uti, _, info in
+                if let data {
+                    continuation.resume(returning: (data, uti ?? "public.jpeg"))
+                } else {
+                    let message = info?[PHImageErrorKey] as? Error
+                    continuation.resume(throwing: message ?? BridgeError.assetNotFound(assetIdentifier))
+                }
+            }
+        }
+        let ext = (UTType(uti)?.preferredFilenameExtension) ?? "jpg"
+        let temp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("jangy-photo-\(UUID().uuidString).\(ext)")
+        try data.write(to: temp)
+        return temp
     }
 }
