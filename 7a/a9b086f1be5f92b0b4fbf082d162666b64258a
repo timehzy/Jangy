@@ -1,0 +1,23 @@
+Jangy/ProjectListModel.swift
+  s_1d39d522f93be9::t_780b12c3f02de3 1-119
+Jangy/ProjectListView.swift
+  s_1d39d522f93be9::t_4e7d9d8cd81f48 1-230
+Jangy/ShareSheet.swift
+  s_1d39d522f93be9::t_e957cf780814e7 1-13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "7aa9b086f1be5f92b0b4fbf082d162666b64258a",
+  "prompts": {},
+  "sessions": {
+    "s_1d39d522f93be9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0a83b637-b9a5-45c2-ab9a-085a23458a6e",
+        "model": "k3"
+      },
+      "human_author": "Michael <yiliforever@qq.com>"
+    }
+  }
+}
