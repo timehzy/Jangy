@@ -1,0 +1,26 @@
+Packages/JangyCore/Sources/JangyCore/AssetItem.swift
+  s_1d39d522f93be9::t_1c077ca1b6ca7c 33-34,39
+  s_1d39d522f93be9::t_f76a3ff0e01ef7 50,54
+  s_1d39d522f93be9::t_ca4571b5eedbec 71
+  s_1d39d522f93be9::t_32649f3748a2d2 19
+Packages/JangyCore/Sources/JangyCore/AssetHasher.swift
+  s_1d39d522f93be9::t_6f2840e0412ffa 1-25
+Packages/JangyCore/Tests/JangyCoreTests/AssetHasherTests.swift
+  s_1d39d522f93be9::t_2ba4f25be199ad 1-48
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "3cf16b1e1bfdf5717e99be779f31382a0dc25481",
+  "prompts": {},
+  "sessions": {
+    "s_1d39d522f93be9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0a83b637-b9a5-45c2-ab9a-085a23458a6e",
+        "model": "k3"
+      },
+      "human_author": "Michael <yiliforever@qq.com>"
+    }
+  }
+}
