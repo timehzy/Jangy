@@ -33,7 +33,8 @@ swift run jangy-cli agent "把第二段切成两半并加字幕" \
   --plan draft.json -o final.json --export out.mp4 --assets ./Assets \
   --base-url "$JANGY_AGENT_BASE_URL" --model "$JANGY_AGENT_MODEL"
 
-# 模拟器手动验证要样例内容时，往 App 沙盒播种（App 首启即空时间线，不再自带样例）：
+# 模拟器手动验证要样例内容时，往 App 沙盒播种旧布局（App 首启自动迁移为多项目布局，
+# 并从 plan.assets 播种 library.json 素材登记表）：
 # APP_DIR=$(模拟器上本 App 的 Application Support/Jangy 目录)
 swift run jangy-cli genassets --to "$APP_DIR" && swift run jangy-cli sample > "$APP_DIR/draft.json"
 

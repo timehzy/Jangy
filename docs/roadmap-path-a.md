@@ -8,10 +8,6 @@
 
 ### 阶段：v1 执行（当前）
 
-- [ ] **素材库管理 UI**（`agent` 执行；v1 范围已拍板）
-  - 内容：网格/缩略图/删除未引用素材；kadr-photos 有 `assets(in:)` 相册列举可用，缩略图需自建 PHImageManager + 缓存
-  - 硬约束：**不晚于首个对外发布版本**——导入走 asCopy 落盘占 sandbox，无删除入口则用户存储只增不减
-  - 验收：素材库网格展示 + 删除未引用素材后 plan 完整性校验通过
 - [ ] **Agent 快照卡片异步加载**（`agent` 执行；App 接入遗留小项）：当前主线程同步读 MB 级 PNG，开发期可接受，后续换缓存/异步加载
 - [ ] **Agent 多模型表现评估**（`人工`）：Kimi/Claude 之外的模型在剪辑 Agent 链路的表现
 
@@ -31,6 +27,9 @@
 
 ### 阶段：v1 规划与启动（2026-10-13 ~ 10-14）
 
+- [x] **素材库管理 UI**（✅ 2026-10-14；plan：[multi-project-asset-library](superpowers/plans/2026-10-14-multi-project-asset-library.md)）
+  - 要点：素材库页（类型 tab + 网格 + ＋快捷上轨 + 多选删除，引用保护/只删未引用）+ 素材预览页（视频播放/trim、图片缩放、信息面板含引用项目列表）+ 多项目化（项目列表页/工程包导入导出/剪辑页素材库入口）；范围超出原条目（原仅网格/缩略图/删除），多项目化与工程包往返为扩展项
+  - 验收：素材库网格展示 + 删除未引用素材后 plan 完整性校验通过
 - [x] **剪辑 Agent App 接入**（✅ 2026-10-13，真机手动验证 10-14；spec：[agent-app-integration-design](superpowers/specs/2026-10-13-agent-app-integration-design.md)）
   - 要点：EditStore 合一（AgentRunContext 注入共享 store + AgentStoreScheduler 调度，Agent 每步编辑实时落到预览 + autosave）；整任务一步撤销（EditStore 分组事务，组内逐工具校验反馈保留）；连续对话（EditAgentSession 长活、transcript 跨 send 保留，会话间隙 plan 被手动改过则注入「先 get_plan 对齐」提示）；UI = 半屏 sheet 三档 + 全屏态 + iMessage 式对话流 + 运行中停止按钮，运行中全部编辑入口锁定；凭据本地文件注入
   - 验收：125 测试全绿 + App 模拟器构建通过 + CLI 冒烟无回归 + 真 key 冒烟 + 真机手动验证（追问链路 / sheet 三档切换 / 对话流底部锚定 / 整任务一步撤销 / 停止按钮）全过
