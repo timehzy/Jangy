@@ -1,0 +1,24 @@
+Packages/JangyCore/Tests/JangyCoreTests/ZipArchiveTests.swift
+  s_1d39d522f93be9::t_71e8cef85c512b 1-43,62-103
+  s_1d39d522f93be9::t_ccbbb2f043d3f7 44-61
+Packages/JangyCore/Sources/JangyCore/ZipArchive.swift
+  s_1d39d522f93be9::t_23cef31c6bc436 1-45,49-51,54-100,102-103,106-118,121-123,133-140,144,146-157,162-163,168-177
+  s_1d39d522f93be9::t_2362332b7503d2 46-48,52-53
+  s_1d39d522f93be9::t_9cb883bbde0b18 101,104-105,119-120,124-132,141-143,145,158-161,164-167
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "083b8603d6979cb3ba9c13ddce929c8988df709f",
+  "prompts": {},
+  "sessions": {
+    "s_1d39d522f93be9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0a83b637-b9a5-45c2-ab9a-085a23458a6e",
+        "model": "k3"
+      },
+      "human_author": null
+    }
+  }
+}
