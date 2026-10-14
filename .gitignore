@@ -64,3 +64,6 @@ fastlane/test_output
 
 # Agent 本地凭据（LLM API key，永不入库）
 .agent-env.local
+
+# 头脑风暴可视化会话产物
+.superpowers/
