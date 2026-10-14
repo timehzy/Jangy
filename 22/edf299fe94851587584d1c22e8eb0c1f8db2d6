@@ -1,0 +1,25 @@
+Packages/JangyCore/Sources/JangyCore/ProjectPackage.swift
+  s_1d39d522f93be9::t_56e8a82df8b9b4 1-43,46-89,91-101,106-157
+  s_1d39d522f93be9::t_091fcbf0ac7a94 44-45
+  s_1d39d522f93be9::t_3d206811512b98 90,102-105
+Packages/JangyCore/Tests/JangyCoreTests/ProjectPackageTests.swift
+  s_1d39d522f93be9::t_b3c82f6efb252b 128-152,154-155,160-161,165-167
+  s_1d39d522f93be9::t_44fb32cb3b8c98 1-127,156-159,162-164,168
+  s_1d39d522f93be9::t_68814dc2b8dcc1 153
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "22edf299fe94851587584d1c22e8eb0c1f8db2d6",
+  "prompts": {},
+  "sessions": {
+    "s_1d39d522f93be9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0a83b637-b9a5-45c2-ab9a-085a23458a6e",
+        "model": "k3"
+      },
+      "human_author": null
+    }
+  }
+}
