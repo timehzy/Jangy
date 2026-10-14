@@ -16,7 +16,7 @@ public enum AssetOrigin: String, Codable, Sendable {
 /// 不再直接引用文件名——素材的元数据（时长/分辨率/有无音频/来源）都挂在这里。
 ///
 /// `fileName` 相对素材目录解析；以 "/" 开头视为绝对路径（CLI 喂任意素材、4K HDR 验证用）。
-public struct AssetItem: Codable, Equatable, Identifiable, Sendable {
+public struct AssetItem: Codable, Equatable, Hashable, Identifiable, Sendable {
     public var id: UUID
     public var kind: AssetKind
     public var fileName: String
@@ -30,11 +30,13 @@ public struct AssetItem: Codable, Equatable, Identifiable, Sendable {
     /// 是否自带音频轨。nil = 未探测（引擎层会即时探测兜底）。
     public var hasAudio: Bool?
     public var importedAt: Date?
+    /// 内容哈希（SHA-256 十六进制）。素材库去重依据；旧数据为 nil（不参与去重判定）。
+    public var sha256: String?
 
     public init(id: UUID = UUID(), kind: AssetKind, fileName: String,
                 displayName: String? = nil, origin: AssetOrigin = .files,
                 duration: TimeInterval? = nil, pixelWidth: Int? = nil, pixelHeight: Int? = nil,
-                hasAudio: Bool? = nil, importedAt: Date? = nil) {
+                hasAudio: Bool? = nil, importedAt: Date? = nil, sha256: String? = nil) {
         self.id = id
         self.kind = kind
         self.fileName = fileName
@@ -45,10 +47,11 @@ public struct AssetItem: Codable, Equatable, Identifiable, Sendable {
         self.pixelHeight = pixelHeight
         self.hasAudio = hasAudio
         self.importedAt = importedAt
+        self.sha256 = sha256
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, kind, fileName, displayName, origin, duration, pixelWidth, pixelHeight, hasAudio, importedAt
+        case id, kind, fileName, displayName, origin, duration, pixelWidth, pixelHeight, hasAudio, importedAt, sha256
     }
 
     /// Agent 友好的宽容解码：仅 `kind`/`fileName` 必填，`id` 缺省随机生成，
@@ -65,5 +68,6 @@ public struct AssetItem: Codable, Equatable, Identifiable, Sendable {
         pixelHeight = try container.decodeIfPresent(Int.self, forKey: .pixelHeight)
         hasAudio = try container.decodeIfPresent(Bool.self, forKey: .hasAudio)
         importedAt = try container.decodeIfPresent(Date.self, forKey: .importedAt)
+        sha256 = try container.decodeIfPresent(String.self, forKey: .sha256)
     }
 }
