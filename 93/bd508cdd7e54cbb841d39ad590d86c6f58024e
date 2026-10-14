@@ -1,0 +1,21 @@
+Packages/JangyCore/Tests/JangyCoreTests/ReferenceScannerTests.swift
+  s_1d39d522f93be9::t_b05fc2d47ad59a 1-58
+Packages/JangyCore/Sources/JangyCore/ReferenceScanner.swift
+  s_1d39d522f93be9::t_52ba19561cdba5 1-53
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "93bd508cdd7e54cbb841d39ad590d86c6f58024e",
+  "prompts": {},
+  "sessions": {
+    "s_1d39d522f93be9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0a83b637-b9a5-45c2-ab9a-085a23458a6e",
+        "model": "k3"
+      },
+      "human_author": "Michael <yiliforever@qq.com>"
+    }
+  }
+}
