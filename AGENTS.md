@@ -65,9 +65,9 @@ xcodebuild -project Jangy.xcodeproj -scheme Jangy \
 | 文件 | 内容 |
 |---|---|
 | [README.md](README.md) | 项目概览与快速开始 |
-| [docs/iOS开源视频剪辑框架选型调研报告.md](docs/iOS开源视频剪辑框架选型调研报告.md) | 框架选型依据（为什么用 Kadr） |
-| [docs/图片编辑框架设计对比与借鉴分析.md](docs/图片编辑框架设计对比与借鉴分析.md) | 图片编辑框架借鉴分析 |
-| [docs/poc-verification-checklist.md](docs/poc-verification-checklist.md) | 真机手动验证清单 + POC 结论模板 |
+| [docs/research/iOS开源视频剪辑框架选型调研报告.md](docs/research/iOS开源视频剪辑框架选型调研报告.md) | 框架选型依据（为什么用 Kadr） |
+| [docs/research/图片编辑框架设计对比与借鉴分析.md](docs/research/图片编辑框架设计对比与借鉴分析.md) | 图片编辑框架借鉴分析 |
+| [docs/archive/poc-verification-checklist.md](docs/archive/poc-verification-checklist.md) | 真机手动验证清单 + POC 结论模板 |
 | [docs/roadmap-path-a.md](docs/roadmap-path-a.md) | 立项路线图：路径 A 落地顺序、backlog 定级（P0–P3 + 执行主体 + 验收标准） |
 | [docs/architecture-covenant.md](docs/architecture-covenant.md) | **v1 架构公约（架构与工程约束唯一事实源）**：L0–L4 分层、单向数据流、clip 内禀属性建模、原语事件+reactor 联动、特殊素材范围、所见即所得硬规则 |
 | [docs/known-pitfalls.md](docs/known-pitfalls.md) | 已知坑（运行时/行为类）：引擎行为、预览、相册集成的排障事实库 |

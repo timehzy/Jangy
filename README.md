@@ -59,9 +59,9 @@ CLI 约定：stdout 只走结构化 JSON/JSONL，日志与错误走 stderr；exi
 
 - [x] Kadr POC 工程骨架（14 任务 + 评审修复，48 测试全绿）：编辑状态层、快照撤销栈、引擎适配层、CLI 四子命令、App 壳
 - [x] 导出写入系统相册（临时文件渲染 → PHPhotoLibrary 注册）
-- [x] 真机手动验证通过（2026-10-08，清单见 [docs/poc-verification-checklist.md](docs/poc-verification-checklist.md)）
+- [x] 真机手动验证通过（2026-10-08，清单见 [docs/archive/poc-verification-checklist.md](docs/archive/poc-verification-checklist.md)）
 - [x] 4K HDR CLI 侧验证通过（2026-10-08：导出/转场/色调全通过；HDR 直通与 HDR→SDR 双路均验证，见清单）
-- [x] **POC 结论落定：正式立项走路径 A（Kadr 全家桶直达）**（2026-10-08，见 [验证清单](docs/poc-verification-checklist.md)）
+- [x] **POC 结论落定：正式立项走路径 A（Kadr 全家桶直达）**（2026-10-08，见 [验证清单](docs/archive/poc-verification-checklist.md)）
 - [x] 素材导入 v1（2026-10-09）：EditPlan v2 素材登记表（`assets` 表 + `assetID` 引用，替代文件名直引）；App 相册导入（kadr-photos resolver → 素材库落盘 → 时间线追加）
 - [x] v1 架构公约落定（2026-10-13，[docs/architecture-covenant.md](docs/architecture-covenant.md)）：L0–L4 分层、单向数据流、所见即所得硬规则
 - [x] 剪辑 Agent headless 链路（2026-10-13）：11 个原子编辑工具 + agent loop 编排 + CLI `agent` 子命令，真 key 冒烟通过
@@ -78,8 +78,8 @@ CLI 约定：stdout 只走结构化 JSON/JSONL，日志与错误走 stderr；exi
 - [架构公约（v1，架构约束唯一事实源）](docs/architecture-covenant.md)
 - [立项路线图（路径 A 落地计划 + v1 任务进度）](docs/roadmap-path-a.md)
 - [已知坑（运行时/行为类排障事实库）](docs/known-pitfalls.md)
-- [iOS 开源视频剪辑框架选型调研报告](docs/iOS开源视频剪辑框架选型调研报告.md)
-- [图片编辑框架设计对比与借鉴分析](docs/图片编辑框架设计对比与借鉴分析.md)
-- [POC 验证清单](docs/poc-verification-checklist.md)
+- [iOS 开源视频剪辑框架选型调研报告](docs/research/iOS开源视频剪辑框架选型调研报告.md)
+- [图片编辑框架设计对比与借鉴分析](docs/research/图片编辑框架设计对比与借鉴分析.md)
+- [POC 验证清单](docs/archive/poc-verification-checklist.md)
 - [剪辑 Agent App 接入 spec](docs/superpowers/specs/2026-10-13-agent-app-integration-design.md) · [计划](docs/superpowers/plans/2026-10-13-agent-app-integration.md)
 - [Kadr POC 设计 spec / 实现计划](docs/superpowers/specs/2026-10-08-kadr-poc-skeleton-design.md) · [计划](docs/superpowers/plans/2026-10-08-kadr-poc-skeleton.md)

@@ -1,6 +1,6 @@
 # 立项路线图（路径 A 落地计划）
 
-> 2026-10-08 POC 结论落定后整理。选型依据见[调研报告](iOS开源视频剪辑框架选型调研报告.md)第 7 节路径 A；POC 验证记录见[poc-verification-checklist.md](poc-verification-checklist.md)。
+> 2026-10-08 POC 结论落定后整理。选型依据见[调研报告](research/iOS开源视频剪辑框架选型调研报告.md)第 7 节路径 A；POC 验证记录见[poc-verification-checklist.md](archive/poc-verification-checklist.md)。
 
 ## 已定论的结论
 
