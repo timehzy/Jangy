@@ -72,3 +72,88 @@ final class AssetImporterTests: XCTestCase {
         } catch {}
     }
 }
+
+/// importMedia 泛化入库：三类素材的元数据探测 + sha256 登记。
+final class AssetImporterMediaTests: XCTestCase {
+
+    private var workDir: URL!
+
+    override func setUp() async throws {
+        workDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: workDir, withIntermediateDirectories: true)
+    }
+
+    override func tearDown() async throws {
+        if let workDir { try? FileManager.default.removeItem(at: workDir) }
+        workDir = nil
+    }
+
+    /// 最小合法 PNG（1x1 红点），CGImageSource 可读尺寸
+    private func makePNG() throws -> URL {
+        let url = workDir.appendingPathComponent("pixel.png")
+        let data = Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==")!
+        try data.write(to: url)
+        return url
+    }
+
+    /// 最小 WAV（PCM 头 + 0.5 秒 8kHz 单声道静音）
+    private func makeWAV() throws -> URL {
+        let url = workDir.appendingPathComponent("tone.wav")
+        let sampleRate: UInt32 = 8000
+        let samples = Int(sampleRate / 2)
+        var data = Data()
+        data.append(contentsOf: "RIFF".utf8)
+        data.appendLE(UInt32(36 + samples))
+        data.append(contentsOf: "WAVEfmt ".utf8)
+        data.appendLE(UInt32(16))          // fmt 块长
+        data.appendLE(UInt16(1))           // PCM
+        data.appendLE(UInt16(1))           // 单声道
+        data.appendLE(sampleRate)
+        data.appendLE(sampleRate)          // byteRate = rate * 1 * 1
+        data.appendLE(UInt16(1))           // blockAlign
+        data.appendLE(UInt16(8))           // 8bit
+        data.append(contentsOf: "data".utf8)
+        data.appendLE(UInt32(samples))
+        data.append(Data(repeating: 128, count: samples))  // 8bit PCM 静音 = 128
+        try data.write(to: url)
+        return url
+    }
+
+    func testImportImageProbesPixelSize() async throws {
+        let source = try makePNG()
+        let importer = AssetImporter(directory: workDir.appendingPathComponent("Assets"))
+        let item = try await importer.importMedia(from: source, kind: .image, origin: .files)
+        XCTAssertEqual(item.kind, .image)
+        XCTAssertEqual(item.pixelWidth, 1)
+        XCTAssertEqual(item.pixelHeight, 1)
+        XCTAssertNil(item.duration)
+        XCTAssertNotNil(item.sha256)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: importer.directory.appendingPathComponent(item.fileName).path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: source.path), "move 语义：源文件不留残余")
+    }
+
+    func testImportAudioProbesDuration() async throws {
+        let source = try makeWAV()
+        let importer = AssetImporter(directory: workDir.appendingPathComponent("Assets"))
+        let item = try await importer.importMedia(from: source, kind: .audio, origin: .files)
+        XCTAssertEqual(item.kind, .audio)
+        XCTAssertEqual(item.duration ?? 0, 0.5, accuracy: 0.05)
+        XCTAssertNotNil(item.sha256)
+    }
+
+    func testImportMediaComputesSHA256UnlessKnown() async throws {
+        let source = try makePNG()
+        let importer = AssetImporter(directory: workDir.appendingPathComponent("Assets"))
+        let item = try await importer.importMedia(from: source, kind: .image, origin: .files,
+                                                  knownSHA256: "preset-hash")
+        XCTAssertEqual(item.sha256, "preset-hash", "调用方已算好哈希时不重复读盘")
+    }
+}
+
+/// Data 小端追加助手（WAV 头构造用）
+private extension Data {
+    mutating func appendLE<T: FixedWidthInteger>(_ value: T) {
+        var le = value.littleEndian
+        append(Data(bytes: &le, count: MemoryLayout<T>.size))
+    }
+}
