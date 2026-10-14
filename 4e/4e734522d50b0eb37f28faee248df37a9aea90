@@ -1,0 +1,26 @@
+Jangy/LibraryModel.swift
+  s_1d39d522f93be9::t_06a937b0e608a9 36-37
+  s_1d39d522f93be9::t_36bb568e119f47 192-199
+  s_1d39d522f93be9::t_3a65ddb69176db 158,166
+Jangy/ThumbnailLoader.swift
+  s_1d39d522f93be9::t_4e10aead452b83 1-41
+Jangy/LibraryView.swift
+  s_1d39d522f93be9::t_67f0c1f674a577 1-111,113-247
+  s_1d39d522f93be9::t_d34194376e10ca 112
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "4e4e734522d50b0eb37f28faee248df37a9aea90",
+  "prompts": {},
+  "sessions": {
+    "s_1d39d522f93be9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0a83b637-b9a5-45c2-ab9a-085a23458a6e",
+        "model": "k3"
+      },
+      "human_author": null
+    }
+  }
+}
