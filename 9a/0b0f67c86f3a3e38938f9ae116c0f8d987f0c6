@@ -1,0 +1,22 @@
+Packages/JangyCore/Tests/JangyCoreTests/ZipArchiveTests.swift
+  s_1d39d522f93be9::t_71e8cef85c512b 1-85
+Packages/JangyCore/Sources/JangyCore/ZipArchive.swift
+  s_1d39d522f93be9::t_2362332b7503d2 46-48,52-53
+  s_1d39d522f93be9::t_23cef31c6bc436 1-45,49-51,54-168
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "9a0b0f67c86f3a3e38938f9ae116c0f8d987f0c6",
+  "prompts": {},
+  "sessions": {
+    "s_1d39d522f93be9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0a83b637-b9a5-45c2-ab9a-085a23458a6e",
+        "model": "k3"
+      },
+      "human_author": "Michael <yiliforever@qq.com>"
+    }
+  }
+}
