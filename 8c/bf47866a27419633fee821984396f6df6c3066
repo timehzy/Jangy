@@ -1,0 +1,23 @@
+Packages/JangyCore/Tests/JangyCoreTests/AssetImporterTests.swift
+  s_1d39d522f93be9::t_7b2bad77d54104 75
+  s_1d39d522f93be9::t_e2ecfed2ded611 76-157
+Packages/JangyCore/Sources/JangyCore/AssetImporter.swift
+  s_1d39d522f93be9::t_e765fa0fc58800 68-134
+  s_1d39d522f93be9::t_f110d085ef5495 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "8cbf47866a27419633fee821984396f6df6c3066",
+  "prompts": {},
+  "sessions": {
+    "s_1d39d522f93be9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0a83b637-b9a5-45c2-ab9a-085a23458a6e",
+        "model": "k3"
+      },
+      "human_author": "Michael <yiliforever@qq.com>"
+    }
+  }
+}
