@@ -1,0 +1,28 @@
+Jangy/ShareSheet.swift
+  s_1d39d522f93be9::t_e957cf780814e7 1-13
+Jangy/ProjectListModel.swift
+  s_1d39d522f93be9::t_c999f9bf2bf814 71-72,74-81,83-101,103-105
+  s_1d39d522f93be9::t_780b12c3f02de3 1-42,48-70,73,107-142
+  s_1d39d522f93be9::t_9b4c1930828a30 43-47
+  s_1d39d522f93be9::t_f588149d7dd001 82
+  s_1d39d522f93be9::t_b6ac1bed268b0f 102
+Jangy/ProjectListView.swift
+  s_1d39d522f93be9::t_4e7d9d8cd81f48 1-27,29-230
+  s_1d39d522f93be9::t_f6af9b7bb0d535 28
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "f23f8477bf288ae1c2db9a0bcfee3db504d45044",
+  "prompts": {},
+  "sessions": {
+    "s_1d39d522f93be9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0a83b637-b9a5-45c2-ab9a-085a23458a6e",
+        "model": "k3"
+      },
+      "human_author": null
+    }
+  }
+}
