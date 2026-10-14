@@ -65,7 +65,7 @@
 2. **素材引用走登记表**：`PlanClip.assetID` / `CaptionTrack.assetID` 必须指向 `plan.assets` 里的 `AssetItem`；禁止在 plan JSON 里写文件名直引（v2 起 `MediaRef` 已删除）。新增素材须先登记再引用，登记 + 追加片段放同一次 `EditStore.apply`（单撤销步）。
 3. **时间口径统一**：渲染时长只认 `EditPlan.renderedDuration`——dissolve 与相邻片段全额重叠（扣 duration），fade 不重叠（各占相邻片段内 duration/2，总长不变）；与 Kadr CompositionBuilder `overlap(during:)` 一致，实测锚点 9.5s ≠ `Video.duration` 求和值 10.5s。UI 展示、e2e 断言都锚它；禁止「修正」成求和值，禁止另写求和。
 4. **无源区间素材**：图片等静态素材的 clip 无 source range，只有 duration；模型层显式建模（如 `PlanClip.source` 枚举：`.video(range)` / `.still(duration)`），不用魔法值（如 range 置零）表达。
-5. **schema 版本守卫**：plan/draft JSON 带 `version`，过新拒绝加载，不静默丢字段。
+5. **schema 版本守卫**：plan JSON 带 `version`，过新拒绝加载，不静默丢字段。
 6. **工程读写必经 `ProjectStore`**：`Projects/<uuid>/project.json`（plan 格式不变）+ `meta.json`，原子写入 + 完整性校验；禁止在 App 层手写 project.json；素材完整性问题经 `verify` 报告显式上报，不静默丢弃。素材实体归全局 `AssetLibrary`（`library.json` 登记表 + `Assets/`），项目只持有引用子集。
 7. **命名避让**：模型层用 `PlanClip` / `PlanTransition`——Kadr 有同名 `Clip` 协议与 `Transition` 枚举，同模块会歧义。新增模型类型命名前先查 Kadr 符号表。
 
@@ -113,7 +113,7 @@ v1 范围：**导入 + 剪辑 + 导出保元数据**；球形交互预览进 bac
 
 1. **同源规则**：预览与导出共用同一 composition 构建入口（现 `EngineBridge.makeComposition`）。禁止预览单独拼一套渲染逻辑。任何无法在预览中实时呈现的效果，不入 v1。
 2. **零 loading 白名单**：允许出现 loading 的操作仅有——素材导入（探测/转码）、导出、剪辑 Agent 任务。**一切编辑操作禁止 loading**。剪辑 Agent 任务的呈现方式：不以 spinner 呈现，以流式对话流呈现（assistant 文字/工具卡片实时下落）；任务期间编辑控件锁定（sheet 遮挡 + disabled）；预览随每步编辑实时重建。
-3. **增量重建**：编辑后预览更新优先就地修改 composition（AVMutableComposition 区间增删 + videoComposition 热更新），不做全量重建。注意已知坑：`AVPlayerItem.videoComposition` setter 是 copy 语义，改完要 mutableCopy 赋回。**player 生命周期规则**：换 player 前必须同步 `pause()` 旧实例 + 取消轮询 Task（旧 player 回收依赖 dealloc 时机不受控，不主动停会出现「界面无播放器却有声音」的孤儿播放）；轮询 Task 必须弱捕获 player；rebuild 的 await 期间可能又来一次 rebuild，安装 player 前必须再查 `Task.isCancelled`；重建保留播放状态（旧 player 暂停/播完则新的不自动出声）。
+3. **增量重建**：编辑后预览更新优先就地修改 composition（AVMutableComposition 区间增删 + videoComposition 热更新），不做全量重建。注意已知坑：`AVPlayerItem.videoComposition` setter 是 copy 语义，改完要 mutableCopy 赋回。**player 生命周期规则**：换 player 前必须同步 `pause()` 旧实例 + 取消轮询 Task（旧 player 回收依赖 dealloc 时机不受控，不主动停会出现「界面无播放器却有声音」的孤儿播放）；轮询 Task 必须弱捕获 player；rebuild 的 await 期间可能又来一次 rebuild，安装 player 前必须再查 `Task.isCancelled`；重建保留播放状态（旧 player 暂停/播完则新的不自动出声）；**跨页规则**：剪辑页被导航 push 覆盖（如进素材库）时 `onDisappear` 必须显式 `pause()`、返回时 `onAppear` 经 `resumeIfNeeded()` 续播——续播意图在页面层消费，不进 rebuild（rebuild 只认 `rate`，否则覆盖页内编辑触发的 rebuild 会把音频重新放出，成因见 known-pitfalls）。
 4. **降级登记制**：预览允许近似的项目必须登记在下表，新降级项不进表不准合入。
 
 | 降级项 | 预览行为 | 导出行为 | 原因 |

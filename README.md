@@ -8,7 +8,7 @@
 ├── Jangy.xcodeproj        # iOS App 工程（iOS 17+）
 ├── Jangy/                 # App 壳源码（SwiftUI 表现层：预览/时间线/操作条/导出/Agent 对话）
 ├── Packages/
-│   └── JangyCore/         # SwiftPM 包：JangyCore 库 + JangyAgent 库 + jangy-cli 可执行 + 125 个测试
+│   └── JangyCore/         # SwiftPM 包：JangyCore 库 + JangyAgent 库 + jangy-cli 可执行 + 152 个测试
 │       ├── Sources/JangyCore/  # 编辑状态层（纯 Swift）+ 引擎适配层（唯一 import Kadr 的地方）
 │       ├── Sources/JangyAgent/ # 剪辑 Agent：工具层（原子编辑工具）+ 编排层（连续对话 session），App 与 CLI 共用
 │       ├── Sources/JangyTestSupport/  # 测试脚手架（样例工程/素材合成器），不进 App 产物
@@ -26,7 +26,7 @@ Swift 6.3 · Xcode 26.4 · SwiftPM · SwiftUI（iOS 17+）· [Kadr 1.2](https://
 
 ## 快速开始
 
-### 跑测试（125 个，含导出端到端）
+### 跑测试（152 个，含导出端到端）
 
 ```bash
 cd Packages/JangyCore && swift test
@@ -53,7 +53,7 @@ CLI 约定：stdout 只走结构化 JSON/JSONL，日志与错误走 stderr；exi
 
 ### iOS App
 
-用 Xcode 打开根目录 `Jangy.xcodeproj`，选择真机或模拟器运行。App 首启是空时间线，要样例内容需往沙盒播种（命令见 [AGENTS.md](AGENTS.md)「常用命令」，Agent 凭据播种同处）。功能：预览播放（字幕叠加层）、撤销/重做、字幕开关、**从相册导入视频素材**（PHPicker 多选，iCloud 自动下载，passthrough 优先保 HDR/高帧率）、导出到系统相册、**剪辑 Agent**（自然语言指令对话式剪辑：半屏 sheet 对话流，编辑实时落到预览，整任务一步撤销，可追问）。
+用 Xcode 打开根目录 `Jangy.xcodeproj`，选择真机或模拟器运行。App 首启是项目列表（旧单草稿布局首启自动迁移为多项目布局），要样例内容需往沙盒播种（命令见 [AGENTS.md](AGENTS.md)「常用命令」，Agent 凭据播种同处）。功能：**多项目**（项目列表：新建/复制/重命名/删除 + 工程包导入导出）、**素材库**（相册/文件导入视频·图片·音频：PHPicker 多选、iCloud 自动下载、passthrough 优先保 HDR/高帧率；SHA-256 内容去重；引用保护删除）、**素材预览**（视频播放 + trim 上轨、图片缩放）、剪辑页（预览播放（字幕叠加层）、撤销/重做、字幕开关、时间线浮动＋进素材库）、导出到系统相册、**剪辑 Agent**（自然语言指令对话式剪辑：半屏 sheet 对话流，编辑实时落到预览，整任务一步撤销，可追问）。
 
 ## 当前状态
 
@@ -66,7 +66,7 @@ CLI 约定：stdout 只走结构化 JSON/JSONL，日志与错误走 stderr；exi
 - [x] v1 架构公约落定（2026-10-13，[docs/architecture-covenant.md](docs/architecture-covenant.md)）：L0–L4 分层、单向数据流、所见即所得硬规则
 - [x] 剪辑 Agent headless 链路（2026-10-13）：11 个原子编辑工具 + agent loop 编排 + CLI `agent` 子命令，真 key 冒烟通过
 - [x] 剪辑 Agent App 接入（2026-10-13/14，[spec](docs/superpowers/specs/2026-10-13-agent-app-integration-design.md)）：EditStore 合一（共享 store + 整任务一步撤销）、连续对话 session、半屏 sheet IM 对话 UI、运行中编辑锁定；真机验证通过
-- [ ] iOS 17 覆盖率调研（人工调研项，见清单）
+- [x] 多项目 + 素材库管理 UI（2026-10-14，[plan](docs/superpowers/plans/2026-10-14-multi-project-asset-library.md)）：项目列表页（工程包导入导出）+ 素材库页（三类素材入库/删除保护）+ 素材预览页（trim 上轨）+ 旧布局自动迁移；152 测试全绿
 
 已知取舍：
 
@@ -82,4 +82,5 @@ CLI 约定：stdout 只走结构化 JSON/JSONL，日志与错误走 stderr；exi
 - [图片编辑框架设计对比与借鉴分析](docs/research/图片编辑框架设计对比与借鉴分析.md)
 - [POC 验证清单](docs/archive/poc-verification-checklist.md)
 - [剪辑 Agent App 接入 spec](docs/superpowers/specs/2026-10-13-agent-app-integration-design.md) · [计划](docs/superpowers/plans/2026-10-13-agent-app-integration.md)
+- [多项目+素材库 spec](docs/superpowers/specs/2026-10-14-multi-project-asset-library-design.md) · [计划](docs/superpowers/plans/2026-10-14-multi-project-asset-library.md)
 - [Kadr POC 设计 spec / 实现计划](docs/superpowers/specs/2026-10-08-kadr-poc-skeleton-design.md) · [计划](docs/superpowers/plans/2026-10-08-kadr-poc-skeleton.md)

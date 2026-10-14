@@ -10,6 +10,7 @@
 
 - [ ] **Agent 快照卡片异步加载**（`agent` 执行；App 接入遗留小项）：当前主线程同步读 MB 级 PNG，开发期可接受，后续换缓存/异步加载
 - [ ] **Agent 多模型表现评估**（`人工`）：Kimi/Claude 之外的模型在剪辑 Agent 链路的表现
+- [ ] **多项目+素材库硬化跟进**（`agent` 执行；实现审查遗留 Minor 汇总）：`ReferenceScanner` 项目目录列举失败应抛错而非吞成空表（删除保护的兜底漏洞）；离开剪辑页时 flush/cancel 防抖 autosave（亚秒窗口内存在旧 plan 覆盖新磁盘态的路径）；启动迁移失败显式上报（当前 `try?` 静默）；补回素材元数据 drift 校验的测试覆盖（DraftStoreTests 删除时随旧测试一起丢失）；`AssetLibrary` 类型 doc 注明无并发保护（调用方串行化）；ZipArchive 大工程包全量内存（流式化评估）
 
 ### 阶段：发布前门槛
 

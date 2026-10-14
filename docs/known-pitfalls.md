@@ -19,7 +19,13 @@
 - **字幕不进预览**：Kadr 官方明确 overlay 仅导出时烧录（`AVVideoCompositionCoreAnimationTool`），`makePlayerItem()` 预览无字幕；App 用 SwiftUI Text 叠加层按播放器时间近似显示（降级登记与约束见架构公约 §6.4）
 - **转场重叠语义**：dissolve 与相邻片段全额重叠（扣 duration），fade 不重叠（各占相邻片段内 duration/2，总长不变）——渲染时长 ≠ `Video.duration` 求和值（样例工程实测 9.5s vs 10.5s，与 Kadr CompositionBuilder `overlap(during:)` 一致）；时长口径约束见架构公约 §3.3
 - **预览 player 生命周期**：旧 player 的回收依赖 dealloc（时机不受控），`PlayerController.rebuild()` 不主动停旧实例会出现「界面无播放器却有声音」的孤儿播放；rebuild 的 await 期间可能又来一次 rebuild。生命周期约束见架构公约 §6.3
+- **导航 push 不暂停 AVPlayer**：剪辑页被 push 覆盖（如进素材库）后预览音频继续播放，需 onDisappear 显式 `pause()`、onAppear `resumeIfNeeded()` 续播；续播意图标记若放在 `rebuild()` 里消费，覆盖页内的编辑（素材库 quick-add）触发 rebuild 会把音频重新放出——意图必须在页面层消费，rebuild 只认 `rate`。约束见架构公约 §6.3
+- **AVAssetWriter 产物字节不确定**：mp4 容器嵌入写入时间戳，同参数两次合成得到不同字节——内容寻址（SHA-256 去重）相关测试不能用「两次合成」冒充「同内容」，要合成一次再拷贝副本（AssetLibraryTests 实测踩过）
 - **转场预览直通怪癖（iOS 26 模拟器实测）**：转场路径（双视频轨 composition）中素材分辨率恰等于 preset renderSize 时，显示管线把解码 buffer 直通 CA image queue，像素格式被拒（-11800 / 底层 -19230）→ `AVPlayerItemFailedToPlayToEndTime`，播到转场即停；identity transform 微扰无效（判定基于尺寸相等），`PreviewBridge.breakRenderSizeEquality` 给 renderSize 加 0.5pt 规避。注意 `AVPlayerItem.videoComposition` setter 是 copy 语义，改完要 mutableCopy 赋回。真机已验证无此问题（2026-10-12），微扰为模拟器保留；正式版发布前再移除或按模拟器条件编译（见 roadmap backlog；降级登记见架构公约 §6.4）
+
+## 文件系统（Foundation）
+
+- **macOS `/var` → `/private/var` firmlink**：`FileManager.temporaryDirectory` 返回 `/var/...`，而 `enumerator(at:)` 返回的 URL 带 `/private/var/...` 前缀（`resolvingSymlinksInPath()` 不解析 firmlink）——按字符串前缀裁剪相对路径会静默错位（ZipArchive 曾因此打出 0 条目的包）；要相对路径用 `enumerator(atPath:)`（天然返回相对路径）
 
 ## 相册集成（kadr-photos）
 

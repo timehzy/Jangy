@@ -17,7 +17,7 @@ iOS 视频剪辑 App（SwiftUI + AVFoundation），基于 [Kadr](https://github.
 ## 常用命令
 
 ```bash
-# 测试（125 个，含导出端到端；全绿才算过）
+# 测试（152 个，含导出端到端；全绿才算过）
 cd Packages/JangyCore && swift test
 
 # CLI 冒烟
@@ -72,5 +72,7 @@ xcodebuild -project Jangy.xcodeproj -scheme Jangy \
 | [docs/roadmap-path-a.md](docs/roadmap-path-a.md) | 立项路线图：待办 / 已完成 / 决策记录 |
 | [docs/architecture-covenant.md](docs/architecture-covenant.md) | **v1 架构公约（架构与工程约束唯一事实源）**：L0–L4 分层、单向数据流、clip 内禀属性建模、原语事件+reactor 联动、特殊素材范围、所见即所得硬规则 |
 | [docs/known-pitfalls.md](docs/known-pitfalls.md) | 已知坑（运行时/行为类）：引擎行为、预览、相册集成的排障事实库 |
+| [docs/superpowers/specs/2026-10-13-agent-app-integration-design.md](docs/superpowers/specs/2026-10-13-agent-app-integration-design.md) | 剪辑 Agent App 接入 spec（[计划](docs/superpowers/plans/2026-10-13-agent-app-integration.md)） |
+| [docs/superpowers/specs/2026-10-14-multi-project-asset-library-design.md](docs/superpowers/specs/2026-10-14-multi-project-asset-library-design.md) | 多项目+素材库设计 spec（[计划](docs/superpowers/plans/2026-10-14-multi-project-asset-library.md)） |
 | [docs/superpowers/specs/2026-10-08-kadr-poc-skeleton-design.md](docs/superpowers/specs/2026-10-08-kadr-poc-skeleton-design.md) | POC 设计 spec |
 | [docs/superpowers/plans/2026-10-08-kadr-poc-skeleton.md](docs/superpowers/plans/2026-10-08-kadr-poc-skeleton.md) | 实现计划（含 API 核实记录与对 spec 的调整） |
