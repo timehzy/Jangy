@@ -8,11 +8,13 @@ import UniformTypeIdentifiers
 struct FilesPicker: UIViewControllerRepresentable {
     /// 完成回调：选中文件的临时 URL 列表；取消/未选则为空数组
     let onFinish: ([URL]) -> Void
+    /// 可选类型（素材库导入传 [.movie, .image, .audio]；工程包导入传 [.zip]）
+    var contentTypes: [UTType] = [.movie]
 
     func makeCoordinator() -> Coordinator { Coordinator(onFinish: onFinish) }
 
     func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
-        let picker = UIDocumentPickerViewController(forOpeningContentTypes: [UTType.movie], asCopy: true)
+        let picker = UIDocumentPickerViewController(forOpeningContentTypes: contentTypes, asCopy: true)
         picker.allowsMultipleSelection = true
         picker.delegate = context.coordinator
         return picker

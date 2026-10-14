@@ -4,52 +4,50 @@ import Observation
 import Photos
 import JangyCore
 
-/// App 侧状态装配：EditStore（编辑状态层）+ PlayerController（预览）+ 导入/导出进度。
+/// App 侧状态装配：EditStore（编辑状态层）+ PlayerController（预览）+ 导出进度。
+/// 一个实例对应一个打开的项目；切换项目 = 丢弃旧实例新建（撤销栈随之清空）。
 /// 所有编辑经 edit() 进入 EditStore.apply —— 校验失败不压栈，撤销栈纹丝不动。
 @MainActor
 @Observable
 final class AppModel {
+    let projectID: UUID
     let store: EditStore
     let resolver: AssetResolver
     let player: PlayerController
-    private let importer: AssetImporter
-    private let draftStore: DraftStore
+    private let projectStore: ProjectStore
     private var autosaveTask: Task<Void, Never>?
 
     var exportProgress: Double?
     var exportMessage: String?
-    var importProgress: Double?
-    var importMessage: String?
     var lastIssues: [ValidationIssue]?
     /// 剪辑 Agent 入口（L1）：sheet 对话 UI 的数据源；凭据缺失时 isConfigured = false。
     /// lazy：初始化器捕获 self，须待 init 完成后首次访问时执行。
-    /// @ObservationIgnored：引用初始化后不变，无需跟踪；嵌套的 items/isRunning 仍由
-    /// AgentController 自身的 @Observable 跟踪。@Observable 宏不支持 lazy 存储属性。
     @ObservationIgnored private(set) lazy var agent = AgentController(
         store: store,
         resolver: resolver,
-        credentials: AgentCredentials.load(from: resolver.directory),
+        credentials: AgentCredentials.load(from: projectStore.root),
         onAppliedEdit: { [weak self] in self?.handleAgentAppliedEdit() }
     )
-    /// 草稿相关提示：恢复失败原因 / 完整性报告 / 保存失败
-    var draftMessage: String?
+    /// 项目相关提示：完整性报告 / 保存失败
+    var projectMessage: String?
 
-    init(store: EditStore, resolver: AssetResolver, draftStore: DraftStore, restoreNotice: String? = nil) {
+    init(projectID: UUID, store: EditStore, resolver: AssetResolver,
+         projectStore: ProjectStore, restoreNotice: String? = nil) {
+        self.projectID = projectID
         self.store = store
         self.resolver = resolver
         self.player = PlayerController(store: store, resolver: resolver)
-        self.importer = AssetImporter(directory: resolver.directory)
-        self.draftStore = draftStore
-        self.draftMessage = restoreNotice
-        verifyDraftIntegrity()
+        self.projectStore = projectStore
+        self.projectMessage = restoreNotice
+        verifyIntegrity()
     }
 
-    /// 启动后异步核对登记表与磁盘素材：缺失/漂移显式报告，不静默丢。
-    private func verifyDraftIntegrity() {
+    /// 打开项目后异步核对登记表与磁盘素材：缺失/漂移显式报告，不静默丢。
+    private func verifyIntegrity() {
         Task { @MainActor in
-            let report = await draftStore.verify(plan: store.plan, resolver: resolver)
+            let report = await projectStore.verify(plan: store.plan, resolver: resolver)
             guard !report.isEmpty else { return }
-            draftMessage = "草稿完整性：\(report.summary)"
+            projectMessage = "工程完整性：\(report.summary)"
         }
     }
 
@@ -57,19 +55,19 @@ final class AppModel {
     private func scheduleAutosave() {
         autosaveTask?.cancel()
         let plan = store.plan
+        let projectID = projectID
         autosaveTask = Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(500))
             guard !Task.isCancelled else { return }
             do {
-                try draftStore.save(plan: plan)
+                try projectStore.saveProject(id: projectID, plan: plan)
             } catch {
-                draftMessage = "草稿保存失败: \(error.localizedDescription)"
+                projectMessage = "保存失败: \(error.localizedDescription)"
             }
         }
     }
 
     /// plan 变更后的统一下行联动：校验提示清零 + 预览重建 + 防抖落盘。
-    /// 手动编辑（edit/undo/redo）与 Agent 编辑（handleAgentAppliedEdit）共用。
     private func afterPlanMutation() {
         lastIssues = nil
         player.rebuild()
@@ -85,7 +83,6 @@ final class AppModel {
         }
     }
 
-    /// Agent 工具每步编辑落 plan 后的联动：与手动编辑同一条下行路径。
     private func handleAgentAppliedEdit() {
         afterPlanMutation()
     }
@@ -93,90 +90,44 @@ final class AppModel {
     func undo() { store.undo(); afterPlanMutation() }
     func redo() { store.redo(); afterPlanMutation() }
 
-    /// 新建草稿：经 EditStore.apply 整体替换为空时间线（单撤销步，可撤销），
-    /// autosave 随即覆盖旧 draft.json。素材文件保留在素材库，登记表清空即不再引用。
-    func resetDraft() {
-        edit { $0 = EditPlan(clips: []) }
-        draftMessage = nil
-    }
-
-    /// 两条导入渠道（相册/文件）共用的导入管线：来源标识 → 临时文件 URL（resolve 闭包，
-    /// 渠道差异只在这一步）→ 逐个 move 进素材库 → 一次 apply 登记素材 + 追加片段
-    /// （单撤销步）。失败的单个素材不阻断其余导入。
-    /// - Parameters:
-    ///   - origin: 登记到 AssetItem.origin 的渠道标识
-    ///   - failureHint: 失败汇总文案里的原因提示（按渠道区分）
-    ///   - resolve: 把来源标识解析成 importer 可接管的临时文件 URL；
-    ///     回调参数为 (来源, 序号, 总数)，供相册渠道换算 iCloud 下载细粒度进度
-    private func importPipeline<Source>(_ sources: [Source],
-                                        origin: AssetOrigin,
-                                        failureHint: String,
-                                        resolve: (Source, Int, Double) async throws -> URL) async {
-        let total = Double(sources.count)
-        var items: [AssetItem] = []
-        var failures = 0
-        for (index, source) in sources.enumerated() {
-            do {
-                let tempFile = try await resolve(source, index, total)
-                let item = try await importer.importVideo(from: tempFile, origin: origin)
-                items.append(item)
-            } catch {
-                failures += 1
+    /// 素材从素材库上轨：登记（若未登记）+ 全长追加片段，同一次 apply（公约 §3 单撤销步）。
+    /// duration 未探测的素材只登记不追加（range 无依据）。
+    func appendAssetToTimeline(_ item: AssetItem) {
+        edit { plan in
+            if plan.asset(withID: item.id) == nil {
+                plan.assets.append(item)
             }
-            importProgress = Double(index + 1) / total
-        }
-        if !items.isEmpty {
-            edit {
-                $0.assets.append(contentsOf: items)
-                for item in items {
-                    // duration 探测失败时不追加片段（避免 range 无依据），素材仍入库
-                    if let duration = item.duration {
-                        $0.clips.append(PlanClip(assetID: item.id, range: 0...duration))
-                    }
-                }
-            }
-        }
-        importProgress = nil
-        if failures > 0 {
-            importMessage = "\(failures) 个素材导入失败（\(failureHint)）"
-        }
-    }
-
-    /// 从相册导入视频：授权 → 逐个解析（iCloud 自动下载）→ 共用管线入库。
-    func importVideos(assetIdentifiers: [String]) {
-        guard !assetIdentifiers.isEmpty else { return }
-        importProgress = 0
-        importMessage = nil
-        Task { @MainActor in
-            guard await PhotosBridge.requestReadAccess() else {
-                importProgress = nil
-                importMessage = "没有相册读取权限（请在系统设置中允许访问相册）"
-                return
-            }
-            await importPipeline(assetIdentifiers, origin: .photoLibrary,
-                                 failureHint: "iCloud 下载或格式不支持") { identifier, index, total in
-                try await PhotosBridge.resolveVideoFile(assetIdentifier: identifier) { fraction in
-                    Task { @MainActor in
-                        self.importProgress = (Double(index) + fraction) / total
-                    }
-                }
+            if let duration = item.duration {
+                plan.clips.append(PlanClip(assetID: item.id, range: 0...duration))
             }
         }
     }
 
-    /// 从文件 App 导入视频：picker（asCopy）已把文件拷入 App 临时目录，
-    /// 无授权申请、无 iCloud 解析步，直接进共用管线。origin 登记为 .files。
-    func importVideosFromFiles(urls: [URL]) {
-        guard !urls.isEmpty else { return }
-        importProgress = 0
-        importMessage = nil
-        Task { @MainActor in
-            await importPipeline(urls, origin: .files,
-                                 failureHint: "文件拷贝或格式不支持") { url, _, _ in url }
+    /// trim 后上轨：同上，但片段区间取 trim 结果。
+    func appendAssetToTimeline(_ item: AssetItem, range: ClosedRange<TimeInterval>) {
+        edit { plan in
+            if plan.asset(withID: item.id) == nil {
+                plan.assets.append(item)
+            }
+            plan.clips.append(PlanClip(assetID: item.id, range: range))
         }
     }
 
-    /// 导出：先渲染到临时文件，完成后写入系统相册，方便真机直接验证成片。
+    /// 重命名当前项目（导航栏点击项目名）。
+    func renameProject(to name: String) {
+        try? projectStore.renameProject(id: projectID, to: name)
+    }
+
+    /// 离开剪辑页时刷新封面缓存（第一片段首帧）。
+    func updateCover() {
+        let plan = store.plan
+        let coverURL = projectStore.projectDirectory(id: projectID)
+            .appendingPathComponent(ProjectStore.coverFileName)
+        let resolver = resolver
+        Task { await CoverGenerator.generate(for: plan, resolver: resolver, to: coverURL) }
+    }
+
+    /// 导出成片：先渲染到临时文件，完成后写入系统相册。
     /// 配置来自导出面板（ExportPanel）：HDR 直通 / SDR 降级等选项见 ExportOptions。
     func export(options: ExportOptions = .default) {
         exportProgress = 0

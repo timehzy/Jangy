@@ -13,7 +13,7 @@ struct PhotoLibraryPicker: UIViewControllerRepresentable {
 
     func makeUIViewController(context: Context) -> PHPickerViewController {
         var configuration = PHPickerConfiguration(photoLibrary: .shared())
-        configuration.filter = .videos
+        configuration.filter = .any(of: [.videos, .images])
         configuration.selectionLimit = 0   // 0 = 不限多选
         let picker = PHPickerViewController(configuration: configuration)
         picker.delegate = context.coordinator
