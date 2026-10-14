@@ -24,7 +24,7 @@ public struct AssetImporter: Sendable {
         self.directory = directory
     }
 
-    /// 视频元数据探测：DraftStore 完整性比对与 importVideo 共用此入口。
+    /// 视频元数据探测：ProjectStore 完整性比对与 importVideo 共用此入口。
     public static func probeMetadata(of url: URL) async -> AssetMetadata {
         let asset = AVURLAsset(url: url)
         let duration = try? await asset.load(.duration)
