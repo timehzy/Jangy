@@ -25,4 +25,5 @@ jobs:
       - name: Build app
         run: |
           xcodebuild -project Jangy.xcodeproj -scheme Jangy \
-            -destination 'generic/platform=iOS Simulator' build
+            -destination 'generic/platform=iOS Simulator' \
+            -skipMacroValidation build
