@@ -1,0 +1,25 @@
+docs/roadmap-path-a.md
+  s_aee63377c92767::t_19568b4ab07d43 128-129
+README.md
+  s_aee63377c92767::t_27e19230cb548b 29,35,43-49,52,56
+  s_aee63377c92767::t_ce8f1ad9921e61 78-80,84
+  s_aee63377c92767::t_8ee683ffb30526 9,11,13,15-16,18
+  s_aee63377c92767::t_70d58750f223bd 66-68
+  s_aee63377c92767::t_b18919b37218b6 23,25
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "d421dfed9e9f7754fb1254c39b026aa9bec3fd31",
+  "prompts": {},
+  "sessions": {
+    "s_aee63377c92767": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "09bc7dbb-0862-42e2-be3e-5e892ffa5207",
+        "model": "k3"
+      },
+      "human_author": "Michael <yiliforever@qq.com>"
+    }
+  }
+}
