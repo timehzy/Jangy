@@ -1,0 +1,19 @@
+.github/workflows/ios.yml
+  s_dbf5667f753224::t_7bb6f068a64749 28-29
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "51360b63808c61fc781225356b4f9de7a59e03e1",
+  "prompts": {},
+  "sessions": {
+    "s_dbf5667f753224": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "46ddb912-758c-4c1c-92b1-d75d2bddeb44",
+        "model": "k3"
+      },
+      "human_author": "Michael <yiliforever@qq.com>"
+    }
+  }
+}
