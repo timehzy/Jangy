@@ -1,0 +1,33 @@
+docs/architecture-covenant.md
+  s_1d39d522f93be9::t_7ca3dd74927eb1 68
+  s_1d39d522f93be9::t_eb22541af3fd1a 116
+README.md
+  s_1d39d522f93be9::t_201f6f061656fb 11
+  s_1d39d522f93be9::t_184287c4420c8a 69
+  s_1d39d522f93be9::t_646fdeecd4e377 29
+  s_1d39d522f93be9::t_df208a522fcf25 56
+docs/known-pitfalls.md
+  s_1d39d522f93be9::t_bf814b3a5aa6a2 22-23
+  s_1d39d522f93be9::t_b9a1e1c79bb583 26-29
+AGENTS.md
+  s_1d39d522f93be9::t_b8edfbf1e9583c 75-76
+  s_1d39d522f93be9::t_a99baff641331e 20
+docs/roadmap-path-a.md
+  s_1d39d522f93be9::t_88212fd8d91f84 13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "e764572b9e247a13c93ab4ccd7ca36a32522f6ba",
+  "prompts": {},
+  "sessions": {
+    "s_1d39d522f93be9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0a83b637-b9a5-45c2-ab9a-085a23458a6e",
+        "model": "k3"
+      },
+      "human_author": "Michael <yiliforever@qq.com>"
+    }
+  }
+}
