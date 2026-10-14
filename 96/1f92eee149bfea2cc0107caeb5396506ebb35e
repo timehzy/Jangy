@@ -1,0 +1,40 @@
+docs/superpowers/plans/2026-10-14-multi-project-asset-library.md
+  s_fb23b4db287bfd::t_30844619c00ec9 1859-2200,2202-2203,2205-2246,2249-2291,2293-2306,2309-2317,2319-2329,2331-2335,2338-2346,2348-2453
+  s_fb23b4db287bfd::t_00e22b1e0be124 1572-1573,1575,1578-1579
+  s_fb23b4db287bfd::t_706382a24a1e03 3378
+  s_fb23b4db287bfd::t_1f005450ad2398 1123
+  s_fb23b4db287bfd::t_c0e02dec6c98d5 1413
+  s_fb23b4db287bfd::t_285e8fc94a4803 1-118,124-347
+  s_fb23b4db287bfd::t_32ea034abc41c3 348-743,746-1079,3879
+  s_fb23b4db287bfd::t_a8f4df3218fc0e 119-123
+  s_fb23b4db287bfd::t_3ab89af8331e63 3116,3122
+  s_fb23b4db287bfd::t_0a22c9affcad4e 1427,1431
+  s_fb23b4db287bfd::t_490db25a40b878 2292,2307-2308,2318
+  s_fb23b4db287bfd::t_8f85587e5c7a60 3169-3173
+  s_fb23b4db287bfd::t_bff2deadec3e9c 2247-2248
+  s_fb23b4db287bfd::t_501a5ac996d421 3066
+  s_fb23b4db287bfd::t_3875ecba7007bd 1608
+  s_fb23b4db287bfd::t_afb0cee0453b4c 1829,1831-1833
+  s_fb23b4db287bfd::t_f2601e55043d37 2330,2336-2337,2347
+  s_fb23b4db287bfd::t_e90c01991d071f 2201,2204
+  s_fb23b4db287bfd::t_7b410c6b9c02d8 1080-1122,1124-1412,1414-1426,1428-1430,1432-1478,1480-1571,1574,1576-1577,1580-1607,1609-1828,1830,1834-1858
+  s_fb23b4db287bfd::t_03917f616a8469 1479
+  s_fb23b4db287bfd::t_bf1f00aa70eda0 2454-3065,3067-3115,3117-3121,3123-3168,3174-3377,3379-3878
+  s_fb23b4db287bfd::t_10c58ab6c16f97 744-745
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "961f92eee149bfea2cc0107caeb5396506ebb35e",
+  "prompts": {},
+  "sessions": {
+    "s_fb23b4db287bfd": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0b3581de-4439-4b4b-9da3-91bfa27ab70d",
+        "model": "k3"
+      },
+      "human_author": "Michael <yiliforever@qq.com>"
+    }
+  }
+}
