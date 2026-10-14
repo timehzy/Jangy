@@ -1,0 +1,29 @@
+Jangy/JangyApp.swift
+  s_1d39d522f93be9::t_afe478a46bc000 7-8,14,16-23,28-30
+Jangy/TimelineView.swift
+  s_1d39d522f93be9::t_887f5d1f4babf5 4-6,9-11,14-16,19-25,28-38,40-41,44-78
+Jangy/EditorView.swift
+  s_1d39d522f93be9::t_b6f72dede33866 1-109
+Jangy/ProjectListView.swift
+  s_1d39d522f93be9::t_7026373f5d1cc4 220
+  s_1d39d522f93be9::t_ecd7be3f945f03 3
+  s_1d39d522f93be9::t_f506a4b0c078bb 205
+Jangy/LibraryView.swift
+  s_1d39d522f93be9::t_5f1d07fe2c1f94 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "c3f320de2700aeb791b96a0f8032041f173db8e4",
+  "prompts": {},
+  "sessions": {
+    "s_1d39d522f93be9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0a83b637-b9a5-45c2-ab9a-085a23458a6e",
+        "model": "k3"
+      },
+      "human_author": "Michael <yiliforever@qq.com>"
+    }
+  }
+}
