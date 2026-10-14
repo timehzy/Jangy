@@ -33,6 +33,8 @@ final class LibraryModel {
     var libraryMessage: String?
     /// 「已添加到时间线」toast 触发（View 层消费后置 nil）
     var toastMessage: String?
+    /// toast 递增序号：View 层 .task(id:) 依此重启计时（否则连续上轨时 toast 不重弹）
+    private(set) var toastSequence = 0
 
     init(library: AssetLibrary, resolver: AssetResolver, projectStore: ProjectStore) {
         self.library = library
@@ -153,6 +155,7 @@ final class LibraryModel {
         guard let editor = attachedEditor else { return }
         editor.appendAssetToTimeline(item)
         toastMessage = "已添加到时间线"
+        toastSequence += 1
     }
 
     /// 预览页 trim 后上轨。
@@ -160,6 +163,7 @@ final class LibraryModel {
         guard let editor = attachedEditor else { return }
         editor.appendAssetToTimeline(item, range: range)
         toastMessage = "已添加到时间线"
+        toastSequence += 1
     }
 
     // MARK: - 删除保护 / 引用查询
@@ -183,6 +187,14 @@ final class LibraryModel {
         } catch {
             return .scanFailed(error.localizedDescription)
         }
+    }
+
+    /// 集合中未被任何项目引用的子集（删除受阻时「只删未引用的」用）。扫描失败返回空集（保守）。
+    func unreferencedIDs(in ids: Set<UUID>) -> Set<UUID> {
+        let editor = attachedEditor
+        guard let refs = try? ReferenceScanner(projectStore: projectStore)
+            .scan(currentProjectID: editor?.projectID, currentPlan: editor?.store.plan) else { return [] }
+        return ids.filter { refs[$0]?.isEmpty != false }
     }
 
     /// 素材信息面板的「被哪些项目引用」。
