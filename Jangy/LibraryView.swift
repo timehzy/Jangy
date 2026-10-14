@@ -1,5 +1,6 @@
 import SwiftUI
 import JangyCore
+import UniformTypeIdentifiers
 
 /// 素材库：类型 tab + 三列网格。首页进入 = 纯管理；剪辑页进入（attachedEditor 非 nil）
 /// = 视频格带 ＋ 快捷上轨。多选模式只有删除（引用保护）。

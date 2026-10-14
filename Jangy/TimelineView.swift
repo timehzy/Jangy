@@ -1,36 +1,83 @@
 import SwiftUI
 import JangyCore
 
-/// 时间线：每行一个片段，提供 POC 五类操作中的四类（裁剪/变速/转场/删除）。
+/// 时间线（简化版）：水平排布、每段固定宽度。点片段弹操作（裁剪/变速/转场/删除）。
+/// 「＋」浮动在可见区域右缘（不随轨道滚动），点击进素材库追加素材。
+/// 精细化（缩放/拖拽排序/可变宽度）留给时间线专项。
 struct TimelineView: View {
     let model: AppModel
+    var onAdd: () -> Void
+
+    @State private var actionIndex: Int?
 
     var body: some View {
-        List {
-            // 总时长用实测口径（dissolve 重叠扣除），与导出产物时长一致；
-            // 不要用片段源区间求和（转场全额计入会偏大）
-            Text("总时长 \(model.store.plan.renderedDuration, format: .number.precision(.fractionLength(1)))s")
+        VStack(alignment: .leading, spacing: 4) {
+            // 总时长用实测口径（dissolve 重叠扣除），与导出产物时长一致
+            Text("总时长 \(model.store.plan.renderedDuration.formatted(.number.precision(.fractionLength(1))))s")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            ForEach(Array(model.store.plan.clips.enumerated()), id: \.element.id) { index, clip in
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("\(index + 1). \(displayName(for: clip))  [\(clip.range.lowerBound, format: .number.precision(.fractionLength(1)))–\(clip.range.upperBound, format: .number.precision(.fractionLength(1)))s]  \(clip.speed.rate, format: .number.precision(.fractionLength(2)))x → \(clip.outputDuration, format: .number.precision(.fractionLength(1)))s")
-                        .font(.callout)
-                    HStack {
-                        Button("裁剪") { toggleTrim(index) }
-                        Button("变速") { cycleSpeed(index) }
-                        if index < model.store.plan.clips.count - 1 {
-                            Button(clip.transitionAfter == nil ? "加转场" : "去转场") { toggleTransition(index) }
+                .padding(.horizontal)
+
+            ZStack(alignment: .trailing) {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 4) {
+                        ForEach(Array(model.store.plan.clips.enumerated()), id: \.element.id) { index, clip in
+                            clipBlock(index: index, clip: clip)
                         }
-                        Button("删除", role: .destructive) { delete(index) }
                     }
-                    .buttonStyle(.bordered)
-                    // Agent 运行中禁用：分组期间手动编辑会并入 Agent 撤销组，
-                    // 破坏整任务一步撤销语义（与操作条同款锁定）
-                    .disabled(model.agent.isRunning)
+                    .padding(.horizontal)
+                    .padding(.trailing, 56)  // 给浮动＋让位
                 }
+
+                Button(action: onAdd) {
+                    Image(systemName: "plus")
+                        .font(.body.bold())
+                        .frame(width: 40, height: 40)
+                        .background(Color.accentColor, in: Circle())
+                        .foregroundStyle(.white)
+                        .shadow(radius: 3)
+                }
+                .padding(.trailing, 8)
+                .buttonStyle(.plain)
+                // Agent 运行中禁用：quick-add 上轨会并入 Agent 撤销组
+                .disabled(model.agent.isRunning)
             }
         }
+        .padding(.vertical, 4)
+        .confirmationDialog("片段 \((actionIndex ?? 0) + 1)", isPresented: actionBinding, titleVisibility: .visible) {
+            Button("裁剪") { if let i = actionIndex { toggleTrim(i) } }
+            Button("变速") { if let i = actionIndex { cycleSpeed(i) } }
+            if let i = actionIndex, i < model.store.plan.clips.count - 1 {
+                Button(model.store.plan.clips[i].transitionAfter == nil ? "加转场" : "去转场") { toggleTransition(i) }
+            }
+            Button("删除", role: .destructive) { if let i = actionIndex { delete(i) } }
+            Button("取消", role: .cancel) {}
+        }
+    }
+
+    private func clipBlock(index: Int, clip: PlanClip) -> some View {
+        Button { actionIndex = index } label: {
+            VStack(spacing: 2) {
+                Text(displayName(for: clip))
+                    .font(.caption2)
+                    .lineLimit(1)
+                Text("\(clip.outputDuration.formatted(.number.precision(.fractionLength(1))))s · \(clip.speed.rate.formatted(.number.precision(.fractionLength(2))))x")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                if clip.transitionAfter != nil {
+                    Text("⇄ 转场").font(.caption2).foregroundStyle(Color.accentColor)
+                }
+            }
+            .frame(width: 72, height: 56)
+            .background(Color(.secondarySystemFill), in: RoundedRectangle(cornerRadius: 8))
+        }
+        .buttonStyle(.plain)
+        // Agent 运行中禁用：分组期间手动编辑会并入 Agent 撤销组
+        .disabled(model.agent.isRunning)
+    }
+
+    private var actionBinding: Binding<Bool> {
+        Binding(get: { actionIndex != nil }, set: { if !$0 { actionIndex = nil } })
     }
 
     /// 片段标题：素材登记表里的 displayName；登记项缺失时兜底显示 ID 前 8 位

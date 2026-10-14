@@ -1,5 +1,6 @@
 import SwiftUI
 import JangyCore
+import UniformTypeIdentifiers
 
 /// 首页：项目列表（单列大卡）。点卡片进剪辑页；多选模式批量删除/复制/导出工程包。
 struct ProjectListView: View {
@@ -7,6 +8,9 @@ struct ProjectListView: View {
     @State var libraryModel: LibraryModel
 
     @State private var openedProject: ProjectSummary?
+    /// AppModel 在点击处构造（不在 destination 闭包里）：后者随 body 重算反复执行，
+    /// 会重复同步读盘 loadProject 并构造一次性 AppModel（附带 PlayerController rebuild）
+    @State private var editorModel: AppModel?
     @State private var showLibrary = false
     @State private var showPackagePicker = false
     @State private var renameTarget: ProjectSummary?
@@ -43,7 +47,7 @@ struct ProjectListView: View {
             if model.isSelecting {
                 selectionBar
             } else {
-                Button { if let p = model.createProject() { openedProject = p } } label: {
+                Button { openProject(model.createProject()) } label: {
                     Label("新建项目", systemImage: "plus")
                         .padding(.horizontal, 24).padding(.vertical, 10)
                 }
@@ -57,8 +61,9 @@ struct ProjectListView: View {
             model.reload()
         }
         .navigationDestination(item: $openedProject) { summary in
-            EditorView(model: makeEditorModel(for: summary),
-                       libraryModel: libraryModel, projectName: summary.name)
+            if let editorModel {
+                EditorView(model: editorModel, libraryModel: libraryModel, projectName: summary.name)
+            }
         }
         .navigationDestination(isPresented: $showLibrary) {
             LibraryView(model: libraryModel)
@@ -100,7 +105,7 @@ struct ProjectListView: View {
         VStack(spacing: 16) {
             Spacer()
             Text("还没有项目").foregroundStyle(.secondary)
-            Button { if let p = model.createProject() { openedProject = p } } label: {
+            Button { openProject(nil) } label: {
                 Label("新建你的第一个项目", systemImage: "plus")
                     .padding(.horizontal, 24).padding(.vertical, 10)
             }
@@ -119,7 +124,7 @@ struct ProjectListView: View {
                             if model.isSelecting {
                                 model.toggleSelection(of: summary.id)
                             } else {
-                                openedProject = summary
+                                openProject(summary)
                             }
                         }
                         .contextMenu {
@@ -147,6 +152,13 @@ struct ProjectListView: View {
                 .disabled(model.selection.isEmpty)
         }
         .padding(.vertical, 10)
+    }
+
+    /// 点击处构造 AppModel 再触发导航（nil = 先新建项目）
+    private func openProject(_ summary: ProjectSummary?) {
+        guard let summary = summary ?? model.createProject() else { return }
+        editorModel = makeEditorModel(for: summary)
+        openedProject = summary
     }
 
     private func makeEditorModel(for summary: ProjectSummary) -> AppModel {
@@ -201,7 +213,7 @@ private struct ProjectCard: View {
                 }
             }
             Text(summary.name).font(.headline)
-            Text("\(summary.duration, format: .number.precision(.fractionLength(1)))s · \(summary.modifiedAt.formatted(date: .abbreviated, time: .shortened))")
+            Text("\(summary.duration.formatted(.number.precision(.fractionLength(1))))s · \(summary.modifiedAt.formatted(date: .abbreviated, time: .shortened))")
                 .font(.caption).foregroundStyle(.secondary)
         }
     }
@@ -216,7 +228,7 @@ private struct ProjectInfoSheet: View {
         NavigationStack {
             List {
                 LabeledContent("名称", value: summary.name)
-                LabeledContent("时长", value: "\(summary.duration, format: .number.precision(.fractionLength(1)))s")
+                LabeledContent("时长", value: "\(summary.duration.formatted(.number.precision(.fractionLength(1))))s")
                 LabeledContent("片段数", value: "\(summary.clipCount)")
                 LabeledContent("引用素材", value: "\(summary.referencedAssetCount) 个")
                 LabeledContent("创建时间", value: summary.createdAt.formatted(date: .abbreviated, time: .shortened))

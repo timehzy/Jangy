@@ -186,11 +186,30 @@ final class PlayerController {
     private var rebuildTask: Task<Void, Never>?
     private let store: EditStore
     private let resolver: AssetResolver
+    /// 页面离开（pause）时正在播放 → 记录恢复意图，由 resumeIfNeeded 在返回时消费
+    private var wantsResume = false
 
     init(store: EditStore, resolver: AssetResolver) {
         self.store = store
         self.resolver = resolver
         rebuild()
+    }
+
+    /// 剪辑页离开（push 素材库等）时调用：立即停声，避免下层页继续放音。
+    /// 若离开时正在播放，记录恢复意图——返回剪辑页时 resumeIfNeeded 续播。
+    func pause() {
+        if let player, player.rate > 0 {
+            wantsResume = true
+            player.pause()
+        }
+    }
+
+    /// 剪辑页返回时调用：消费恢复意图（若有）继续播放
+    func resumeIfNeeded() {
+        if wantsResume {
+            wantsResume = false
+            player?.play()
+        }
     }
 
     func rebuild() {

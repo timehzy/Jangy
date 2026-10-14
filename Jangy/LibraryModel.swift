@@ -152,7 +152,7 @@ final class LibraryModel {
 
     /// 素材格 ＋：全长追加到当前项目时间线末尾。
     func quickAdd(_ item: AssetItem) {
-        guard let editor = attachedEditor else { return }
+        guard let editor = attachedEditor, !editor.agent.isRunning else { return }
         editor.appendAssetToTimeline(item)
         toastMessage = "已添加到时间线"
         toastSequence += 1
@@ -160,7 +160,7 @@ final class LibraryModel {
 
     /// 预览页 trim 后上轨。
     func addToTimeline(_ item: AssetItem, range: ClosedRange<TimeInterval>) {
-        guard let editor = attachedEditor else { return }
+        guard let editor = attachedEditor, !editor.agent.isRunning else { return }
         editor.appendAssetToTimeline(item, range: range)
         toastMessage = "已添加到时间线"
         toastSequence += 1
