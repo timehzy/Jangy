@@ -10,6 +10,16 @@ extension PlanClip {
     }
 }
 
+extension PlanElement {
+    /// 该元素尾部转场的重叠量（非内容元素 / 无转场 → 0）。与 `EditPlan.renderedDuration` 同口径。
+    public var trailingOverlap: TimeInterval {
+        guard case .content(let payload) = content,
+              let clip = payload.value as? PlanClip,
+              let transition = clip.transitionAfter else { return 0 }
+        return transition.overlapDuration
+    }
+}
+
 extension PlanTrack {
     /// 每个元素在成片时间轴上的**输出起点**。
     /// - 链式轨：前缀和，逐段扣掉该段尾部转场的重叠量（与 `EditPlan.renderedDuration` 同口径）
@@ -24,12 +34,7 @@ extension PlanTrack {
             var cursor: TimeInterval = 0
             for element in elements {
                 starts.append(cursor)
-                cursor += element.duration
-                if case .content(let payload) = element.content,
-                   let clip = payload.value as? PlanClip,
-                   let transition = clip.transitionAfter {
-                    cursor -= transition.overlapDuration
-                }
+                cursor += element.duration - element.trailingOverlap
             }
             return starts
         }

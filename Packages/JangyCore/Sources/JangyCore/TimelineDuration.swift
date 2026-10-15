@@ -34,13 +34,7 @@ extension EditPlan {
     public var renderedDuration: TimeInterval {
         guard let track = primaryTrack else { return 0 }
         return track.elements.reduce(0) { total, element in
-            var overlap: TimeInterval = 0
-            if case .content(let payload) = element.content,
-               let clip = payload.value as? PlanClip,
-               let transition = clip.transitionAfter {
-                overlap = transition.overlapDuration
-            }
-            return total + element.duration - overlap
+            total + element.duration - element.trailingOverlap
         }
     }
 }
