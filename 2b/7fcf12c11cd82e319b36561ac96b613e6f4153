@@ -1,0 +1,20 @@
+docs/superpowers/specs/2026-10-15-image-on-timeline-design.md
+  s_9a70defc13b235::t_e6a159c33ec6af 1-12,14-113
+  s_9a70defc13b235::t_6f3460528d9d8d 13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "2b7fcf12c11cd82e319b36561ac96b613e6f4153",
+  "prompts": {},
+  "sessions": {
+    "s_9a70defc13b235": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8b9cd9a4-be2a-41b5-8f01-e1390b420087",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Michael <yiliforever@qq.com>"
+    }
+  }
+}
