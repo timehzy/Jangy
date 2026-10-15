@@ -1180,7 +1180,7 @@ final class SRTParserTests: XCTestCase {
         第二段：中景
 
         """
-        let cues = SRTParser.parse(srt)
+        let cues = SRTParser.parse(srt).cues
         XCTAssertEqual(cues.count, 2)
         XCTAssertEqual(cues[0].text, "第一段：开场")
         XCTAssertEqual(cues[0].start, 0, accuracy: 0.001)
@@ -1191,12 +1191,40 @@ final class SRTParserTests: XCTestCase {
 
     func testJoinsMultilineText() {
         let srt = "1\n00:00:01,000 --> 00:00:03,000\n第一行\n第二行\n\n"
-        XCTAssertEqual(SRTParser.parse(srt).first?.text, "第一行\n第二行")
+        XCTAssertEqual(SRTParser.parse(srt).cues.first?.text, "第一行\n第二行")
+    }
+
+    func testParsesCueWithPositionCoordinates() {
+        // YouTube / ASR 工具导出的 SRT 常在时间轴后追加 X1/X2/Y1/Y2 定位坐标。
+        // 不剥掉它们会让时间戳解析出 7 段而整条 cue 被静默丢弃。
+        let srt = """
+        1
+        00:00:01,000 --> 00:00:02,000 X1:100 X2:200 Y1:300 Y2:400
+        带定位的cue
+
+        """
+        let cues = SRTParser.parse(srt).cues
+        XCTAssertEqual(cues.count, 1, "带定位坐标的 cue 不能被丢弃")
+        XCTAssertEqual(cues[0].start, 1.0, accuracy: 0.001)
+        XCTAssertEqual(cues[0].duration, 1.0, accuracy: 0.001)
+        XCTAssertEqual(cues[0].text, "带定位的cue")
+    }
+
+    func testCountsSkippedBlocksButIgnoresBlankOnes() {
+        // 坏块跳过是刻意的宽容策略，但跳过多少必须能被调用方看见
+        let srt = "garbage without timeline\n\n1\n00:00:01,000 --> 00:00:02,000\n有效\n\n"
+        let result = SRTParser.parse(srt)
+        XCTAssertEqual(result.cues.count, 1)
+        XCTAssertEqual(result.skippedBlocks, 1, "非空坏块要计数")
+
+        // 多空行 / 末尾换行产生的纯空块不计入
+        let withBlankLines = "1\n00:00:01,000 --> 00:00:02,000\n有效\n\n\n\n"
+        XCTAssertEqual(SRTParser.parse(withBlankLines).skippedBlocks, 0)
     }
 
     func testToleratesDotMillisecondSeparatorAndCRLF() {
         let srt = "1\r\n00:00:01.000 --> 00:00:02.000\r\n你好\r\n\r\n"
-        let cues = SRTParser.parse(srt)
+        let cues = SRTParser.parse(srt).cues
         XCTAssertEqual(cues.count, 1)
         XCTAssertEqual(cues[0].start, 1.0, accuracy: 0.001)
         XCTAssertEqual(cues[0].duration, 1.0, accuracy: 0.001)
@@ -1204,13 +1232,15 @@ final class SRTParserTests: XCTestCase {
 
     func testSkipsMalformedBlocks() {
         let srt = "garbage without timeline\n\n1\n00:00:01,000 --> 00:00:02,000\n有效\n\n"
-        let cues = SRTParser.parse(srt)
+        let cues = SRTParser.parse(srt).cues
         XCTAssertEqual(cues.count, 1)
         XCTAssertEqual(cues[0].text, "有效")
     }
 
     func testEmptyInputGivesNoCues() {
-        XCTAssertTrue(SRTParser.parse("").isEmpty)
+        let result = SRTParser.parse("")
+        XCTAssertTrue(result.cues.isEmpty)
+        XCTAssertEqual(result.skippedBlocks, 0)
     }
 }
 ```
@@ -1238,12 +1268,25 @@ public enum SRTParser {
         public let duration: TimeInterval
     }
 
-    public static func parse(_ content: String) -> [Cue] {
-        content
+    /// 解析结果。宽容策略下坏块静默跳过，但**跳过多少要能被调用方看见**——
+    /// 迁移时若 SRT 有大半解析不出来，用户必须能收到提示，而不是字幕静默变少。
+    public struct ParseResult: Equatable, Sendable {
+        public let cues: [Cue]
+        /// 非空但没能产出 cue 的块数。纯空块（多空行 / 末尾换行产生的）不计入。
+        public let skippedBlocks: Int
+    }
+
+    public static func parse(_ content: String) -> ParseResult {
+        let blocks = content
             .replacingOccurrences(of: "\r\n", with: "\n")
             .replacingOccurrences(of: "\r", with: "\n")
             .components(separatedBy: "\n\n")
-            .compactMap(parseBlock)
+
+        let cues = blocks.compactMap(parseBlock)
+        let nonEmptyBlocks = blocks.filter {
+            !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }.count
+        return ParseResult(cues: cues, skippedBlocks: nonEmptyBlocks - cues.count)
     }
 
     private static func parseBlock(_ block: String) -> Cue? {
@@ -1263,9 +1306,16 @@ public enum SRTParser {
     private static func parseTimeline(_ line: String) -> (TimeInterval, TimeInterval)? {
         let parts = line.components(separatedBy: "-->")
         guard parts.count == 2,
-              let start = parseTimestamp(parts[0]),
-              let end = parseTimestamp(parts[1]) else { return nil }
+              let start = parseTimestamp(firstToken(of: parts[0])),
+              let end = parseTimestamp(firstToken(of: parts[1])) else { return nil }
         return (start, end)
+    }
+
+    /// 时间轴两侧可能带额外内容——YouTube / ASR 工具常在时间戳后追加
+    /// `X1:.. X2:.. Y1:.. Y2:..` 定位坐标。只取第一个空白分隔的 token，
+    /// 否则整条 cue 会因为段数判据失败而被静默丢弃。
+    private static func firstToken(of raw: String) -> String {
+        raw.trimmingCharacters(in: .whitespaces).split(separator: " ").first.map(String.init) ?? ""
     }
 
     private static func parseTimestamp(_ raw: String) -> TimeInterval? {
@@ -1283,9 +1333,14 @@ public enum SRTParser {
 - [ ] **Step 4: 运行确认通过**
 
 Run: `cd Packages/JangyCore && swift test --filter SRTParserTests`
-Expected: PASS（5 个用例）
+Expected: PASS（7 个用例）
 
-- [ ] **Step 5: 提交**
+- [ ] **Step 5: 全量回归**
+
+Run: `cd Packages/JangyCore && swift test`
+Expected: 216 个既有用例 + 本任务 7 个新用例 = 223，全部通过。
+
+- [ ] **Step 6: 提交**
 
 ```bash
 git add Packages/JangyCore/Sources/JangyCore/SRTParser.swift \
@@ -1492,7 +1547,7 @@ enum PlanMigration {
            let fileName = assets.first(where: { $0.id == legacy.assetID })?.fileName,
            let text = try? String(contentsOf: assetsDirectory.appendingPathComponent(fileName),
                                   encoding: .utf8) {
-            elements = SRTParser.parse(text).map { cue in
+            elements = SRTParser.parse(text).cues.map { cue in
                 PlanElement(at: cue.start,
                             content: .content(TrackPayload(
                                 CaptionCuePayload(text: cue.text, duration: cue.duration))))
