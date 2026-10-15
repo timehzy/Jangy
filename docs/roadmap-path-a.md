@@ -26,6 +26,12 @@
 
 ## 已完成
 
+### 阶段：v1 执行（2026-10-15）
+
+- [x] **图片上轨**（✅ 2026-10-15；spec：[image-on-timeline-design](superpowers/specs/2026-10-15-image-on-timeline-design.md)，plan：[image-on-timeline](superpowers/plans/2026-10-15-image-on-timeline.md)）
+  - 要点：`PlanClip.source` 枚举（.video(range)/.still(duration)，schema v3）+ Kadr 原生 ImageClip 路线（不物化）+ Core letterbox 预合成消除拉伸 + 图片变速存倍率 + Agent add_clip/split/trim 图片分支 + App 预览页时长选择器/素材库图片 ＋
+  - 验收：174 测试全绿 + 图片 e2e（纯图片/混排/letterbox 无变形/快照）+ App 构建通过
+
 ### 阶段：v1 规划与启动（2026-10-13 ~ 10-14）
 
 - [x] **素材库管理 UI**（✅ 2026-10-14；plan：[multi-project-asset-library](superpowers/plans/2026-10-14-multi-project-asset-library.md)）

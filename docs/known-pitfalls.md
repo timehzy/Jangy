@@ -22,6 +22,8 @@
 - **导航 push 不暂停 AVPlayer**：剪辑页被 push 覆盖（如进素材库）后预览音频继续播放，需 onDisappear 显式 `pause()`、onAppear `resumeIfNeeded()` 续播；续播意图标记若放在 `rebuild()` 里消费，覆盖页内的编辑（素材库 quick-add）触发 rebuild 会把音频重新放出——意图必须在页面层消费，rebuild 只认 `rate`。约束见架构公约 §6.3
 - **AVAssetWriter 产物字节不确定**：mp4 容器嵌入写入时间戳，同参数两次合成得到不同字节——内容寻址（SHA-256 去重）相关测试不能用「两次合成」冒充「同内容」，要合成一次再拷贝副本（AssetLibraryTests 实测踩过）
 - **转场预览直通怪癖（iOS 26 模拟器实测）**：转场路径（双视频轨 composition）中素材分辨率恰等于 preset renderSize 时，显示管线把解码 buffer 直通 CA image queue，像素格式被拒（-11800 / 底层 -19230）→ `AVPlayerItemFailedToPlayToEndTime`，播到转场即停；identity transform 微扰无效（判定基于尺寸相等），`PreviewBridge.breakRenderSizeEquality` 给 renderSize 加 0.5pt 规避。注意 `AVPlayerItem.videoComposition` setter 是 copy 语义，改完要 mutableCopy 赋回。真机已验证无此问题（2026-10-12），微扰为模拟器保留；正式版发布前再移除或按模拟器条件编译（见 roadmap backlog；降级登记见架构公约 §6.4）
+- **Kadr ImageClip 拉伸图片到 preset 画幅（不保宽高比）**（2026-10-15 实测：100×100 方图导出 1080×1920 整帧填充）：`ImageEncoder.createPixelBuffer` 把 CGImage 直接 `draw(in: 全画幅 rect)`，非匹配宽高比的图片被压扁/拉长。规避：`EngineBridge` 交给 Kadr 前先用 `StillImagePreparer` 把图片等比 aspect-fit 居中贴到 preset 画幅黑底画布（`preset.resolution`），之后 Kadr 的拉伸变为恒等缩放。`ImageClip.background(_:)` 不能替代——`insertImageClip` 调 `ImageEncoder.encode` 时未传 backgroundColor，该修饰符在此路径不生效
+- **Kadr ImageClip 内部物化**：`CompositionBuilder.insertImageClip` 每次构建 composition 都把图片按 preset 分辨率+帧率编码成临时 mp4、插入后即删。我们层无需物化/缓存/登记表扩展；代价是图片工程每次 rebuild 都有一次编码开销（当前可接受）
 
 ## 文件系统（Foundation）
 

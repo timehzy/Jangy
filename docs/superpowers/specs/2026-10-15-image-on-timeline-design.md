@@ -51,19 +51,7 @@ public struct PlanClip: Codable, Equatable, Identifiable, Sendable {
 - **编码**：`source` tagged（仿 `SpeedPlan`/`PlanTransition`）。
 - **解码（向后兼容）**：有 `source` → 用之；无 `source` 但有旧 `range` → `.video(range)`。
 - **版本**：`EditPlan.version` 默认值 + `ProjectStore.currentSchemaVersion` 2 → 3。旧 v2 plan 仍可解（2 ≤ 3）。
-- **outputDuration**（`TimelineDuration.swift`）：
-
-```swift
-extension PlanClip {
-    public var sourceLength: TimeInterval {
-        switch source {
-        case .video(let r): return r.upperBound - r.lowerBound
-        case .still(let d): return d
-        }
-    }
-    public var outputDuration: TimeInterval { sourceLength / speed.rate }
-}
-```
+- `outputDuration`：抽 `PlanClipSource.length`（video=range 长；still=基准时长），`outputDuration = source.length / speed.rate` —— 图片变速存倍率、输出=基准/rate，幂等且与视频同构。
 
 `renderedDuration` 不变（Σ outputDuration − Σ 转场重叠）。
 

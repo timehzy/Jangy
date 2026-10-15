@@ -45,7 +45,7 @@
 | `EditPlan` / `PlanClip` / `AssetItem` / `TimelineDuration` | L2 | |
 | `EditStore` / `UndoStack` / `EditPlanValidator` | L2 | apply 是全库唯一写入口 |
 | `AssetResolver` / `ProjectStore` / `AssetLibrary` / `PlanLoader` | L2 基础设施 | ProjectStore 多项目持久化；AssetLibrary 全局素材登记表 |
-| `EngineBridge` / `PreviewBridge` / `ExportRunner` / `PhotosBridge` / `AssetImporter` / `CaptionImageRenderer` | L3 | |
+| `EngineBridge` / `PreviewBridge` / `ExportRunner` / `PhotosBridge` / `AssetImporter` / `CaptionImageRenderer` / `StillImagePreparer` / `ImageDownsampler` / `CoverGenerator` | L3 | |
 | App 壳全部 SwiftUI + `AppModel` | L0/L1 | AppModel 目前是 L1 雏形，正式版拆出 Interaction 层 |
 | `AgentToolSet` / `EditAgentSession` / `AgentRunContext`（`JangyAgent` target） | L1 headless 消费方 | 剪辑 Agent：工具层（原子编辑 → `EditStore.apply`，校验失败结构化回喂）+ 编排层（连续对话 session，agent loop + snapshot 视觉自检）；App 与 CLI 共用 |
 | `AssetSynthesizer` / `SamplePlan`（`JangyTestSupport` target） | 测试脚手架 | 不分层：仅测试与 CLI 依赖，App 不链接，不进正式产物 |
@@ -97,8 +97,8 @@
 
 ### 5.1 图片素材
 
-- 模型层按 §3.4 建「无源区间素材」；引擎层合固定时长帧序列（写帧能力可移植自 `JangyTestSupport.AssetSynthesizer`）。
-- 图片 clip 支持的操作集与视频一致（分割/变速语义：变速 = 改 duration）。
+- 模型层按 §3.4 建「无源区间素材」（`PlanClip.source` 枚举：`.video(range)` / `.still(duration)`）。引擎层直接用 Kadr 原生 `ImageClip`——它内部把图片编码成固定时长帧序列（临时文件，用后即删），无需自建写帧能力。交 Kadr 前先经 `StillImagePreparer` 预合成到 preset 画幅（Kadr 会拉伸，见 known-pitfalls）。
+- 图片 clip 支持的操作集与视频一致（分割/转场）；「变速」= 存倍率、输出时长 = 基准时长 / rate（效果上即改输出时长）。
 
 ### 5.2 全景视频（360°）
 
