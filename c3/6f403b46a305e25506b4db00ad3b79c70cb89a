@@ -1,0 +1,30 @@
+Packages/JangyCore/Sources/JangyCore/EditPlanValidator.swift
+  s_9a70defc13b235::t_65c97a51fb23c3 69,71,74,79
+Jangy/AppModel.swift
+  s_9a70defc13b235::t_2d7cd04820510f 103,107-108
+Packages/JangyCore/Sources/JangyAgent/AgentTools.swift
+  s_9a70defc13b235::t_46ff76bdcf62f3 208,214
+Packages/JangyCore/Tests/JangyAgentTests/AgentToolsTests.swift
+  s_9a70defc13b235::t_1f47173066cd1c 110
+Packages/JangyCore/Tests/JangyCoreTests/EditPlanTests.swift
+  s_9a70defc13b235::t_702572d1f76e3f 166-176
+Packages/JangyCore/Tests/JangyCoreTests/EditPlanValidatorTests.swift
+  s_9a70defc13b235::t_004f1fbe0bcfd2 57,75,80
+  s_9a70defc13b235::t_620baee89a61e7 147-183
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "c36f403b46a305e25506b4db00ad3b79c70cb89a",
+  "prompts": {},
+  "sessions": {
+    "s_9a70defc13b235": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8b9cd9a4-be2a-41b5-8f01-e1390b420087",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Michael <yiliforever@qq.com>"
+    }
+  }
+}
