@@ -64,6 +64,34 @@ final class PlanTrackTests: XCTestCase {
         XCTAssertThrowsError(try JSONDecoder().decode(ElementContent.self, from: json))
     }
 
+    // MARK: JSON 往返（CLI / Agent / 落盘的互操作契约）
+
+    func testElementRoundTripsThroughJSON() throws {
+        let element = PlanElement(at: 2.5, content: .content(TrackPayload(TestPingPayload(value: 9))))
+        let data = try JSONEncoder().encode(element)
+        XCTAssertEqual(try JSONDecoder().decode(PlanElement.self, from: data), element)
+    }
+
+    func testChainedElementOmitsAtFromJSON() throws {
+        // chained 轨元素不带 at：nil 必须从 JSON 省略，避免「顺序 + at」两个事实源。
+        let data = try JSONEncoder().encode(PlanElement(content: .gap(duration: 1)))
+        let json = String(decoding: data, as: UTF8.self)
+        XCTAssertFalse(json.contains("\"at\""), "at 为 nil 时应从 JSON 省略；实际：\(json)")
+    }
+
+    func testTrackRoundTripsThroughJSON() throws {
+        let track = PlanTrack(
+            kind: .video, name: "主轨", placement: .chained,
+            isMuted: true, isHidden: false, isLocked: true,
+            settings: TrackPayload(TestPingPayload(value: 3)),
+            elements: [
+                PlanElement(content: .gap(duration: 2)),
+                PlanElement(content: .content(TrackPayload(TestPingPayload(value: 5)))),
+            ])
+        let data = try JSONEncoder().encode(track)
+        XCTAssertEqual(try JSONDecoder().decode(PlanTrack.self, from: data), track)
+    }
+
     // MARK: payload 与注册表
 
     func testPayloadRoundTripsThroughRegisteredCodec() throws {
@@ -74,6 +102,14 @@ final class PlanTrackTests: XCTestCase {
         let data = try JSONEncoder().encode(payload)
         let decoded = try JSONDecoder().decode(TrackPayload.self, from: data)
         XCTAssertEqual(decoded.value as? TestPingPayload, TestPingPayload(value: 7))
+    }
+
+    func testPayloadEqualityDistinguishesSameTypeDifferentValue() {
+        // 同类型但值不等：走 isEqual(to:) 的「同类型不等」分支。
+        XCTAssertNotEqual(TrackPayload(TestPingPayload(value: 1)),
+                          TrackPayload(TestPingPayload(value: 2)))
+        XCTAssertEqual(TrackPayload(TestPingPayload(value: 1)),
+                       TrackPayload(TestPingPayload(value: 1)))
     }
 
     func testUnknownPayloadTypeThrowsAndListsRegistered() throws {

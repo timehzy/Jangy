@@ -29,7 +29,10 @@ public struct PlanTrack: Codable, Equatable, Identifiable, Sendable {
         self.elements = elements
     }
 
-    /// 轨道覆盖的时间长度。链式轨 = Σ 元素时长；绝对轨 = max(at + duration)。
+    /// 轨道自身的时间跨度。链式轨 = Σ 元素时长（**不含转场重叠，因此不等于成片时长**）；
+    /// 绝对轨 = max(at + duration)（绝对轨元素本来就按成片时间轴定位，所以它等于轨道末端）。
+    ///
+    /// 成片时长一律用 `EditPlan.renderedDuration`（公约 §3.3 的实测口径）。
     public var span: TimeInterval {
         switch placement {
         case .chained:

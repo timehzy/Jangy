@@ -6,6 +6,11 @@ public protocol TrackElementPayload: Codable, Equatable, Sendable {
     static var payloadType: String { get }
     /// 元素时长。有内容的元素时长由 payload 推出（gap 的时长自带）。
     var duration: TimeInterval { get }
+
+    /// 同具体类型的相等比较。**声明为协议要求**（而非仅扩展方法），
+    /// 保证通过 `any TrackElementPayload` 调用时走见证表动态派发，
+    /// 而不是被静态派发到默认实现上。
+    func isEqual(to other: any TrackElementPayload) -> Bool
 }
 
 /// type-erased payload box：JSON 形如 {"type":"clip", ...}。
@@ -44,21 +49,14 @@ public struct TrackPayload: Codable, Equatable, Sendable {
     }
 
     public static func == (lhs: TrackPayload, rhs: TrackPayload) -> Bool {
-        guard lhs.payloadType == rhs.payloadType,
-              let other = rhs.value as? any Equatable else { return false }
-        return Self.areEqual(lhs.value, other)
-    }
-
-    /// 同类型 payload 的相等比较：借 Codable 往返（`any Equatable` 的 `==` 需要同具体类型）。
-    private static func areEqual(_ lhs: any TrackElementPayload, _ rhs: any Equatable) -> Bool {
-        guard let rhsValue = rhs as? any TrackElementPayload else { return false }
-        return lhs.isEqual(to: rhsValue)
+        guard lhs.payloadType == rhs.payloadType else { return false }
+        return lhs.value.isEqual(to: rhs.value)
     }
 }
 
 extension TrackElementPayload {
-    /// 同具体类型的相等比较。默认实现直接比 `self == other`（同类型才成立）。
-    func isEqual(to other: any TrackElementPayload) -> Bool {
+    /// 默认实现：同具体类型才相等。
+    public func isEqual(to other: any TrackElementPayload) -> Bool {
         guard let other = other as? Self else { return false }
         return self == other
     }
