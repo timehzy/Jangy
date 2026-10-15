@@ -161,15 +161,12 @@ struct AddClipTool: DefensiveAgentTool {
         let currentPlan = await context.plan
         let existingFileNames = Set(currentPlan.assets.map(\.fileName))
 
-        // 已登记则复用其 kind；否则按扩展名判类型
-        let knownKind = currentPlan.assets.first { $0.fileName == args.fileName }?.kind
-        let ext = (args.fileName as NSString).pathExtension.lowercased()
-        let isImage = (knownKind == .image) || (knownKind == nil && Self.imageExtensions.contains(ext))
-
-        // 登记素材：未登记先探测元数据（文件不存在直接报错，免得到引擎期才炸）
+        // 登记素材：已登记则复用；未登记先按扩展名判图片、探测元数据
+        // （文件不存在直接报错，免得到引擎期才炸）
         var asset = currentPlan.assets.first { $0.fileName == args.fileName }
         if asset == nil {
-            if isImage {
+            let ext = (args.fileName as NSString).pathExtension.lowercased()
+            if Self.imageExtensions.contains(ext) {
                 guard context.resolver.exists(AssetItem(kind: .image, fileName: args.fileName)) else {
                     return ToolEnvelope.error("素材文件不存在: \(args.fileName)。请用 list_assets 查看可用素材")
                 }
@@ -189,10 +186,12 @@ struct AddClipTool: DefensiveAgentTool {
             }
         }
         guard let asset else { return ToolEnvelope.error("素材登记失败") }
-        // 非上轨素材类型直接拒绝（音频维持后置；字幕走 set_captions）——
-        // 否则下面的 .video 分支会对缺失的 range 强解包崩溃
+        // 已登记的非上轨类型（音频后置；字幕走 set_captions）直接拒绝——
+        // 否则下面的 .video 分支会对缺失的 range 强解包崩溃。
+        // 注意：未登记文件在探测阶段按扩展名归类（image vs 其余），不在此 guard 范围。
         guard asset.kind == .video || asset.kind == .image else {
-            return ToolEnvelope.error("不支持把 \(asset.kind.rawValue) 素材加入时间线（音频后置；字幕请用 set_captions）")
+            let label = asset.kind == .audio ? "音频" : "字幕"
+            return ToolEnvelope.error("不支持把\(label)素材加入时间线（音频后置；字幕请用 set_captions）")
         }
         let rate = args.speed ?? 1.0
 
