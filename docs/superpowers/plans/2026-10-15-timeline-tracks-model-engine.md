@@ -708,8 +708,10 @@ public enum VideoFeature: TrackFeature {
                                           message: "视频轨必须是链式（.chained）"))
         }
 
+        // 前缀是循环不变量，提到循环外（否则每个元素都做一次 O(n) 查找）
+        let prefix = context.pathPrefix(for: track)
         for (i, element) in track.elements.enumerated() {
-            let path = "\(context.pathPrefix(for: track)).elements[\(i)]"
+            let path = "\(prefix).elements[\(i)]"
             // gap 在链式轨上合法（删除留下的空档），不校验内容；
             // 出现别的 payload 类型（kind 与 payload 不匹配）时同样跳过——
             // 那类错误由引擎层（EngineBridge.UnknownPayloadError）兜底，不在这里判。
@@ -803,7 +805,9 @@ public enum VideoFeature: TrackFeature {
 - [ ] **Step 7: 运行确认通过**
 
 Run: `cd Packages/JangyCore && swift test --filter VideoFeatureTests`
-Expected: PASS（12 个用例）
+Expected: PASS（13 个用例）
+
+> 第 13 条专门钉 `pathPrefix` 的索引解析——上面所有用例的 context 都传 `tracks: []`，path 全走 `tracks[?]` 回落分支，索引查找本身零覆盖（写错了也全绿）。补一条 context 带轨道的用例，断言 `issue.path == "tracks[0].elements[0].assetID"`。
 
 > 上面前 6 条是计划给的；**另需补 6 条边界用例**——因为本步之后同一套校验规则会有**两份**（`EditPlanValidator.validate(_:)` 里那份旧的 + `VideoFeature` 这份新的），Task 6 会删掉旧的那份。若新实现没被独立测试钉住，平移过程中的细微差异会在删掉旧代码后**静默失去覆盖**：
 >
@@ -817,7 +821,7 @@ Expected: PASS（12 个用例）
 - [ ] **Step 8: 全量回归**
 
 Run: `cd Packages/JangyCore && swift test`
-Expected: 190 个既有用例 + 本任务 12 个新用例 = 202，全部通过。**本步不破坏任何现有代码**（`PlanClip` 只加协议一致性、没动 `id`），所以这是一次干净的绿色提交。
+Expected: 190 个既有用例 + 本任务 13 个新用例 = 203，全部通过。**本步不破坏任何现有代码**（`PlanClip` 只加协议一致性、没动 `id`），所以这是一次干净的绿色提交。
 
 - [ ] **Step 9: 提交**
 
@@ -1016,8 +1020,10 @@ public enum CaptionFeature: TrackFeature {
                                           message: "字幕轨必须是绝对定位（.absolute）"))
         }
 
+        // 前缀是循环不变量，提到循环外（否则每个元素都做一次 O(n) 查找）
+        let prefix = context.pathPrefix(for: track)
         for (i, element) in track.elements.enumerated() {
-            let path = "\(context.pathPrefix(for: track)).elements[\(i)]"
+            let path = "\(prefix).elements[\(i)]"
             guard let at = element.at else {
                 issues.append(ValidationIssue(path: "\(path).at", elementID: element.id,
                                               message: "绝对定位轨的元素必须带 at"))
