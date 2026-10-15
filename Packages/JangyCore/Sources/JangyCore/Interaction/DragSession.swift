@@ -140,7 +140,7 @@ public struct DragSession: Equatable, Sendable {
         let deltaSeconds = TimeInterval(translation.width / context.pointsPerSecond)
         let draggedCenter = starts[currentIndex] + element.duration / 2 + deltaSeconds
 
-        var targetIndex = track.elements.count - 1
+        var targetIndex = track.elements.count
         for (i, start) in starts.enumerated() where i != currentIndex {
             if draggedCenter < start + track.elements[i].duration / 2 {
                 targetIndex = i

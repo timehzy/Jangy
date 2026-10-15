@@ -126,6 +126,63 @@ final class DragSessionTests: XCTestCase {
             .translated(to: CGSize(width: 0, height: -64))
         XCTAssertNil(session.resolve(in: context(plan)), "已在顶部，上移无净变化")
     }
+
+    // MARK: 链式轨内重排（拖到末端 / 前端）
+
+    // 每段 2s，起点 0/2/4，中点 1/3/5。
+
+    func testChainedReorderDragRightPastLastMovesToEndOfTwo() {
+        let plan = mainPlan([
+            PlanClip(assetID: UUID(), source: .video(0...2)),
+            PlanClip(assetID: UUID(), source: .video(0...2)),
+        ])
+        let a = plan.primaryTrack!.elements[0].id
+        let primaryID = plan.primaryTrackID
+        let session = DragSession(kind: .moveElement(elementID: a, fromTrackID: primaryID))
+            .translated(to: CGSize(width: 250, height: 0))    // 中点 1 → 3.5，越过 B 的中点
+        XCTAssertEqual(session.resolve(in: context(plan)),
+                       .moveElement(elementID: a, toTrackID: primaryID, at: nil, toIndex: 1))
+    }
+
+    func testChainedReorderDragRightPastEndMovesToEndOfThree() {
+        let plan = mainPlan([
+            PlanClip(assetID: UUID(), source: .video(0...2)),
+            PlanClip(assetID: UUID(), source: .video(0...2)),
+            PlanClip(assetID: UUID(), source: .video(0...2)),
+        ])
+        let a = plan.primaryTrack!.elements[0].id
+        let primaryID = plan.primaryTrackID
+        let session = DragSession(kind: .moveElement(elementID: a, fromTrackID: primaryID))
+            .translated(to: CGSize(width: 500, height: 0))    // 中点 1 → 6，越过末端
+        XCTAssertEqual(session.resolve(in: context(plan)),
+                       .moveElement(elementID: a, toTrackID: primaryID, at: nil, toIndex: 2))
+    }
+
+    func testChainedReorderDragLeftToFrontMovesToZero() {
+        let plan = mainPlan([
+            PlanClip(assetID: UUID(), source: .video(0...2)),
+            PlanClip(assetID: UUID(), source: .video(0...2)),
+            PlanClip(assetID: UUID(), source: .video(0...2)),
+        ])
+        let c = plan.primaryTrack!.elements[2].id
+        let primaryID = plan.primaryTrackID
+        let session = DragSession(kind: .moveElement(elementID: c, fromTrackID: primaryID))
+            .translated(to: CGSize(width: -500, height: 0))   // 中点 5 → 0，越过 A 的中点
+        XCTAssertEqual(session.resolve(in: context(plan)),
+                       .moveElement(elementID: c, toTrackID: primaryID, at: nil, toIndex: 0))
+    }
+
+    func testChainedReorderWithinSameSlotIsNoOp() {
+        let plan = mainPlan([
+            PlanClip(assetID: UUID(), source: .video(0...2)),
+            PlanClip(assetID: UUID(), source: .video(0...2)),
+        ])
+        let a = plan.primaryTrack!.elements[0].id
+        let primaryID = plan.primaryTrackID
+        let session = DragSession(kind: .moveElement(elementID: a, fromTrackID: primaryID))
+            .translated(to: CGSize(width: 10, height: 0))     // 中点 1 → 1.1，没过 B 的中点
+        XCTAssertNil(session.resolve(in: context(plan)), "未跨中点，重排无净变化")
+    }
 }
 
 final class GestureRouterTests: XCTestCase {
