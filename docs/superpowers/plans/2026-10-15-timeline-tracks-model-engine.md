@@ -454,6 +454,16 @@ public protocol TrackFeature {
     static var payloadTypes: [any TrackElementPayload.Type] { get }
     /// 本特性的校验规则。由 EditPlanValidator 统一分派调用。
     static func validate(track: PlanTrack, context: TrackValidationContext) -> [ValidationIssue]
+
+    /// 结构变化后的**归一化**：把 payload 里因结构变化而失效的字段清掉。
+    /// 核心在 `EditStore.apply` 里逐轨调用——核心读不到 payload 内部，
+    /// 这类「跟着结构走」的字段只能由认识它的特性模块自己收。
+    static func normalize(track: inout PlanTrack, context: TrackValidationContext)
+}
+
+extension TrackFeature {
+    /// 默认无操作。
+    public static func normalize(track: inout PlanTrack, context: TrackValidationContext) {}
 }
 ```
 
@@ -699,6 +709,32 @@ import Foundation
 public enum VideoFeature: TrackFeature {
     public static let kind = TrackKind.video
     public static let payloadTypes: [any TrackElementPayload.Type] = [PlanClip.self]
+
+    /// 归一化：转场只能挂在「后面紧跟一个内容元素」的位置上。
+    /// 结构变化（删除 → 变 gap、删末位、重排）会让原本合法的转场失效，这里统一清掉。
+    /// 不清的话 `validate` 会报「转场不能跨过空档」/「最后一个片段不能挂转场」，
+    /// 让**删除操作本身失败**——而用户的本意只是删一段。
+    public static func normalize(track: inout PlanTrack, context: TrackValidationContext) {
+        guard track.placement == .chained else { return }
+        for i in track.elements.indices {
+            guard case .content(let payload) = track.elements[i].content,
+                  var clip = payload.value as? PlanClip,
+                  clip.transitionAfter != nil else { continue }
+
+            let followedByAdjacentContent: Bool = {
+                let next = i + 1
+                guard next < track.elements.count else { return false }
+                guard case .content(let nextPayload) = track.elements[next].content,
+                      nextPayload.value is PlanClip else { return false }
+                return true
+            }()
+
+            if !followedByAdjacentContent {
+                clip.transitionAfter = nil
+                track.elements[i].content = .content(TrackPayload(clip))
+            }
+        }
+    }
 
     public static func validate(track: PlanTrack, context: TrackValidationContext) -> [ValidationIssue] {
         var issues: [ValidationIssue] = []
@@ -2494,7 +2530,10 @@ git commit -m "Core: EditPlan 切换到多轨 v4 模型（clips/captions → tra
 
 **Files:**
 - Create: `Packages/JangyCore/Sources/JangyCore/TrackOperations.swift`
+- Modify: `Packages/JangyCore/Sources/JangyCore/EditStore.swift`（`apply` 里接入不变式维持与归一化）
 - Test: `Packages/JangyCore/Tests/JangyCoreTests/TrackOperationsTests.swift`
+
+> **背景**：Task 6 为了编译，已经照抄本任务与 Task 10 的源码新建了 `TrackOperations.swift` / `VideoEngine.swift` / `CaptionEngine.swift`（未加测试）。所以本任务的源码步骤可能已是 no-op——**先读现有文件确认，只补缺的部分**；本任务的**测试步骤仍然完整有效且必须做**。
 
 - [ ] **Step 1: 写失败的测试**
 
@@ -2635,6 +2674,9 @@ public enum TrackOperations {
     /// - 链式轨的中间元素 → 原地换成等长 gap（内容消失、时长保留）
     /// - 链式轨的末尾元素 → 真正移除；若其他轨更靠后，随后由 maintainInvariants 补尾部 gap
     /// - 绝对轨元素 → 直接移除（主轨长度不受影响）
+    ///
+    /// **不在这里调 maintainInvariants**——不变式的维持收敛在 `EditStore.apply` 一处
+    /// （本方法总是被包在 apply 闭包里跑）。散到各操作里就是「漏改一处就复发」。
     public static func removeElement(_ elementID: UUID, in plan: inout EditPlan) {
         for (ti, track) in plan.tracks.enumerated() {
             guard let ei = track.elements.firstIndex(where: { $0.id == elementID }) else { continue }
@@ -2645,7 +2687,6 @@ public enum TrackOperations {
             } else {
                 plan.tracks[ti].elements.remove(at: ei)
             }
-            maintainInvariants(in: &plan)
             return
         }
     }
@@ -2655,7 +2696,6 @@ public enum TrackOperations {
         for (ti, track) in plan.tracks.enumerated() {
             guard let ei = track.elements.firstIndex(where: { $0.id == elementID }) else { continue }
             plan.tracks[ti].elements[ei].at = at
-            maintainInvariants(in: &plan)
             return
         }
     }
@@ -2678,20 +2718,63 @@ public enum TrackOperations {
             plan.tracks[pi].elements.append(PlanElement(content: .gap(duration: deficit)))
         }
     }
+
+    /// 逐轨调特性模块的归一化（清掉因结构变化而失效的 payload 字段）。
+    /// 与 `maintainInvariants` 一样，**只由 `EditStore.apply` 调用**——单点收敛。
+    /// 必须在 `maintainInvariants` **之后**跑：补尾部 gap 会改变 `renderedDuration`，
+    /// 而归一化要基于最终结构判断。
+    public static func normalizePayloads(in plan: inout EditPlan) {
+        let context = TrackValidationContext(assets: plan.assets,
+                                             mainTrackEnd: plan.renderedDuration,
+                                             tracks: plan.tracks)
+        for i in plan.tracks.indices {
+            guard let feature = TrackFeatureRegistry.feature(for: plan.tracks[i].kind) else { continue }
+            feature.normalize(track: &plan.tracks[i], context: context)
+        }
+    }
 }
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [ ] **Step 4: 在 `EditStore.apply` 里接入（**这一步是这条不变式真正生效的地方**）**
+
+```swift
+    @discardableResult
+    public func apply(_ mutate: (inout EditPlan) -> Void) -> Result<EditPlan, ValidationFailure> {
+        var next = plan
+        mutate(&next)
+
+        // 结构变化后的不变式维持与归一化，**只在这一处做**：
+        // EditStore.apply 是唯一写入口，放这里任何编辑都绕不开。
+        // 散到各工具 / UI 动作里就是「隐式约定散落多处，漏改一处就复发」——
+        // 它已经复发过一次：trim/speed 让主轨变短却没人补 gap，带字幕工程上编辑静默失败。
+        TrackOperations.maintainInvariants(in: &next)
+        TrackOperations.normalizePayloads(in: &next)
+
+        let issues = validator.validate(next)
+        guard issues.isEmpty else { return .failure(ValidationFailure(issues: issues)) }
+        if groupBase == nil { undoStack.push(next) }  // 组内不压栈，endGrouping 统一收
+        plan = next
+        return .success(next)
+    }
+```
+
+顺序不能反：`maintainInvariants` 可能补尾部 gap 改变 `renderedDuration`，`normalizePayloads` 要基于最终结构判断。
+
+再补一条**回归测试**（这条路径现在零覆盖）：带字幕工程 + 缩短主轨的编辑 → `apply` 成功、主轨自动补了尾部 gap、`renderedDuration` 等于字幕轨末端。
+
+- [ ] **Step 5: 运行确认通过**
 
 Run: `cd Packages/JangyCore && swift test --filter TrackOperationsTests`
 Expected: PASS（8 个用例）
 
-- [ ] **Step 5: 提交**
+- [ ] **Step 6: 提交**
 
 ```bash
 git add Packages/JangyCore/Sources/JangyCore/TrackOperations.swift \
+        Packages/JangyCore/Sources/JangyCore/EditStore.swift \
+        Packages/JangyCore/Sources/JangyCore/Features/Video/VideoFeature.swift \
         Packages/JangyCore/Tests/JangyCoreTests/TrackOperationsTests.swift
-git commit -m "Core: gap 核心操作与主轨两条不变式（操作维持 + 校验器兜底）"
+git commit -m "Core: gap 核心操作与主轨两条不变式（EditStore.apply 单点维持 + 校验器兜底）"
 ```
 
 ---
@@ -3404,6 +3487,8 @@ struct MoveElementTool: DefensiveAgentTool {
 ```
 
 **3d. 其余工具**：`clipID` 参数名统一改成 `elementID`；各工具 `Payload` 里返回给模型的字段名同步改成 `elementID` / `firstElementID` / `secondElementID`（模型读到的标识符应与它下次回传的参数名一致，否则它会照抄旧名再报错）；内部按 Task 6 Step 9 的「定位 → 解包 → 改 → 装回」模式；`RemoveClipTool` 改调 `TrackOperations.removeElement`（保持「删除 = 留 gap」语义）。
+
+> **工具里一律不要自己调 `TrackOperations.maintainInvariants` / `normalizePayloads`**——它们在 `EditStore.apply` 里已经单点跑过了，工具只负责「改 plan」，不变式与归一化由写入口兜。`AddClipTool` 里那处显式调用（Task 6 Step 9 写的）也应删掉。
 
 `SplitClipTool` 的改法是唯一需要多想一步的——它要在链式轨里把元素一分为二，且两段都要保留原 payload 的属性：
 
