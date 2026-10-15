@@ -1,0 +1,21 @@
+Packages/JangyCore/Tests/JangyCoreTests/StillImagePreparerTests.swift
+  s_9a70defc13b235::t_1b7c1ed2013856 72-85
+Packages/JangyCore/Sources/JangyCore/StillImagePreparer.swift
+  s_9a70defc13b235::t_ad6da7b01fd1e1 4,6-11,14,24-26,30,37,72
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "7f187a63f41ce186eaca85c7a2e9b7002f9ddbec",
+  "prompts": {},
+  "sessions": {
+    "s_9a70defc13b235": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8b9cd9a4-be2a-41b5-8f01-e1390b420087",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Michael <yiliforever@qq.com>"
+    }
+  }
+}
