@@ -20,7 +20,10 @@ public final class TimelineViewportState {
     /// 缩放：每秒占多少点。夹在 [minPointsPerSecond, maxPointsPerSecond]。
     public private(set) var pointsPerSecond: CGFloat = 60
     /// 内容总时长（= `plan.renderedDuration`）。plan 变化后由 App 同步进来。
-    public var contentDuration: TimeInterval = 0
+    /// 收缩（删除片段）时重夹播放头，保住 `playheadTime ∈ [0, contentDuration]` 不变式。
+    public var contentDuration: TimeInterval = 0 {
+        didSet { playheadTime = min(playheadTime, max(0, contentDuration)) }
+    }
     /// 视口宽度（点）。由 L0 的 GeometryReader 回填，缩放锚点换算要用。
     public var viewportWidth: CGFloat = 0
 
@@ -36,14 +39,19 @@ public final class TimelineViewportState {
     /// 内容相对视口左缘的偏移（点）。= 播放头时间 × px/s（见类注释推导）。
     public var scrollOffset: CGFloat { CGFloat(playheadTime) * pointsPerSecond }
 
-    /// 视口内某点（点，相对视口左缘）对应的时间。
-    public func time(atX x: CGFloat) -> TimeInterval {
+    /// 视口坐标（相对视口左缘）某点对应的时间。
+    public func time(atViewportX x: CGFloat) -> TimeInterval {
         playheadTime + TimeInterval((x - viewportWidth / 2) / pointsPerSecond)
     }
 
     /// 内容坐标：时间 t 相对内容左缘的 x（含半视口留白）。
-    public func x(forTime t: TimeInterval) -> CGFloat {
+    public func contentX(forTime t: TimeInterval) -> CGFloat {
         viewportWidth / 2 + CGFloat(t) * pointsPerSecond
+    }
+
+    /// 时间 t 在**视口坐标**（相对视口左缘）的 x。是 `time(atViewportX:)` 的逆。
+    public func viewportX(forTime t: TimeInterval) -> CGFloat {
+        contentX(forTime: t) - scrollOffset
     }
 
     /// 单指横向拖拽 = 滚动 = 擦洗。dx 为位移（点，右正）。
@@ -58,7 +66,7 @@ public final class TimelineViewportState {
 
     /// 双指捏合：以视口内 anchorX 为锚点缩放 px/s（锚点下的时间保持不动）。
     public func zoom(by factor: CGFloat, anchorX: CGFloat) {
-        let anchorTime = time(atX: anchorX)
+        let anchorTime = time(atViewportX: anchorX)
         let next = min(max(Self.minPointsPerSecond, pointsPerSecond * factor),
                        Self.maxPointsPerSecond)
         guard next != pointsPerSecond else { return }
@@ -69,7 +77,7 @@ public final class TimelineViewportState {
 
     /// 当前视口覆盖的时间区间（缩略图只渲可见区用）。
     public var visibleTimeRange: ClosedRange<TimeInterval> {
-        let lo = time(atX: 0), hi = time(atX: viewportWidth)
+        let lo = time(atViewportX: 0), hi = time(atViewportX: viewportWidth)
         return min(lo, hi)...max(lo, hi)
     }
 }
