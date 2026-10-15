@@ -6,7 +6,7 @@ import Foundation
 ///
 /// 与旧路径（`Kadr.Caption.load(srt:)`）保持一致：**cue 文本原样保留，不做 markup 处理**。
 /// `<i>斜体</i>`、`{\an8}` 这类标签不会被剥离，会原样进 `Cue.text`——旧解析器也是这么做的，
-/// 迁移后才能保持渲染结果不变。
+/// 迁移后才能保持渲染结果不变。UTF-8 BOM 会被剥离（与旧路径一致）。
 public enum SRTParser {
 
     public struct Cue: Equatable, Sendable {
@@ -24,10 +24,13 @@ public enum SRTParser {
     }
 
     public static func parse(_ content: String) -> ParseResult {
-        let blocks = content
+        // 旧路径（KadrCaptions 的 SRT 加载器）会剥 UTF-8 BOM，这里保持一致：
+        // 不剥的话，「BOM + 无编号行」的 SRT 会让首条 cue 的时间戳解析失败而整条丢失。
+        let normalized = content
+            .replacingOccurrences(of: "\u{FEFF}", with: "")
             .replacingOccurrences(of: "\r\n", with: "\n")
             .replacingOccurrences(of: "\r", with: "\n")
-            .components(separatedBy: "\n\n")
+        let blocks = normalized.components(separatedBy: "\n\n")
 
         let cues = blocks.compactMap(parseBlock)
         let nonEmptyBlocks = blocks.filter {

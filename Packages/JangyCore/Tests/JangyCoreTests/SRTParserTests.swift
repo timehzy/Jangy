@@ -78,4 +78,13 @@ final class SRTParserTests: XCTestCase {
         let srt = "1\n00:00:01,000 --> 00:00:02,000\n<i>斜体</i>{\\an8}\n\n"
         XCTAssertEqual(SRTParser.parse(srt).cues.first?.text, "<i>斜体</i>{\\an8}")
     }
+
+    /// 与旧路径一致——剥 UTF-8 BOM；不剥的话「BOM + 无编号行」的 SRT 首条 cue 会整条丢失。
+    func testStripsUTF8BOM() {
+        let srt = "\u{FEFF}00:00:01,000 --> 00:00:02,000\n带 BOM 的cue\n\n"
+        let cues = SRTParser.parse(srt).cues
+        XCTAssertEqual(cues.count, 1)
+        XCTAssertEqual(cues[0].start, 1.0, accuracy: 0.001)
+        XCTAssertEqual(cues[0].text, "带 BOM 的cue")
+    }
 }
