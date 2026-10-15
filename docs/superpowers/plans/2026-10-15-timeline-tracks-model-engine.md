@@ -907,6 +907,56 @@ final class CaptionFeatureTests: XCTestCase {
             .contains { $0.message.contains("引用了未登记的字幕素材") })
     }
 
+    func testValidateRejectsNonAbsolutePlacement() {
+        // 字幕轨必须是绝对定位；链式轨会让「元素自带 at」的整套语义失效
+        let track = PlanTrack(kind: .caption, placement: .chained, elements: [])
+        let context = TrackValidationContext(assets: [], mainTrackEnd: 10, tracks: [track])
+        XCTAssertTrue(CaptionFeature.validate(track: track, context: context)
+            .contains { $0.message.contains("必须是绝对定位") })
+    }
+
+    func testValidateRejectsNegativeAt() {
+        let track = PlanTrack(kind: .caption, placement: .absolute, elements: [
+            PlanElement(at: -1, content: .content(TrackPayload(
+                CaptionCuePayload(text: "负起点", duration: 1)))),
+        ])
+        let context = TrackValidationContext(assets: [], mainTrackEnd: 10, tracks: [track])
+        XCTAssertTrue(CaptionFeature.validate(track: track, context: context)
+            .contains { $0.message.contains("字幕起点不能为负") })
+    }
+
+    func testValidateRejectsNonPositiveDuration() {
+        let track = PlanTrack(kind: .caption, placement: .absolute, elements: [
+            PlanElement(at: 1, content: .content(TrackPayload(
+                CaptionCuePayload(text: "零时长", duration: 0)))),
+        ])
+        let context = TrackValidationContext(assets: [], mainTrackEnd: 10, tracks: [track])
+        XCTAssertTrue(CaptionFeature.validate(track: track, context: context)
+            .contains { $0.message.contains("字幕时长必须为正") })
+    }
+
+    func testValidateRejectsSourceAssetOfWrongKind() {
+        // 这条的旧实现（EditPlanValidator 的 captions 分支）连同它的测试会被 Task 6 删掉，
+        // 届时这里是唯一实现——必须现在钉住
+        let videoAssetID = UUID()
+        let track = PlanTrack(kind: .caption, placement: .absolute,
+                              settings: TrackPayload(CaptionTrackSettings(sourceAssetID: videoAssetID)))
+        let context = TrackValidationContext(
+            assets: [AssetItem(id: videoAssetID, kind: .video, fileName: "v.mp4")],
+            mainTrackEnd: 10, tracks: [track])
+        XCTAssertTrue(CaptionFeature.validate(track: track, context: context)
+            .contains { $0.message.contains("字幕来源必须是字幕素材") })
+    }
+
+    func testValidateRejectsWrongTypedSettingsPayload() {
+        // settings 类型不对会让来源素材检查被静默跳过，必须显式上报
+        let track = PlanTrack(kind: .caption, placement: .absolute,
+                              settings: TrackPayload(CaptionCuePayload(text: "放错地方了", duration: 1)))
+        let context = TrackValidationContext(assets: [], mainTrackEnd: 10, tracks: [track])
+        XCTAssertTrue(CaptionFeature.validate(track: track, context: context)
+            .contains { $0.message.contains("settings payload 类型不对") })
+    }
+
     func testRegistryKnowsAllPayloadTypes() {
         XCTAssertTrue(TrackFeatureRegistry.payloadCodecs.keys.contains("clip"))
         XCTAssertTrue(TrackFeatureRegistry.payloadCodecs.keys.contains("caption-cue"))
@@ -1043,6 +1093,14 @@ public enum CaptionFeature: TrackFeature {
             }
         }
 
+        // settings 存在但类型不对时，settings(of:) 会静默回落默认值——
+        // 那会让下面的来源素材检查被整个跳过。这里显式报出来（引擎层没有对应兜底）。
+        if let settings = track.settings, !(settings.value is CaptionTrackSettings) {
+            issues.append(ValidationIssue(
+                path: "\(prefix).settings",
+                message: "字幕轨的 settings payload 类型不对（期望 caption-settings，实际 \(settings.payloadType)）"))
+        }
+
         if let sourceID = settings(of: track).sourceAssetID {
             switch context.asset(withID: sourceID) {
             case nil:
@@ -1075,12 +1133,20 @@ public enum CaptionFeature: TrackFeature {
 - [ ] **Step 5: 运行确认通过**
 
 Run: `cd Packages/JangyCore && swift test --filter CaptionFeatureTests`
-Expected: PASS（7 个用例）
+Expected: PASS（13 个用例）
 
-- [ ] **Step 6: 提交（只提交新增文件）**
+> 后 5 条（非绝对定位 / `at` 为负 / 时长非正 / 来源素材 kind 不对 / settings 类型不对）的理由与 Task 2 同款：**Task 6 会删掉 `EditPlanValidator` 里现有的字幕校验分支和针对它的旧测试**，删完之后 `CaptionFeature` 就是唯一实现——不现在钉住，这些规则会静默失去覆盖。
+
+- [ ] **Step 6: 全量回归**
+
+Run: `cd Packages/JangyCore && swift test`
+Expected: 203 个既有用例 + 本任务 13 个新用例 = 216，全部通过。
+
+- [ ] **Step 7: 提交**
 
 ```bash
 git add Packages/JangyCore/Sources/JangyCore/Features/Caption \
+        Packages/JangyCore/Sources/JangyCore/Features/Manifest.swift \
         Packages/JangyCore/Tests/JangyCoreTests/CaptionFeatureTests.swift
 git commit -m "Core: Caption 特性片（cue 逐句 payload + 轨级 settings）"
 ```
