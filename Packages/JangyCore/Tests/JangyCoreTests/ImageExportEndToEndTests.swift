@@ -1,6 +1,7 @@
 import XCTest
 import AVFoundation
 import CoreGraphics
+import ImageIO
 @testable import JangyCore
 @testable import JangyTestSupport
 
@@ -33,9 +34,8 @@ final class ImageExportEndToEndTests: XCTestCase {
         return out
     }
 
-    /// 抽帧（零容差）读单点像素。y 从图像顶部起算（CGBitmapContext 内存行 0 = 图像顶部）。
-    private func pixel(_ url: URL, at seconds: TimeInterval, x: Int, y: Int) throws -> (UInt8, UInt8, UInt8) {
-        let cg = try FrameSnapshotter.frame(from: AVURLAsset(url: url), at: seconds)
+    /// 读 CGImage 上单点像素（RGBA 8bit）。y 从图像顶部起算（CGBitmapContext 内存行 0 = 图像顶部）。
+    private func pixel(_ cg: CGImage, x: Int, y: Int) -> (UInt8, UInt8, UInt8) {
         let w = cg.width, h = cg.height
         let buf = UnsafeMutablePointer<UInt8>.allocate(capacity: w * h * 4)
         defer { buf.deallocate() }
@@ -45,6 +45,11 @@ final class ImageExportEndToEndTests: XCTestCase {
         ctx.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
         let o = (y * w + x) * 4
         return (buf[o], buf[o + 1], buf[o + 2])
+    }
+
+    /// 抽帧（零容差）后读单点像素。
+    private func pixel(_ url: URL, at seconds: TimeInterval, x: Int, y: Int) throws -> (UInt8, UInt8, UInt8) {
+        pixel(try FrameSnapshotter.frame(from: AVURLAsset(url: url), at: seconds), x: x, y: y)
     }
 
     func testPureImageExportDurationAndContent() async throws {
@@ -58,6 +63,7 @@ final class ImageExportEndToEndTests: XCTestCase {
 
         // 16:9 图在 9:16 画幅里贴满宽、上下留黑：中心为图片色（黄），顶部为黑边。
         // 断言用「中心明显亮于黑边」的相对式，规避 HDR→SDR 色调映射的绝对色偏。
+        // 实测（2026-10-15）：center=(245,225,34) 黄、top=(0,0,0) 黑——绝对阈值留了充裕余量。
         let center = try pixel(out, at: 1.0, x: 540, y: 960)
         let top = try pixel(out, at: 1.0, x: 540, y: 60)
         XCTAssertGreaterThan(Int(center.0), 120, "中心应为图片（偏黄）")
@@ -88,6 +94,14 @@ final class ImageExportEndToEndTests: XCTestCase {
         XCTAssertEqual(tracks.count, 1)
         let duration = try await CMTimeGetSeconds(asset.load(.duration))
         XCTAssertEqual(duration, plan.renderedDuration, accuracy: 0.25)
+
+        // t=3.5 落在图片段（2.5–4.5s）：中心偏黄、顶部黑边。
+        // 视频片段是 aspect-fill（铺满画幅），只有图片段会留黑边——故这条断言同时证明
+        // 「此刻在图片段」且「图片按 letterbox 渲染」。
+        let center = try pixel(out, at: 3.5, x: 540, y: 960)
+        let top = try pixel(out, at: 3.5, x: 540, y: 60)
+        XCTAssertGreaterThan(Int(center.0), 120, "混排中图片段中心应为图片（偏黄）")
+        XCTAssertLessThan(Int(top.0), 60, "混排中图片段顶部应为黑边")
     }
 
     func testSnapshotInsideStillRegion() async throws {
@@ -97,6 +111,14 @@ final class ImageExportEndToEndTests: XCTestCase {
         let frames = try await FrameSnapshotter.snapshots(plan: plan, resolver: resolver, at: [1.5])
         let png = try XCTUnwrap(frames[1.5])
         XCTAssertTrue(png.starts(with: [0x89, 0x50, 0x4E, 0x47]), "应为 PNG")
+
+        // 快照内容：图片居中（黄）、上下黑边——证明快照真的渲染了 still 帧（纯黑也能过魔数断言）
+        let source = try XCTUnwrap(CGImageSourceCreateWithData(png as CFData, nil))
+        let cg = try XCTUnwrap(CGImageSourceCreateImageAtIndex(source, 0, nil))
+        let center = pixel(cg, x: cg.width / 2, y: cg.height / 2)
+        let top = pixel(cg, x: cg.width / 2, y: 60)
+        XCTAssertGreaterThan(Int(center.0), 120, "快照中心应为图片（偏黄）")
+        XCTAssertLessThan(Int(top.0), 60, "快照顶部应为黑边")
     }
 
     func testStillSpeedHalvesOutputDuration() async throws {
