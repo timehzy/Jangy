@@ -365,7 +365,7 @@ struct SplitClipTool: DefensiveAgentTool {
                         with: [firstElement, secondElement])
                 }
                 return ToolEnvelope.applied(result) { plan in
-                    Payload(firstElementID: args.elementID, secondElementID: secondID.uuidString,
+                    Payload(firstElementID: originalID.uuidString, secondElementID: secondID.uuidString,
                             renderedDuration: plan.renderedDuration)
                 }
             case .still(let duration):
@@ -392,7 +392,7 @@ struct SplitClipTool: DefensiveAgentTool {
                         with: [firstElement, secondElement])
                 }
                 return ToolEnvelope.applied(result) { plan in
-                    Payload(firstElementID: args.elementID, secondElementID: secondID.uuidString,
+                    Payload(firstElementID: originalID.uuidString, secondElementID: secondID.uuidString,
                             renderedDuration: plan.renderedDuration)
                 }
             }

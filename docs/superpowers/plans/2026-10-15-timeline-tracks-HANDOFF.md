@@ -81,30 +81,6 @@ Spec：[../specs/2026-10-15-timeline-tracks-design.md](../specs/2026-10-15-timel
 | **13 · 可插拔性验收测试** | ✅ | 第四类轨空壳，核心零分支改动 |
 | **14 · 公约修订与文档同步** | ✅ | 公约新增「轨道模型」「删除语义」两节 + 各处同步 |
 
-### Task 12 · Agent 工具改造（未做）
-
-Task 6 阶段 B 只做了「编译通过 + 行为等价」的最小适配。**真正的签名改造还没做**，计划 Task 12 节有完整清单：
-
-- `clipID` 参数统一改 `elementID`；`Payload` 字段名同步（`elementID` / `firstElementID` / `secondElementID`）
-- `move_clip` → `move_element(elementID, toTrackID?, beforeElementID?, at?)`（**废除下标寻址**）
-- 新增轨工具：`add_track` / `remove_track` / `move_track` / `set_track_flags`
-- `set_captions` → `set_caption_track`（导入 SRT 并展开）；新增 `set_caption_text`
-- `get_plan` 增加扁平元素视图
-- `AgentPromptBuilder` 的领域规则段整体改写（计划里有成稿）
-- **工具里一律不要自己调 `TrackOperations.maintainInvariants` / `normalizePayloads`**——它们在 `EditStore.apply` 里已单点跑过
-
-### Task 13 · 可插拔性验收（未做）
-
-计划 Task 13 节有完整代码：用 `TrackFeatureRegistry.testOnlyFeatures` 注入一个第四类轨（贴纸轨空壳），断言核心零条件分支改动。`testOnlyFeatures` 是 `internal`（测试经 `@testable import` 访问）。
-
-### Task 14 · 公约修订与文档同步（未做）
-
-计划 Task 14 节有清单，**注意补充一条本次新定的**：
-
-- 归一化在写入口**无条件**跑 → **任何结构变化后悬空的转场一律被清掉**，包括「用户显式把挂转场的片段移到最后」（v3 是校验失败、v4 是清转场后成功）。**这是有意的取舍**（转场不跟在内容元素后面就是悬空引用，同外键语义），不是 bug。
-
-还要同步：`AGENTS.md` 的测试数、`README.md`、`docs/roadmap-path-a.md`（加「阶段① 已完成」条目 + 「阶段② 时间线 UI」待办）。
-
 ---
 
 ## 三、新会话必须知道的上下文

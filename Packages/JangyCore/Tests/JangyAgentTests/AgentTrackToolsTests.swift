@@ -285,6 +285,11 @@ final class AgentTrackToolsTests: XCTestCase {
         XCTAssertEqual(halves.count, 2)
         XCTAssertEqual(halves[0].source, .still(duration: 1.0))
         XCTAssertEqual(halves[1].source, .still(duration: 3.0))
+
+        // still 分支的第二段 ID 也必须指向真实元素（悬空 ID 回归守卫）
+        let envelope = try JSONDecoder().decode(SplitEnvelope.self, from: Data(result.utf8))
+        let ids = Set((await context.plan).primaryTrack!.elements.map { $0.id.uuidString })
+        XCTAssertTrue(ids.contains(envelope.payload.secondElementID), "still 分支 secondElementID 应指向真实元素")
     }
 
     // MARK: - move_element 守卫
