@@ -1,0 +1,23 @@
+docs/superpowers/plans/2026-10-15-image-on-timeline.md
+  s_9a70defc13b235::t_dd698a150cf7ec 1170-1171,1180,1190,1193-1202
+  s_9a70defc13b235::t_9db8c883304a46 1-726,728,731,733-1056,1058-1068,1070-1071,1074-1077,1079,1081-1083,1086-1089,1091-1092,1094-1096,1098-1169,1172-1179,1181-1189,1191-1192,1203-1285,1288-1452
+  s_9a70defc13b235::t_27da4754b7ec1f 1286-1287
+  s_9a70defc13b235::t_468a72d816e227 1057,1069,1072-1073,1078,1080,1084-1085,1090,1093,1097
+  s_9a70defc13b235::t_086eb50ad3a47b 727,729-730,732
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "e0f45f75a95c0428975d657cbce96a11b2c531e8",
+  "prompts": {},
+  "sessions": {
+    "s_9a70defc13b235": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8b9cd9a4-be2a-41b5-8f01-e1390b420087",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Michael <yiliforever@qq.com>"
+    }
+  }
+}
