@@ -53,7 +53,7 @@ CLI 约定：stdout 只走结构化 JSON/JSONL，日志与错误走 stderr；exi
 
 ### iOS App
 
-用 Xcode 打开根目录 `Jangy.xcodeproj`，选择真机或模拟器运行。App 首启是项目列表（旧单草稿布局首启自动迁移为多项目布局），要样例内容需往沙盒播种（命令见 [AGENTS.md](AGENTS.md)「常用命令」，Agent 凭据播种同处）。功能：**多项目**（项目列表：新建/复制/重命名/删除 + 工程包导入导出）、**素材库**（相册/文件导入视频·图片·音频：PHPicker 多选、iCloud 自动下载、passthrough 优先保 HDR/高帧率；SHA-256 内容去重；引用保护删除）、**素材预览**（视频播放 + trim 上轨、图片缩放）、剪辑页（预览播放（字幕叠加层）、撤销/重做、字幕开关、时间线浮动＋进素材库）、导出到系统相册、**剪辑 Agent**（自然语言指令对话式剪辑：半屏 sheet 对话流，编辑实时落到预览，整任务一步撤销，可追问）。
+用 Xcode 打开根目录 `Jangy.xcodeproj`，选择真机或模拟器运行。App 首启是项目列表（旧单草稿布局首启自动迁移为多项目布局），要样例内容需往沙盒播种（命令见 [AGENTS.md](AGENTS.md)「常用命令」，Agent 凭据播种同处）。功能：**多项目**（项目列表：新建/复制/重命名/删除 + 工程包导入导出）、**素材库**（相册/文件导入视频·图片·音频：PHPicker 多选、iCloud 自动下载、passthrough 优先保 HDR/高帧率；SHA-256 内容去重；引用保护删除）、**素材预览**（视频播放 + trim 上轨、图片缩放 + 时长选择上轨）、剪辑页（预览播放（字幕叠加层）、撤销/重做、字幕开关、时间线浮动＋进素材库）、导出到系统相册、**剪辑 Agent**（自然语言指令对话式剪辑：半屏 sheet 对话流，编辑实时落到预览，整任务一步撤销，可追问）。
 
 ## 当前状态
 
@@ -67,6 +67,7 @@ CLI 约定：stdout 只走结构化 JSON/JSONL，日志与错误走 stderr；exi
 - [x] 剪辑 Agent headless 链路（2026-10-13）：11 个原子编辑工具 + agent loop 编排 + CLI `agent` 子命令，真 key 冒烟通过
 - [x] 剪辑 Agent App 接入（2026-10-13/14，[spec](docs/superpowers/specs/2026-10-13-agent-app-integration-design.md)）：EditStore 合一（共享 store + 整任务一步撤销）、连续对话 session、半屏 sheet IM 对话 UI、运行中编辑锁定；真机验证通过
 - [x] 多项目 + 素材库管理 UI（2026-10-14，[plan](docs/superpowers/plans/2026-10-14-multi-project-asset-library.md)）：项目列表页（工程包导入导出）+ 素材库页（三类素材入库/删除保护）+ 素材预览页（trim 上轨）+ 旧布局自动迁移；152 测试全绿
+- [x] 图片上轨（2026-10-15，[spec](docs/superpowers/specs/2026-10-15-image-on-timeline-design.md)）：`PlanClip.source` 枚举（.video(range)/.still(duration)，schema v3）+ Kadr 原生 ImageClip（不物化）+ Core letterbox 预合成消除拉伸 + 图片变速存倍率 + Agent/App 图片入口；174 测试全绿
 
 已知取舍：
 
