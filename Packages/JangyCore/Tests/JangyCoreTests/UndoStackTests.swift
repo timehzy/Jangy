@@ -7,7 +7,7 @@ final class UndoStackTests: XCTestCase {
     /// 因此各测试先把实例捕获到局部常量再做相等断言。
     private func plan(_ marker: String) -> EditPlan {
         let asset = AssetItem(kind: .video, fileName: marker)
-        return EditPlan(assets: [asset], clips: [PlanClip(assetID: asset.id, range: 0...1)])
+        return EditPlan(assets: [asset], clips: [PlanClip(assetID: asset.id, source: .video(0...1))])
     }
 
     func testInitialState() {

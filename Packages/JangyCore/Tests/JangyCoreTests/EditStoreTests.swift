@@ -7,7 +7,7 @@ final class EditStoreTests: XCTestCase {
         let assetID = UUID(uuidString: "aaaaaaaa-0000-0000-0000-000000000001")!
         return EditPlan(
             assets: [AssetItem(id: assetID, kind: .video, fileName: "clip1.mp4", duration: 4.0)],
-            clips: [PlanClip(assetID: assetID, range: 0...3)]
+            clips: [PlanClip(assetID: assetID, source: .video(0...3))]
         )
     }
 
@@ -34,7 +34,7 @@ final class EditStoreTests: XCTestCase {
     func testApplyDanglingAssetReferenceFails() {
         let initial = initialPlan()
         let store = EditStore(initial: initial)
-        let result = store.apply { $0.clips.append(PlanClip(assetID: UUID(), range: 0...1)) }
+        let result = store.apply { $0.clips.append(PlanClip(assetID: UUID(), source: .video(0...1))) }
         guard case .failure(let failure) = result else { return XCTFail("应失败") }
         XCTAssertEqual(failure.issues.map(\.path), ["clips[1].assetID"])
         XCTAssertEqual(store.plan, initial)
@@ -46,7 +46,7 @@ final class EditStoreTests: XCTestCase {
         let newAsset = AssetItem(kind: .video, fileName: "imported.mp4", duration: 6.0)
         let result = store.apply {
             $0.assets.append(newAsset)
-            $0.clips.append(PlanClip(assetID: newAsset.id, range: 0...6))
+            $0.clips.append(PlanClip(assetID: newAsset.id, source: .video(0...6)))
         }
         guard case .success = result else { return XCTFail("应成功") }
         XCTAssertEqual(store.plan.assets.count, 2)

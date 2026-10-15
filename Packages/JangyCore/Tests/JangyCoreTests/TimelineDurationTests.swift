@@ -8,7 +8,7 @@ final class TimelineDurationTests: XCTestCase {
 
     private func clip(_ range: ClosedRange<TimeInterval>, rate: Double = 1.0,
                       transition: PlanTransition? = nil) -> PlanClip {
-        PlanClip(assetID: UUID(), range: range, speed: .flat(rate), transitionAfter: transition)
+        PlanClip(assetID: UUID(), source: .video(range), speed: .flat(rate), transitionAfter: transition)
     }
 
     private func plan(_ clips: [PlanClip]) -> EditPlan {

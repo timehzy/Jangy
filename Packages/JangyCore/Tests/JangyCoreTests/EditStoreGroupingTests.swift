@@ -9,7 +9,7 @@ final class EditStoreGroupingTests: XCTestCase {
         let assetID = UUID(uuidString: "aaaaaaaa-0000-0000-0000-000000000001")!
         return EditPlan(
             assets: [AssetItem(id: assetID, kind: .video, fileName: "clip1.mp4", duration: 4.0)],
-            clips: [PlanClip(assetID: assetID, range: 0...3)]
+            clips: [PlanClip(assetID: assetID, source: .video(0...3))]
         )
     }
 
@@ -19,14 +19,14 @@ final class EditStoreGroupingTests: XCTestCase {
         store.beginGrouping()
         XCTAssertTrue(store.isGrouping)
         store.apply { $0.clips[0].speed = .flat(0.5) }
-        store.apply { $0.clips[0].range = 0...2 }
+        store.apply { $0.clips[0].source = .video(0...2) }
         XCTAssertEqual(store.historyCount, baselineCount, "组内 apply 不压栈")
         store.endGrouping()
         XCTAssertFalse(store.isGrouping)
         XCTAssertEqual(store.historyCount, baselineCount + 1, "整组只压一步")
         store.undo()
         XCTAssertEqual(store.plan.clips[0].speed, .flat(1.0), "一步撤销回退整组")
-        XCTAssertEqual(store.plan.clips[0].range, 0...3)
+        XCTAssertEqual(store.plan.clips[0].source, .video(0...3))
     }
 
     func testFailedApplyInsideGroupPushesNothing() {

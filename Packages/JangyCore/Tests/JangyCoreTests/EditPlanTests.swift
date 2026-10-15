@@ -17,11 +17,11 @@ final class EditPlanTests: XCTestCase {
             clips: [
                 PlanClip(id: UUID(uuidString: "11111111-1111-1111-1111-111111111111")!,
                          assetID: Self.videoID,
-                         range: 0...3, speed: .flat(1.0),
+                         source: .video(0...3), speed: .flat(1.0),
                          transitionAfter: .dissolve(duration: 0.5)),
                 PlanClip(id: UUID(uuidString: "22222222-2222-2222-2222-222222222222")!,
                          assetID: Self.videoID2,
-                         range: 0...3, speed: .flat(0.5),
+                         source: .video(0...3), speed: .flat(0.5),
                          transitionAfter: nil),
             ],
             captions: CaptionTrack(assetID: Self.srtID,
@@ -40,8 +40,8 @@ final class EditPlanTests: XCTestCase {
         XCTAssertEqual(decoded, plan)
     }
 
-    func testDefaultVersionIs2() {
-        XCTAssertEqual(makePlan().version, 2)
+    func testDefaultVersionIs3() {
+        XCTAssertEqual(makePlan().version, 3)
     }
 
     func testAssetLookup() {
@@ -76,7 +76,7 @@ final class EditPlanTests: XCTestCase {
         }
         """
         let plan = try JSONDecoder().decode(EditPlan.self, from: Data(json.utf8))
-        XCTAssertEqual(plan.version, 2)
+        XCTAssertEqual(plan.version, 3)
         XCTAssertEqual(plan.preset, .reelsAndShorts)
         XCTAssertNil(plan.captions)
         XCTAssertEqual(plan.assets.count, 1)
@@ -85,7 +85,7 @@ final class EditPlanTests: XCTestCase {
         XCTAssertNil(plan.assets[0].duration)
         XCTAssertEqual(plan.clips.count, 1)
         XCTAssertEqual(plan.clips[0].assetID, Self.videoID)
-        XCTAssertEqual(plan.clips[0].range, 0...3)
+        XCTAssertEqual(plan.clips[0].source, .video(0...3))
         XCTAssertEqual(plan.clips[0].speed, .flat(1.0))
         XCTAssertNil(plan.clips[0].transitionAfter)
     }
@@ -130,6 +130,37 @@ final class EditPlanTests: XCTestCase {
                                      from: Data("{\"type\":\"warp\",\"rate\":1}".utf8))
         ) { error in
             XCTAssertTrue(String(describing: error).contains("warp"))
+        }
+    }
+
+    func testPlanClipSourceWireFormat() throws {
+        struct Wrapper: Codable { var source: PlanClipSource }
+        let videoJSON = String(decoding: try JSONEncoder().encode(Wrapper(source: .video(0...3))), as: UTF8.self)
+        XCTAssertTrue(videoJSON.contains("\"type\":\"video\""), "got: \(videoJSON)")
+        XCTAssertTrue(videoJSON.contains("\"range\":[0,3]"), "got: \(videoJSON)")
+
+        let stillJSON = String(decoding: try JSONEncoder().encode(Wrapper(source: .still(duration: 2.5))), as: UTF8.self)
+        XCTAssertTrue(stillJSON.contains("\"type\":\"still\""), "got: \(stillJSON)")
+        XCTAssertTrue(stillJSON.contains("\"duration\":2.5"), "got: \(stillJSON)")
+
+        XCTAssertEqual(try JSONDecoder().decode(PlanClipSource.self,
+                                                from: Data(#"{"type":"still","duration":2.5}"#.utf8)),
+                       .still(duration: 2.5))
+    }
+
+    /// v2 旧 clip（只有 range）宽容解码为 .video(range)。
+    func testDecodesLegacyRangeField() throws {
+        let json = #"{"assetID":"aaaaaaaa-0000-0000-0000-000000000001","range":[1,2.5]}"#
+        let clip = try JSONDecoder().decode(PlanClip.self, from: Data(json.utf8))
+        XCTAssertEqual(clip.source, .video(1...2.5))
+    }
+
+    func testUnknownClipSourceTypeThrows() {
+        XCTAssertThrowsError(
+            try JSONDecoder().decode(PlanClipSource.self,
+                                     from: Data(#"{"type":"gif","duration":1}"#.utf8))
+        ) { error in
+            XCTAssertTrue(String(describing: error).contains("gif"))
         }
     }
 }

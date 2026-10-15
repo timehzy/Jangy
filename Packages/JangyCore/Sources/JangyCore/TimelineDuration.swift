@@ -9,8 +9,9 @@ import Foundation
 /// ≠ 渲染输出时长；预览/导出/UI 时长展示一律用这里的口径，不要重新发明求和。
 extension PlanClip {
     /// 片段在输出时间线上的时长 = 源区间长度 / 倍速。
+    /// 视频：源区间长 / 倍速；图片：基准时长 / 倍速（图片「变速」即改输出时长）。
     public var outputDuration: TimeInterval {
-        (range.upperBound - range.lowerBound) / speed.rate
+        source.length / speed.rate
     }
 }
 

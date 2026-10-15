@@ -21,7 +21,7 @@ final class EditPlanValidatorTests: XCTestCase {
                       speed: SpeedPlan = .flat(1.0),
                       transition: PlanTransition? = nil,
                       assetID: UUID? = nil) -> PlanClip {
-        PlanClip(assetID: assetID ?? videoID, range: range, speed: speed, transitionAfter: transition)
+        PlanClip(assetID: assetID ?? videoID, source: .video(range), speed: speed, transitionAfter: transition)
     }
 
     private func plan(clips: [PlanClip], assets: [AssetItem]? = nil,

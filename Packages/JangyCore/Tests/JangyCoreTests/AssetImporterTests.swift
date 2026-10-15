@@ -58,7 +58,7 @@ final class AssetImporterTests: XCTestCase {
         let importer = AssetImporter(directory: libraryDir)
         let item = try await importer.importVideo(from: source, origin: .photoLibrary)
         let plan = EditPlan(assets: [item],
-                            clips: [PlanClip(assetID: item.id, range: 0...(item.duration ?? 0))])
+                            clips: [PlanClip(assetID: item.id, source: .video(0...(item.duration ?? 0)))])
         XCTAssertTrue(EditPlanValidator().validate(plan).isEmpty)
         XCTAssertTrue(EditPlanValidator().validateAssets(plan, resolver: AssetResolver(directory: libraryDir)).isEmpty)
     }

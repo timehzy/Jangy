@@ -39,9 +39,9 @@ final class PreviewPlaybackTests: XCTestCase {
                           origin: .synthesized, duration: 4.0, pixelWidth: 1280, pixelHeight: 720, hasAudio: false),
             ],
             clips: [
-                PlanClip(assetID: SamplePlan.assetID1, range: 0...3,
+                PlanClip(assetID: SamplePlan.assetID1, source: .video(0...3),
                          transitionAfter: .dissolve(duration: 0.5)),
-                PlanClip(assetID: SamplePlan.assetID2, range: 0...3, speed: .flat(0.5)),
+                PlanClip(assetID: SamplePlan.assetID2, source: .video(0...3), speed: .flat(0.5)),
             ]
         )
 
@@ -83,9 +83,9 @@ final class PreviewPlaybackTests: XCTestCase {
                               origin: .synthesized, duration: 4.0, pixelWidth: 1080, pixelHeight: 1920, hasAudio: false),
                 ],
                 clips: [
-                    PlanClip(assetID: SamplePlan.assetID1, range: 0...3,
+                    PlanClip(assetID: SamplePlan.assetID1, source: .video(0...3),
                              transitionAfter: .dissolve(duration: 0.5)),
-                    PlanClip(assetID: secondClipAsset, range: 0...3),
+                    PlanClip(assetID: secondClipAsset, source: .video(0...3)),
                 ]
             )
         }
@@ -117,9 +117,9 @@ final class PreviewPlaybackTests: XCTestCase {
                           origin: .synthesized, duration: 4.0, pixelWidth: 1080, pixelHeight: 1920, hasAudio: false),
             ],
             clips: [
-                PlanClip(assetID: SamplePlan.assetID1, range: 0...3,
+                PlanClip(assetID: SamplePlan.assetID1, source: .video(0...3),
                          transitionAfter: .dissolve(duration: 0.5)),
-                PlanClip(assetID: tallID, range: 0...3),
+                PlanClip(assetID: tallID, source: .video(0...3)),
             ]
         )
 

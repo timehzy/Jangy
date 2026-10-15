@@ -92,7 +92,7 @@ public struct ProjectStore: Sendable {
     public static let metaFileName = "meta.json"
     public static let coverFileName = "cover.jpg"
     /// 当前支持的 EditPlan schema 版本（与 EditPlan.version 默认值一致）
-    public static let currentSchemaVersion = 2
+    public static let currentSchemaVersion = 3
 
     /// App 支持目录根（Application Support/Jangy）
     public let root: URL

@@ -142,7 +142,7 @@ public enum ProjectPackage {
         // 改写 plan 内全部引用
         plan.clips = plan.clips.map {
             PlanClip(id: $0.id, assetID: idMap[$0.assetID] ?? $0.assetID,
-                     range: $0.range, speed: $0.speed, transitionAfter: $0.transitionAfter)
+                     source: $0.source, speed: $0.speed, transitionAfter: $0.transitionAfter)
         }
         if let captions = plan.captions, let mapped = idMap[captions.assetID] {
             plan.captions = CaptionTrack(assetID: mapped, isEnabled: captions.isEnabled, style: captions.style)

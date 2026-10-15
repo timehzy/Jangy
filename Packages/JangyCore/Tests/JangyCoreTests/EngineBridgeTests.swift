@@ -67,7 +67,7 @@ final class EngineBridgeTests: XCTestCase {
         let assetID = UUID()
         let plan = EditPlan(
             assets: [AssetItem(id: assetID, kind: .video, fileName: "clip1.mp4", duration: 4.0)],
-            clips: [PlanClip(assetID: assetID, range: 0...3)]
+            clips: [PlanClip(assetID: assetID, source: .video(0...3))]
         )
         let video = try await EngineBridge.makeComposition(from: plan, resolver: resolver)
         XCTAssertEqual(video.clips.count, 1)

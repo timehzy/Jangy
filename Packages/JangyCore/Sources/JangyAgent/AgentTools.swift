@@ -186,7 +186,7 @@ struct AddClipTool: DefensiveAgentTool {
                     assetID = asset.id
                 }
                 let clip = PlanClip(assetID: assetID,
-                                    range: args.rangeStart...args.rangeEnd,
+                                    source: .video(args.rangeStart...args.rangeEnd),
                                     speed: .flat(rate))
                 plan.clips.append(clip)
             }
@@ -205,7 +205,7 @@ struct AddClipTool: DefensiveAgentTool {
 struct SplitClipTool: DefensiveAgentTool {
     let context: AgentRunContext
     let name = "split_clip"
-    let description = "在源区间内的指定时刻把片段切成两段。变速等片段属性两段都保留；原片段尾部转场归后半段。"
+    let description = "在片段内指定时刻把片段切成两段。变速等片段属性两段都保留；原片段尾部转场归后半段。视频按源区间时间切，图片按片段内已过时间切。"
 
     @Generable
     struct Args {
@@ -230,22 +230,44 @@ struct SplitClipTool: DefensiveAgentTool {
             case .failure(let error): return error.message
             }
             let clip = store.plan.clips[index]
-            guard args.at > clip.range.lowerBound, args.at < clip.range.upperBound else {
-                return ToolEnvelope.error("分割点 \(args.at) 须严格落在片段源区间 \(clip.range.lowerBound)–\(clip.range.upperBound) 内")
-            }
-            let secondID = UUID()
-            let result = store.apply { plan in
-                var first = plan.clips[index]
-                var second = plan.clips[index]
-                first.range = clip.range.lowerBound...args.at
-                first.transitionAfter = nil
-                second.id = secondID
-                second.range = args.at...clip.range.upperBound
-                plan.clips.replaceSubrange(index...index, with: [first, second])
-            }
-            return ToolEnvelope.applied(result) { plan in
-                Payload(firstClipID: args.clipID, secondClipID: secondID.uuidString,
-                        renderedDuration: plan.renderedDuration)
+            switch clip.source {
+            case .video(let range):
+                guard args.at > range.lowerBound, args.at < range.upperBound else {
+                    return ToolEnvelope.error("分割点 \(args.at) 须严格落在片段源区间 \(range.lowerBound)–\(range.upperBound) 内")
+                }
+                let secondID = UUID()
+                let result = store.apply { plan in
+                    var first = plan.clips[index]
+                    var second = plan.clips[index]
+                    first.source = .video(range.lowerBound...args.at)
+                    first.transitionAfter = nil
+                    second.id = secondID
+                    second.source = .video(args.at...range.upperBound)
+                    plan.clips.replaceSubrange(index...index, with: [first, second])
+                }
+                return ToolEnvelope.applied(result) { plan in
+                    Payload(firstClipID: args.clipID, secondClipID: secondID.uuidString,
+                            renderedDuration: plan.renderedDuration)
+                }
+            case .still(let duration):
+                // 图片无源区间：分割点按「片段内已过时间」解释，切成两段 still（倍率两段都保留）。
+                guard args.at > 0, args.at < duration else {
+                    return ToolEnvelope.error("分割点 \(args.at) 须严格落在图片时长 0–\(duration) 内")
+                }
+                let secondID = UUID()
+                let result = store.apply { plan in
+                    var first = plan.clips[index]
+                    var second = plan.clips[index]
+                    first.source = .still(duration: args.at)
+                    first.transitionAfter = nil
+                    second.id = secondID
+                    second.source = .still(duration: duration - args.at)
+                    plan.clips.replaceSubrange(index...index, with: [first, second])
+                }
+                return ToolEnvelope.applied(result) { plan in
+                    Payload(firstClipID: args.clipID, secondClipID: secondID.uuidString,
+                            renderedDuration: plan.renderedDuration)
+                }
             }
         }
     }
@@ -254,7 +276,7 @@ struct SplitClipTool: DefensiveAgentTool {
 struct TrimClipTool: DefensiveAgentTool {
     let context: AgentRunContext
     let name = "trim_clip"
-    let description = "修改片段的源区间（裁剪）。区间须在素材时长内且非空。"
+    let description = "修改片段时长。视频：改源区间（区间须在素材时长内且非空）；图片：以 rangeEnd − rangeStart 作为新时长。"
 
     @Generable
     struct Args {
@@ -283,7 +305,13 @@ struct TrimClipTool: DefensiveAgentTool {
             case .failure(let error): return error.message
             }
             let result = store.apply { plan in
-                plan.clips[index].range = args.rangeStart...args.rangeEnd
+                switch plan.clips[index].source {
+                case .video:
+                    plan.clips[index].source = .video(args.rangeStart...args.rangeEnd)
+                case .still:
+                    // 图片无源区间：以 rangeEnd − rangeStart 作为新基准时长。
+                    plan.clips[index].source = .still(duration: args.rangeEnd - args.rangeStart)
+                }
             }
             return ToolEnvelope.applied(result) { plan in
                 Payload(clipID: args.clipID, renderedDuration: plan.renderedDuration)

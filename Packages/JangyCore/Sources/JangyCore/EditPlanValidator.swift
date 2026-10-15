@@ -46,22 +46,38 @@ public struct EditPlanValidator: Sendable {
         }
 
         for (i, clip) in plan.clips.enumerated() {
-            // 素材引用必须落在登记表里，且时间线片段目前只接受视频素材
+            // 素材引用必须落在登记表里，且 source 与素材 kind 一致（视频↔video、图片↔image）
             let asset = plan.asset(withID: clip.assetID)
             if asset == nil {
                 issues.append(ValidationIssue(path: "clips[\(i)].assetID", message: "引用了未登记的素材: \(clip.assetID)"))
-            } else if asset!.kind != .video {
-                issues.append(ValidationIssue(path: "clips[\(i)].assetID", message: "时间线片段仅支持视频素材，实际为 \(asset!.kind.rawValue)"))
+            } else if let asset {
+                switch clip.source {
+                case .video where asset.kind != .video:
+                    issues.append(ValidationIssue(path: "clips[\(i)].assetID",
+                                                  message: "视频片段必须引用视频素材，实际为 \(asset.kind.rawValue)"))
+                case .still where asset.kind != .image:
+                    issues.append(ValidationIssue(path: "clips[\(i)].assetID",
+                                                  message: "图片片段必须引用图片素材，实际为 \(asset.kind.rawValue)"))
+                default:
+                    break
+                }
             }
 
-            if clip.range.lowerBound < 0 {
-                issues.append(ValidationIssue(path: "clips[\(i)].range", message: "裁剪起点不能为负"))
-            } else if clip.range.upperBound <= clip.range.lowerBound {
-                issues.append(ValidationIssue(path: "clips[\(i)].range", message: "裁剪区间不能为空"))
-            } else if let duration = asset?.duration,
-                      clip.range.upperBound > duration + Self.durationTolerance {
-                issues.append(ValidationIssue(path: "clips[\(i)].range",
-                                              message: "裁剪终点超出素材时长（\(duration)s）"))
+            switch clip.source {
+            case .video(let range):
+                if range.lowerBound < 0 {
+                    issues.append(ValidationIssue(path: "clips[\(i)].range", message: "裁剪起点不能为负"))
+                } else if range.upperBound <= range.lowerBound {
+                    issues.append(ValidationIssue(path: "clips[\(i)].range", message: "裁剪区间不能为空"))
+                } else if let duration = asset?.duration,
+                          range.upperBound > duration + Self.durationTolerance {
+                    issues.append(ValidationIssue(path: "clips[\(i)].range",
+                                                  message: "裁剪终点超出素材时长（\(duration)s）"))
+                }
+            case .still(let duration):
+                if duration <= 0 {
+                    issues.append(ValidationIssue(path: "clips[\(i)].source", message: "图片时长必须为正"))
+                }
             }
 
             if !Self.speedRange.contains(clip.speed.rate) {

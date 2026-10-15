@@ -124,9 +124,9 @@ final class AgentToolsTests: XCTestCase {
         let plan = await context.plan
         let clips = plan.clips
         XCTAssertEqual(clips.count, 4)
-        XCTAssertEqual(clips[0].range, 0...1.5)
+        XCTAssertEqual(clips[0].source, .video(0...1.5))
         XCTAssertNil(clips[0].transitionAfter, "前半段不再挂转场")
-        XCTAssertEqual(clips[1].range, 1.5...3)
+        XCTAssertEqual(clips[1].source, .video(1.5...3))
         XCTAssertEqual(clips[1].transitionAfter, .dissolve(duration: 0.5), "转场归后半段尾部")
         XCTAssertNotEqual(clips[1].id, clips[0].id)
     }
@@ -155,7 +155,7 @@ final class AgentToolsTests: XCTestCase {
             .call(parsed: .init(clipID: clip1, rangeStart: 1, rangeEnd: 2.5))
         XCTAssertEqual(try decodeEnvelope(result).status, "ok")
         let plan = await context.plan
-        XCTAssertEqual(plan.clips[0].range, 1...2.5)
+        XCTAssertEqual(plan.clips[0].source, .video(1...2.5))
         XCTAssertEqual(plan.renderedDuration, 8.0, accuracy: 0.001)
     }
 
@@ -165,7 +165,7 @@ final class AgentToolsTests: XCTestCase {
             .call(parsed: .init(clipID: clip1, rangeStart: 2, rangeEnd: 1))
         XCTAssertEqual(try decodeEnvelope(result).status, "error")
         let plan = await context.plan
-        XCTAssertEqual(plan.clips[0].range, 0...3, "失败不留痕")
+        XCTAssertEqual(plan.clips[0].source, .video(0...3), "失败不留痕")
     }
 
     func testMoveClipReorders() async throws {

@@ -88,8 +88,12 @@ struct TimelineView: View {
 
     private func toggleTrim(_ index: Int) {
         model.edit {
-            let clip = $0.clips[index]
-            $0.clips[index].range = clip.range.lowerBound == 0 ? 0.5...2.5 : 0...3
+            switch $0.clips[index].source {
+            case .video(let range):
+                $0.clips[index].source = .video(range.lowerBound == 0 ? 0.5...2.5 : 0...3)
+            case .still:
+                $0.clips[index].source = .still(duration: 2.0)
+            }
         }
     }
 

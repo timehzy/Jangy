@@ -90,28 +90,46 @@ final class AppModel {
     func undo() { store.undo(); afterPlanMutation() }
     func redo() { store.redo(); afterPlanMutation() }
 
-    /// 素材从素材库上轨：登记（若未登记）+ 全长追加片段，同一次 apply（公约 §3 单撤销步）。
-    /// duration 未探测的素材只登记不追加（range 无依据）。
+    /// 素材从素材库上轨：登记（若未登记）+ 追加片段，同一次 apply（公约 §3 单撤销步）。
+    /// 视频全长上轨（duration 未探测则不追加）；图片以默认时长上轨。
     func appendAssetToTimeline(_ item: AssetItem) {
         edit { plan in
             if plan.asset(withID: item.id) == nil {
                 plan.assets.append(item)
             }
-            if let duration = item.duration {
-                plan.clips.append(PlanClip(assetID: item.id, range: 0...duration))
+            switch item.kind {
+            case .image:
+                plan.clips.append(PlanClip(assetID: item.id, source: .still(duration: Self.defaultStillDuration)))
+            default:
+                if let duration = item.duration {
+                    plan.clips.append(PlanClip(assetID: item.id, source: .video(0...duration)))
+                }
             }
         }
     }
 
-    /// trim 后上轨：同上，但片段区间取 trim 结果。
+    /// trim 后上轨：片段区间取 trim 结果。
     func appendAssetToTimeline(_ item: AssetItem, range: ClosedRange<TimeInterval>) {
         edit { plan in
             if plan.asset(withID: item.id) == nil {
                 plan.assets.append(item)
             }
-            plan.clips.append(PlanClip(assetID: item.id, range: range))
+            plan.clips.append(PlanClip(assetID: item.id, source: .video(range)))
         }
     }
+
+    /// 图片上轨：以指定时长追加（预览页时长选择器）。
+    func appendImageToTimeline(_ item: AssetItem, duration: TimeInterval) {
+        edit { plan in
+            if plan.asset(withID: item.id) == nil {
+                plan.assets.append(item)
+            }
+            plan.clips.append(PlanClip(assetID: item.id, source: .still(duration: duration)))
+        }
+    }
+
+    /// 图片上轨默认时长（秒）。
+    static let defaultStillDuration: TimeInterval = 3.0
 
     /// 重命名当前项目（导航栏点击项目名）。
     func renameProject(to name: String) {

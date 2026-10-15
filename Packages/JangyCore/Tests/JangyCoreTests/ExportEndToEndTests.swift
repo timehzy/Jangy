@@ -192,7 +192,7 @@ final class ExportEndToEndTests: XCTestCase {
             let asset = AssetItem(kind: .video, fileName: spec.file, origin: .synthesized,
                                   duration: 4.0, pixelWidth: 1280, pixelHeight: 720, hasAudio: false)
             assets.append(asset)
-            planClips.append(PlanClip(assetID: asset.id, range: spec.range, speed: .flat(spec.speed)))
+            planClips.append(PlanClip(assetID: asset.id, source: .video(spec.range), speed: .flat(spec.speed)))
         }
         return EditPlan(assets: assets, clips: planClips)
     }

@@ -25,27 +25,15 @@ public enum EngineBridge {
         public var description: String { "素材未登记: \(assetID)" }
     }
 
+    /// 图片素材无法解码（损坏/非图片）。正常路径已被 EditPlanValidator 拦截。
+    public struct ImageDecodeError: Error, CustomStringConvertible {
+        public let assetID: UUID
+        public var description: String { "图片素材无法解码: \(assetID)" }
+    }
+
     /// - Parameter options: 导出配置（仅导出链路关心 SDR 降级；预览走默认 HDR 直通）。
     public static func makeComposition(from plan: EditPlan, resolver: AssetResolver,
                                        options: ExportOptions = .default) async throws -> Kadr.Video {
-        var elements: [any Kadr.Clip] = []
-        for clip in plan.clips {
-            guard let asset = plan.asset(withID: clip.assetID) else {
-                throw MissingAssetError(assetID: clip.assetID)
-            }
-            let sourceURL = resolver.resolve(asset)
-            var videoClip = Kadr.VideoClip(url: sourceURL)
-                .trimmed(to: clip.range)
-            // Kadr 1.x 校准：`speed(_:)` 只接受 Speed 枚举（Double 重载在 v0.14 被移除）。
-            if clip.speed.rate != 1.0 {
-                videoClip = videoClip.speed(.flat(clip.speed.rate))
-            }
-            elements.append(videoClip)
-            if let transition = clip.transitionAfter {
-                elements.append(kadrTransition(transition))
-            }
-        }
-
         // 显式映射而非静默丢弃：新增 OutputPreset case 时此处必须编译报错。
         let preset: Kadr.Preset
         switch plan.preset {
@@ -57,6 +45,34 @@ public enum EngineBridge {
                 // BT.709（POC 验证点③实测与 709 composition 路径产物逐像素一致）。
                 // 不用 .tiktok（同为 1080x1920@30 H.264）是刻意解耦语义档位名。
                 : .custom(width: 1080, height: 1920, frameRate: 30, codec: .h264)
+        }
+
+        var elements: [any Kadr.Clip] = []
+        for clip in plan.clips {
+            guard let asset = plan.asset(withID: clip.assetID) else {
+                throw MissingAssetError(assetID: clip.assetID)
+            }
+            let sourceURL = resolver.resolve(asset)
+            switch clip.source {
+            case .video(let range):
+                var videoClip = Kadr.VideoClip(url: sourceURL)
+                    .trimmed(to: range)
+                // Kadr 1.x 校准：`speed(_:)` 只接受 Speed 枚举（Double 重载在 v0.14 被移除）。
+                if clip.speed.rate != 1.0 {
+                    videoClip = videoClip.speed(.flat(clip.speed.rate))
+                }
+                elements.append(videoClip)
+            case .still(let duration):
+                // 图片无源区间：预合成到 preset 画幅（消除 Kadr 拉伸变形），
+                // 时长 = 基准 / 倍速（图片「变速」即改输出时长）。
+                guard let image = StillImagePreparer.prepare(url: sourceURL, canvas: preset.resolution) else {
+                    throw ImageDecodeError(assetID: clip.assetID)
+                }
+                elements.append(Kadr.ImageClip(image, duration: duration / clip.speed.rate))
+            }
+            if let transition = clip.transitionAfter {
+                elements.append(kadrTransition(transition))
+            }
         }
 
         // Kadr 1.x 校准：VideoBuilder 的 buildExpression 只接受单个 Clip，

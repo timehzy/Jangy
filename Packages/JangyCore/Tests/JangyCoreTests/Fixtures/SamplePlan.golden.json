@@ -53,10 +53,13 @@
     {
       "assetID" : "AAAAAAAA-0000-0000-0000-000000000001",
       "id" : "11111111-1111-1111-1111-111111111111",
-      "range" : [
-        0,
-        3
-      ],
+      "source" : {
+        "range" : [
+          0,
+          3
+        ],
+        "type" : "video"
+      },
       "speed" : {
         "rate" : 1,
         "type" : "flat"
@@ -69,10 +72,13 @@
     {
       "assetID" : "AAAAAAAA-0000-0000-0000-000000000002",
       "id" : "22222222-2222-2222-2222-222222222222",
-      "range" : [
-        0,
-        3
-      ],
+      "source" : {
+        "range" : [
+          0,
+          3
+        ],
+        "type" : "video"
+      },
       "speed" : {
         "rate" : 0.5,
         "type" : "flat"
@@ -81,10 +87,13 @@
     {
       "assetID" : "AAAAAAAA-0000-0000-0000-000000000003",
       "id" : "33333333-3333-3333-3333-333333333333",
-      "range" : [
-        0,
-        2
-      ],
+      "source" : {
+        "range" : [
+          0,
+          2
+        ],
+        "type" : "video"
+      },
       "speed" : {
         "rate" : 2,
         "type" : "flat"
@@ -92,5 +101,5 @@
     }
   ],
   "preset" : "reelsAndShorts",
-  "version" : 2
+  "version" : 3
 }

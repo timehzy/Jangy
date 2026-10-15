@@ -46,7 +46,7 @@ final class ProjectPackageTests: XCTestCase {
             plan.assets[index] = lib
         }
         plan.clips = plan.clips.map { PlanClip(id: $0.id, assetID: idMap[$0.assetID]!,
-                                               range: $0.range, speed: $0.speed,
+                                               source: $0.source, speed: $0.speed,
                                                transitionAfter: $0.transitionAfter) }
         if let captions = plan.captions {
             plan.captions = CaptionTrack(assetID: idMap[captions.assetID]!,
