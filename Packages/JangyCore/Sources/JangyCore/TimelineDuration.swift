@@ -10,9 +10,8 @@ import Foundation
 extension PlanClip {
     /// 片段在输出时间线上的时长 = 源区间长度 / 倍速。
     /// 视频：源区间长 / 倍速；图片：基准时长 / 倍速（图片「变速」即改输出时长）。
-    public var outputDuration: TimeInterval {
-        source.length / speed.rate
-    }
+    /// TrackElementPayload.duration 转发到这里——两者是同一个值，不是两处口径。
+    public var outputDuration: TimeInterval { duration }
 }
 
 extension PlanTransition {

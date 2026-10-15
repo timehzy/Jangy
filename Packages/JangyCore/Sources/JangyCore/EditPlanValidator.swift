@@ -4,9 +4,13 @@ import Foundation
 public struct ValidationIssue: Equatable, Sendable, Codable, CustomStringConvertible {
     public let path: String
     public let message: String
+    /// 出问题的元素 ID（可定位时）。Agent 用它做位置无关的引用——
+    /// 下标会随 plan 变动漂移，ID 不会。
+    public let elementID: UUID?
 
-    public init(path: String, message: String) {
+    public init(path: String, elementID: UUID? = nil, message: String) {
         self.path = path
+        self.elementID = elementID
         self.message = message
     }
 

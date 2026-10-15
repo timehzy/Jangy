@@ -88,9 +88,12 @@ public enum PlanClipSource: Codable, Equatable, Sendable {
     }
 }
 
-/// 时间线片段。转场挂在片段尾部（`transitionAfter`），与 Kadr DSL 中
-/// Transition 作为时间线一等元素的位置一一对应。
-public struct PlanClip: Codable, Equatable, Identifiable, Sendable {
+/// 视频轨的元素 payload。`type` 判别字段由 TrackPayload box 注入，这里不写。
+/// **`id` 本步仍在这里**——它要到后续 Task 才挪去 PlanElement（届时删掉字段与它的编解码）。
+/// 转场挂在片段尾部（`transitionAfter`），与 Kadr DSL 中 Transition 作为时间线一等元素的位置一一对应。
+public struct PlanClip: Codable, Equatable, Sendable, TrackElementPayload {
+    public static let payloadType = "clip"
+
     public var id: UUID
     /// 素材引用：指向 EditPlan.assets 中的条目（v2 起替代文件名直引）。
     public var assetID: UUID
@@ -107,6 +110,9 @@ public struct PlanClip: Codable, Equatable, Identifiable, Sendable {
         self.speed = speed
         self.transitionAfter = transitionAfter
     }
+
+    /// payload 时长 = 输出时长（源区间长 / 倍速）。
+    public var duration: TimeInterval { source.length / speed.rate }
 
     private enum CodingKeys: String, CodingKey {
         case id, assetID, source, speed, transitionAfter

@@ -5,9 +5,13 @@ import Foundation
 /// 若编解码器由 App 注册，CLI 解码带新轨类型的 plan 会直接失败。
 public enum TrackFeatureRegistry {
 
-    /// 生产特性清单。计算属性：无共享可变状态，因此不需要 nonisolated(unsafe)。
-    /// 加一类轨 = 这里加一行（如 `VideoFeature.self`）；本任务清单尚为空。
-    public static var features: [any TrackFeature.Type] { [] }
+    /// 生产特性清单。计算属性：无共享可变状态，因此不需要 nonisolated(unsafe) 豁免。
+    /// 加一类轨 = 这里加一行（如 `VideoFeature.self`）。
+    public static var features: [any TrackFeature.Type] {
+        [
+            VideoFeature.self,
+        ]
+    }
 
     /// 测试注入点：可插拔性验收用（后续任务）。生产路径永不写入。
     /// internal：仅 `@testable import` 可见，不进生产 API 面（可变全局不该暴露）。
