@@ -1454,7 +1454,7 @@ final class PlanMigrationTests: XCTestCase {
 
         let result = PlanMigration.migrate(legacy, assetsDirectory: dir)
         let captionTrack = result.tracks.first { $0.kind == .caption }
-        XCTAssertEqual(captionTrack?.elements.count, 2, "sample.srt 有两条 cue")
+        XCTAssertEqual(captionTrack?.elements.count, 3, "sample.srt 有三条 cue")
         XCTAssertEqual(captionTrack?.elements[0].at, 0, "cue 位置进 element.at")
         XCTAssertEqual(CaptionFeature.settings(of: captionTrack!).sourceAssetID,
                        SamplePlan.captionAssetID, "来源素材引用保留")
@@ -1969,16 +1969,21 @@ public enum PlanLoader {
                         tracks: [primary, captionTrack], primaryTrackID: primary.id)
     }
 
-    /// 与 AssetSynthesizer 产出的 sample.srt 一一对应。
-    /// 实现时读 `AssetSynthesizer.srtFileName` 的内容核对文案与时间点。
+    /// 与 `AssetSynthesizer.srtContent` **逐字一一对应**（3 条 cue）：
+    /// 0–2.5「第一段：开场」/ 3.0–7.5「第二段：慢动作」/ 8.0–9.0「第三段：收尾」。
+    /// **必须与 srtContent 完全一致**——`ExportEndToEndTests` 的像素断言锚在
+    /// 「t=1.0 有字幕、t=2.8 无字幕」上（2.8 落在 cue1 结束 2.5 与 cue2 开始 3.0 之间）。
     private static func captionElements() -> [PlanElement] {
         [
             PlanElement(id: UUID(uuidString: "66666666-6666-6666-6666-666666666666")!,
                         at: 0, content: .content(TrackPayload(
                             CaptionCuePayload(text: "第一段：开场", duration: 2.5)))),
             PlanElement(id: UUID(uuidString: "77777777-7777-7777-7777-777777777777")!,
-                        at: 2.5, content: .content(TrackPayload(
-                            CaptionCuePayload(text: "第二段：中景", duration: 2.5)))),
+                        at: 3.0, content: .content(TrackPayload(
+                            CaptionCuePayload(text: "第二段：慢动作", duration: 4.5)))),
+            PlanElement(id: UUID(uuidString: "88888888-8888-8888-8888-888888888888")!,
+                        at: 8.0, content: .content(TrackPayload(
+                            CaptionCuePayload(text: "第三段：收尾", duration: 1.0)))),
         ]
     }
 ```
