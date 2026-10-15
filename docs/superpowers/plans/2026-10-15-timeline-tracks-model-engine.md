@@ -2747,20 +2747,27 @@ public enum TrackOperations {
         // EditStore.apply 是唯一写入口，放这里任何编辑都绕不开。
         // 散到各工具 / UI 动作里就是「隐式约定散落多处，漏改一处就复发」——
         // 它已经复发过一次：trim/speed 让主轨变短却没人补 gap，带字幕工程上编辑静默失败。
-        TrackOperations.maintainInvariants(in: &next)
+        //
+        // **顺序不能反**：normalize 清掉悬空转场会「减少重叠」从而「增加」renderedDuration，
+        // 所以必须先归一化、再按最终结构补 gap。反过来会按「含转场的旧时长」算差额，
+        // 主轨被多补一个转场时长（实测算例：主轨 [A(3s, dissolve 0.5), B(3s)] + 字幕到 5.5s，
+        // 删 B 后先补 gap 再清转场 → 成片 6.0s，比预期的 5.5s 多出 0.5s 黑尾且不会自愈）。
         TrackOperations.normalizePayloads(in: &next)
+        TrackOperations.maintainInvariants(in: &next)
 
         let issues = validator.validate(next)
         guard issues.isEmpty else { return .failure(ValidationFailure(issues: issues)) }
-        if groupBase == nil { undoStack.push(next) }  // 组内不压栈，endGrouping 统一收
+        // 无变化的编辑不压栈（加了 normalize 之后，「给末位设转场」这类净变化为零的编辑
+        // 会压一个一模一样的快照，产生幽灵撤销步）
+        if groupBase == nil, next != plan { undoStack.push(next) }  // 组内不压栈，endGrouping 统一收
         plan = next
         return .success(next)
     }
 ```
 
-顺序不能反：`maintainInvariants` 可能补尾部 gap 改变 `renderedDuration`，`normalizePayloads` 要基于最终结构判断。
-
-再补一条**回归测试**（这条路径现在零覆盖）：带字幕工程 + 缩短主轨的编辑 → `apply` 成功、主轨自动补了尾部 gap、`renderedDuration` 等于字幕轨末端。
+再补两条**回归测试**：
+1. 带字幕工程 + 缩短主轨的编辑 → `apply` 成功、主轨自动补尾部 gap、`renderedDuration` 等于字幕轨末端
+2. 带字幕工程 + **删除末位片段且新末位挂着转场** → `renderedDuration` **恰好**等于字幕轨末端（钉住顺序，不多不少）
 
 - [ ] **Step 5: 运行确认通过**
 
