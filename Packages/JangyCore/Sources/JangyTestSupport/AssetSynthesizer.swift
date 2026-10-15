@@ -1,14 +1,17 @@
 import AVFoundation
 import CoreGraphics
+import ImageIO
 import JangyCore
+import UniformTypeIdentifiers
 
-/// 用 AVAssetWriter 合成确定性测试素材：三段 4 秒纯色 720p 视频 + 一份 SRT。
+/// 用 AVAssetWriter 合成确定性测试素材：三段 4 秒纯色 720p 视频 + 一份 SRT + 一张纯色 PNG 测试图。
 /// 无二进制资产进 git，CI/真机/CLI 随时可再生成。幂等：已存在则跳过。
 /// 仅测试与 CLI 使用（JangyTestSupport），不进 App 产物。
 public enum AssetSynthesizer {
 
     public static let clipFileNames = ["clip1.mp4", "clip2.mp4", "clip3.mp4"]
     public static let srtFileName = "sample.srt"
+    public static let imageFileName = "still.png"
 
     /// SRT 时间轴按 sample 工程的合成时间轴编写（clip1 3s@1x + 转场 0.5s + clip2 3s@0.5x=6s + clip3 2s@2x=1s）。
     static let srtContent = """
@@ -44,7 +47,29 @@ public enum AssetSynthesizer {
         if !FileManager.default.fileExists(atPath: srtURL.path) {
             try srtContent.write(to: srtURL, atomically: true, encoding: .utf8)
         }
+        let imageURL = directory.appendingPathComponent(imageFileName)
+        if !FileManager.default.fileExists(atPath: imageURL.path) {
+            try writeSolidColorImage(to: imageURL, color: CGColor(red: 0.95, green: 0.85, blue: 0.1, alpha: 1),
+                                     width: 640, height: 360)
+        }
         return AssetResolver(directory: directory)
+    }
+
+    /// 合成纯色 PNG 测试图（16:9，非 preset 画幅——用于验证 letterbox 无变形）。
+    static func writeSolidColorImage(to url: URL, color: CGColor, width: Int, height: Int) throws {
+        let ctx = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8,
+                            bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
+                            bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue)!
+        ctx.setFillColor(color)
+        ctx.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        guard let cgImage = ctx.makeImage(),
+              let dest = CGImageDestinationCreateWithURL(url as CFURL, UTType.png.identifier as CFString, 1, nil) else {
+            throw NSError(domain: "AssetSynthesizer", code: 2, userInfo: [NSLocalizedDescriptionKey: "图片合成失败"])
+        }
+        CGImageDestinationAddImage(dest, cgImage, nil)
+        guard CGImageDestinationFinalize(dest) else {
+            throw NSError(domain: "AssetSynthesizer", code: 3, userInfo: [NSLocalizedDescriptionKey: "图片写入失败"])
+        }
     }
 
     /// 合成单个纯色视频。internal 供测试用（@testable）：回归测试需要非默认尺寸素材

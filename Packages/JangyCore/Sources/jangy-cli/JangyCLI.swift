@@ -68,7 +68,7 @@ struct GenAssets: AsyncParsableCommand {
         let resolver = try AssetSynthesizer.synthesize(into: URL(fileURLWithPath: to))
         struct Result: Encodable { let directory: String; let files: [String] }
         try JSONLines.print(Result(directory: resolver.directory.path,
-                                   files: AssetSynthesizer.clipFileNames + [AssetSynthesizer.srtFileName]))
+                                   files: AssetSynthesizer.clipFileNames + [AssetSynthesizer.srtFileName, AssetSynthesizer.imageFileName]))
     }
 }
 
