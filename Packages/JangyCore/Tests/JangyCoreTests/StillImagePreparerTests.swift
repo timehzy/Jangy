@@ -69,6 +69,20 @@ final class StillImagePreparerTests: XCTestCase {
         XCTAssertLessThan(bottom.r, 30)
     }
 
+    func testPillarboxesTallImageWithBlackBars() throws {
+        // 100×200（1:2）纯红竖图 → 画布 1080×1920（9:16）。
+        // aspect-fit：贴满高 → 宽 = 1920/2 = 960，居中于 x∈[60,1020]，左右为黑边。
+        let url = try makePNG(width: 100, height: 200, color: CGColor(red: 1, green: 0, blue: 0, alpha: 1))
+        let cg = try XCTUnwrap(StillImagePreparer.prepareCGImage(url: url, canvas: CGSize(width: 1080, height: 1920)))
+        let center = pixel(cg, x: 540, y: 960)
+        XCTAssertGreaterThan(center.r, 200)
+        XCTAssertLessThan(center.g, 60)
+        let left = pixel(cg, x: 20, y: 960)
+        XCTAssertLessThan(left.r, 30)
+        let right = pixel(cg, x: 1060, y: 960)
+        XCTAssertLessThan(right.r, 30)
+    }
+
     func testCanvasSizedImageFillsEntireFrame() throws {
         // 输入恰好等于画布宽高比：不留黑边（整帧红）。
         let url = try makePNG(width: 108, height: 192, color: CGColor(red: 1, green: 0, blue: 0, alpha: 1))
