@@ -54,7 +54,7 @@ final class EditPlanValidatorTests: XCTestCase {
 
     func testRangeBeyondAssetDuration() {
         // 素材 4s，裁剪到 5s 越界；容差内（4.04s）放行
-        XCTAssertEqual(validator.validate(plan(clips: [clip(0...5)])).map(\.path), ["clips[0].range"])
+        XCTAssertEqual(validator.validate(plan(clips: [clip(0...5)])).map(\.path), ["clips[0].source.range"])
         XCTAssertTrue(validator.validate(plan(clips: [clip(0...4.04)])).isEmpty)
     }
 
@@ -72,12 +72,12 @@ final class EditPlanValidatorTests: XCTestCase {
 
     func testNegativeRangeStart() {
         let issues = validator.validate(plan(clips: [clip(-1...3)]))
-        XCTAssertEqual(issues.map(\.path), ["clips[0].range"])
+        XCTAssertEqual(issues.map(\.path), ["clips[0].source.range"])
     }
 
     func testEmptyRange() {
         let issues = validator.validate(plan(clips: [clip(2...2)]))
-        XCTAssertEqual(issues.map(\.path), ["clips[0].range"])
+        XCTAssertEqual(issues.map(\.path), ["clips[0].source.range"])
     }
 
     func testSpeedOutOfBounds() {
@@ -143,5 +143,42 @@ final class EditPlanValidatorTests: XCTestCase {
         // 登记表 3 条目中 clip2.mp4 / sample.srt 未落盘
         let issues = validator.validateAssets(plan(clips: [clip()]), resolver: resolver)
         XCTAssertEqual(issues.map(\.path), ["assets[1].fileName", "assets[2].fileName"])
+    }
+
+    func testStillClipIsValid() {
+        let imageID = UUID()
+        let table = [AssetItem(id: imageID, kind: .image, fileName: "p.png")]
+        let clip = PlanClip(assetID: imageID, source: .still(duration: 3.0))
+        XCTAssertTrue(validator.validate(plan(clips: [clip], assets: table)).isEmpty)
+    }
+
+    func testStillClipRejectsNonImageAsset() {
+        // still 片段引用视频素材 → source 与 kind 不一致
+        let clip = PlanClip(assetID: videoID, source: .still(duration: 3.0))
+        XCTAssertEqual(validator.validate(plan(clips: [clip])).map(\.path), ["clips[0].assetID"])
+    }
+
+    func testVideoClipRejectsImageAsset() {
+        let imageID = UUID()
+        let table = [AssetItem(id: imageID, kind: .image, fileName: "p.png")]
+        let clip = PlanClip(assetID: imageID, source: .video(0...3))
+        XCTAssertEqual(validator.validate(plan(clips: [clip], assets: table)).map(\.path), ["clips[0].assetID"])
+    }
+
+    func testStillDurationMustBePositive() {
+        let imageID = UUID()
+        let table = [AssetItem(id: imageID, kind: .image, fileName: "p.png")]
+        let clip = PlanClip(assetID: imageID, source: .still(duration: 0))
+        XCTAssertEqual(validator.validate(plan(clips: [clip], assets: table)).map(\.path), ["clips[0].source.duration"])
+    }
+
+    func testStillClipWithTransitionIsValid() {
+        let imageID = UUID()
+        let table = [AssetItem(id: imageID, kind: .image, fileName: "p.png")]
+        let clips = [
+            PlanClip(assetID: imageID, source: .still(duration: 3.0), transitionAfter: .dissolve(duration: 0.5)),
+            PlanClip(assetID: imageID, source: .still(duration: 3.0)),
+        ]
+        XCTAssertTrue(validator.validate(plan(clips: clips, assets: table)).isEmpty)
     }
 }

@@ -107,7 +107,7 @@ final class AgentToolsTests: XCTestCase {
             .call(parsed: .init(fileName: "clip1.mp4", rangeStart: 0, rangeEnd: 99, speed: nil))
         let envelope = try decodeEnvelope(result)
         XCTAssertEqual(envelope.status, "error")
-        XCTAssertTrue(envelope.issues?.contains { $0.path == "clips[3].range" } == true)
+        XCTAssertTrue(envelope.issues?.contains { $0.path == "clips[3].source.range" } == true)
         let plan = await context.plan
         XCTAssertEqual(plan.clips.count, 3, "校验失败不落 plan")
     }

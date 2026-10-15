@@ -163,4 +163,15 @@ final class EditPlanTests: XCTestCase {
             XCTAssertTrue(String(describing: error).contains("gif"))
         }
     }
+
+    func testRoundTripWithStillClip() throws {
+        let imageID = UUID()
+        let plan = EditPlan(
+            assets: [AssetItem(id: imageID, kind: .image, fileName: "p.png", pixelWidth: 100, pixelHeight: 100)],
+            clips: [PlanClip(assetID: imageID, source: .still(duration: 2.5))])
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let decoded = try JSONDecoder().decode(EditPlan.self, from: encoder.encode(plan))
+        XCTAssertEqual(decoded, plan)
+    }
 }

@@ -205,13 +205,13 @@ struct AddClipTool: DefensiveAgentTool {
 struct SplitClipTool: DefensiveAgentTool {
     let context: AgentRunContext
     let name = "split_clip"
-    let description = "在片段内指定时刻把片段切成两段。变速等片段属性两段都保留；原片段尾部转场归后半段。视频按源区间时间切，图片按片段内已过时间切。"
+    let description = "在片段内指定时刻把片段切成两段。变速等片段属性两段都保留；原片段尾部转场归后半段。视频按源区间时间切，图片按基准时长切。"
 
     @Generable
     struct Args {
         @Guide(description: "片段 ID（get_plan 返回的 clip id）")
         let clipID: String
-        @Guide(description: "分割点（秒，相对素材自身时间轴，须严格落在片段源区间内部）")
+        @Guide(description: "分割点（秒）。视频为源区间内时刻，图片为片段基准时长内时刻；须严格落在区间内部")
         let at: Double
     }
 

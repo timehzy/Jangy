@@ -100,10 +100,12 @@ final class AppModel {
             switch item.kind {
             case .image:
                 plan.clips.append(PlanClip(assetID: item.id, source: .still(duration: Self.defaultStillDuration)))
-            default:
+            case .video:
                 if let duration = item.duration {
                     plan.clips.append(PlanClip(assetID: item.id, source: .video(0...duration)))
                 }
+            case .audio, .subtitle:
+                break
             }
         }
     }

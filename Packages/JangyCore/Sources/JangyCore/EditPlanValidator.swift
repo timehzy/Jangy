@@ -66,17 +66,17 @@ public struct EditPlanValidator: Sendable {
             switch clip.source {
             case .video(let range):
                 if range.lowerBound < 0 {
-                    issues.append(ValidationIssue(path: "clips[\(i)].range", message: "裁剪起点不能为负"))
+                    issues.append(ValidationIssue(path: "clips[\(i)].source.range", message: "裁剪起点不能为负"))
                 } else if range.upperBound <= range.lowerBound {
-                    issues.append(ValidationIssue(path: "clips[\(i)].range", message: "裁剪区间不能为空"))
+                    issues.append(ValidationIssue(path: "clips[\(i)].source.range", message: "裁剪区间不能为空"))
                 } else if let duration = asset?.duration,
                           range.upperBound > duration + Self.durationTolerance {
-                    issues.append(ValidationIssue(path: "clips[\(i)].range",
+                    issues.append(ValidationIssue(path: "clips[\(i)].source.range",
                                                   message: "裁剪终点超出素材时长（\(duration)s）"))
                 }
             case .still(let duration):
                 if duration <= 0 {
-                    issues.append(ValidationIssue(path: "clips[\(i)].source", message: "图片时长必须为正"))
+                    issues.append(ValidationIssue(path: "clips[\(i)].source.duration", message: "图片时长必须为正"))
                 }
             }
 
