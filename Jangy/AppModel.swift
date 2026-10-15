@@ -195,6 +195,18 @@ final class AppModel {
 }
 
 /// 预览播放器：plan 变化 → PreviewBridge 重建 playerItem；周期性时间观察驱动字幕叠加层。
+///
+/// **播放状态模型（本类的健壮性核心，改这里之前先读完）**：
+/// - 意图 = `wantsPlaying && isPageActive`，由 `applyDesired()` 单点收敛到 AVPlayer。
+///   任何「谁该在播」的判断都只经这一处，不再散落成入口快照 / rate 推断 / 跨页标记各一份。
+/// - `wantsPlaying`：用户是否希望它在播，跨页保留。只在**能读到真实播放状态**时同步
+///   （页面在前台时的旧实例 `rate`、离开页面那一刻的 `rate`）——不靠跨 await 的快照。
+/// - `isPageActive`：剪辑页是否在前台，由 onAppear/onDisappear 驱动，**初始 false**。
+///   播放起点是「页面出现」而不是「模型构造」：AppModel 在点击项目卡时就先行构造
+///   （见 ProjectListView.openProject），构造即起播会让任何未真正进入剪辑页的构造
+///   留下没人停的孤儿播放。
+/// - `player` 的唯一写入点是 `install(_:)`：它同步停掉被替换实例再按意图收敛，
+///   结构上杜绝「旧实例继续出声」。**不要在别处给 `player` 赋值。**
 @MainActor
 @Observable
 final class PlayerController {
@@ -206,8 +218,10 @@ final class PlayerController {
     private var rebuildTask: Task<Void, Never>?
     private let store: EditStore
     private let resolver: AssetResolver
-    /// 页面离开（pause）时正在播放 → 记录恢复意图，由 resumeIfNeeded 在返回时消费
-    private var wantsResume = false
+    /// 用户是否希望预览在播（跨页保留，见类注释）
+    private var wantsPlaying = true   // 首次装载视为自动播放
+    /// 剪辑页是否在前台（见类注释）
+    private var isPageActive = false
 
     init(store: EditStore, resolver: AssetResolver) {
         self.store = store
@@ -215,50 +229,57 @@ final class PlayerController {
         rebuild()
     }
 
-    /// 剪辑页离开（push 素材库等）时调用：立即停声，避免下层页继续放音。
-    /// 若离开时正在播放，记录恢复意图——返回剪辑页时 resumeIfNeeded 续播。
-    func pause() {
-        if let player, player.rate > 0 {
-            wantsResume = true
-            player.pause()
-        }
+    // MARK: 页面生命周期（剪辑页 onAppear / onDisappear 驱动）
+
+    /// 剪辑页出现（首次进入 / 从素材库等返回）：恢复播放意图。
+    func pageDidAppear() {
+        isPageActive = true
+        applyDesired()
     }
 
-    /// 剪辑页返回时调用：消费恢复意图（若有）继续播放
-    func resumeIfNeeded() {
-        if wantsResume {
-            wantsResume = false
-            player?.play()
+    /// 剪辑页离开（push 素材库 / 返回项目列表）：立即停声，并记下此刻的播放意图供返回时恢复。
+    func pageDidDisappear() {
+        if let player { wantsPlaying = player.rate > 0 }   // 尚无实例（未装载完）时保留原意图
+        isPageActive = false
+        applyDesired()
+    }
+
+    /// 单点收敛：把意图落到当前实例上。
+    private func applyDesired() {
+        guard let player else { return }
+        if wantsPlaying && isPageActive { player.play() } else { player.pause() }
+    }
+
+    /// `player` 的唯一安装点（连同与实例绑定的轮询 Task 一起换）：先按旧实例此刻的播放状态
+    /// 同步意图（仅页面在前台时可信——不在前台时旧实例是被我们自己停的），再同步停掉旧实例
+    /// 与其轮询，最后按意图收敛新实例。
+    private func install(_ newPlayer: AVPlayer) {
+        if isPageActive, let old = player { wantsPlaying = old.rate > 0 }
+        player?.pause()
+        timePollingTask?.cancel()
+        player = newPlayer
+        // 轮询 Task 弱捕获 player：Task 若因任何原因未被取消（如控制器被整体丢弃），
+        // 也不会把旧 player 钉在内存里继续出声。
+        // @MainActor Task 闭包与 self 同属 MainActor 隔离域，捕获非 Sendable 值合法。
+        timePollingTask = Task { @MainActor [weak self, weak newPlayer] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(100))
+                guard let self, let newPlayer, !Task.isCancelled else { return }
+                self.currentTime = newPlayer.currentTime().seconds
+            }
         }
+        applyDesired()
     }
 
     func rebuild() {
         rebuildTask?.cancel()
-        // 换 player 前同步停掉旧的：旧实例的回收依赖 dealloc（时机不受控），
-        // 不主动 pause 就会出现「界面无播放器却有声音」的孤儿播放。
-        let wasPlaying = player.map { $0.rate > 0 } ?? true  // 首次装载视为自动播放
-        player?.pause()
-        timePollingTask?.cancel()
         rebuildTask = Task { @MainActor in
             guard !Task.isCancelled else { return }
             guard let package = try? await PreviewBridge.makePreview(for: store.plan, resolver: resolver) else { return }
             // 重建竞态防护：await 期间可能已被下一次 rebuild 取消，此时不得安装过期 player。
             guard !Task.isCancelled else { return }
-            let newPlayer = AVPlayer(playerItem: package.playerItem)
-            // 轮询 Task 弱捕获 player：Task 若因任何原因未被取消（如控制器被整体丢弃），
-            // 也不会把旧 player 钉在内存里继续出声。
-            // @MainActor Task 闭包与 self 同属 MainActor 隔离域，捕获非 Sendable 值合法。
-            timePollingTask = Task { @MainActor [weak self, weak newPlayer] in
-                while !Task.isCancelled {
-                    try? await Task.sleep(for: .milliseconds(100))
-                    guard let self, let newPlayer, !Task.isCancelled else { return }
-                    self.currentTime = newPlayer.currentTime().seconds
-                }
-            }
-            player = newPlayer
             cues = package.cues
-            // 保留播放状态：编辑前已暂停/播完，则新 player 不自动出声
-            if wasPlaying { newPlayer.play() }
+            install(AVPlayer(playerItem: package.playerItem))
         }
     }
 

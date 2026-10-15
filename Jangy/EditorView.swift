@@ -81,14 +81,14 @@ struct EditorView: View {
                 }
             }
         }
-        // 返回剪辑页：消费恢复意图（离开时在播则续播）；同时建立素材库上轨语境
+        // 剪辑页出现（首次进入 / 从素材库等返回）：恢复播放意图；同时建立素材库上轨语境
         .onAppear {
-            model.player.resumeIfNeeded()
+            model.player.pageDidAppear()
             libraryModel.attachedEditor = model
         }
         // 离开剪辑页（push 素材库 / 返回项目列表）：先停预览声音并刷新封面
         .onDisappear {
-            model.player.pause()
+            model.player.pageDidDisappear()
             model.updateCover()
         }
         .navigationDestination(isPresented: $showLibrary) {

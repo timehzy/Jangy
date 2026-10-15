@@ -50,6 +50,7 @@ xcodebuild -project Jangy.xcodeproj -scheme Jangy \
 
 架构与工程约束不在此复述，见 [架构公约](docs/architecture-covenant.md)。本节只留协作流程约定：
 
+- **修 bug 优先结构性修复**：复发过的问题不要只按住当前症状，先归因到「哪条不变式被破坏、它现在有几个落点」，再把落点收成一个（唯一写入点 / 单点收敛），让绕开它变得不可能——散落在多处的隐式约定（快照、标记、推断各一份）漏改一处就会复发。文档侧同步把约束写成结构规则，而非散点要求
 - **提交信息用中文**，风格参照 `git log`（如 `App: 导出改为写入系统相册（…）`）；代码注释同样用中文
 - **生成产物入库**：App 产物目录是 `.gitignore` 的；`Packages/JangyCore/.gitignore` 忽略 `.build/` 与 `TestArtifacts/`（e2e 抽帧核对图不入库）
 
