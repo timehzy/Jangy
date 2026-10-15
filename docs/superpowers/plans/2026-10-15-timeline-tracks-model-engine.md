@@ -1478,6 +1478,97 @@ final class PlanMigrationTests: XCTestCase {
         XCTAssertEqual(result.tracks.count, 2)
         XCTAssertEqual(result.tracks.first { $0.kind == .caption }?.elements.count, 0)
     }
+
+    func testHealthyMigrationProducesNoNotices() throws {
+        let legacy = try JSONDecoder().decode(LegacyPlanV3.self, from: try fixtureData())
+        let dir = try assetsDirectory(withAssets: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        XCTAssertTrue(PlanMigration.migrate(legacy, assetsDirectory: dir).notices.isEmpty)
+    }
+
+    func testReportsSkippedCaptionBlocks() throws {
+        // 坏块跳过是刻意的宽容策略，但「跳过了多少」必须能被调用方看见
+        let legacy = try JSONDecoder().decode(LegacyPlanV3.self, from: try fixtureData())
+        let dir = try assetsDirectory(withAssets: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let srt = "garbage without timeline\n\n1\n00:00:01,000 --> 00:00:02,000\n有效\n\n"
+        try srt.write(to: dir.appendingPathComponent("sample.srt"), atomically: true, encoding: .utf8)
+
+        let result = PlanMigration.migrate(legacy, assetsDirectory: dir)
+        XCTAssertEqual(result.notices, [.captionBlocksSkipped(assetID: SamplePlan.captionAssetID, count: 1)])
+    }
+
+    func testReportsUnreadableCaptionSource() throws {
+        // 文件不存在 → 读不出来 → 留空轨 + notice（不得静默丢）
+        let legacy = try JSONDecoder().decode(LegacyPlanV3.self, from: try fixtureData())
+        let dir = try assetsDirectory(withAssets: false)   // 素材目录是空的
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let result = PlanMigration.migrate(legacy, assetsDirectory: dir)
+        XCTAssertEqual(result.notices, [.captionSourceUnreadable(assetID: SamplePlan.captionAssetID)])
+        XCTAssertEqual(result.tracks.first { $0.kind == .caption }?.elements.count, 0)
+    }
+
+    func testFallsBackToCP1252Encoding() throws {
+        // 与旧路径（KadrCaptions）一致的编码回落：UTF-8 读不出时试 windowsCP1252。
+        // 'é' 的 CP1252 字节 0xE9 单独出现不是合法 UTF-8 序列。
+        let legacy = try JSONDecoder().decode(LegacyPlanV3.self, from: try fixtureData())
+        let dir = try assetsDirectory(withAssets: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let srt = "1\n00:00:01,000 --> 00:00:02,000\ncaf\u{00E9}\n\n"
+        try srt.write(to: dir.appendingPathComponent("sample.srt"),
+                      atomically: true, encoding: .windowsCP1252)
+
+        let result = PlanMigration.migrate(legacy, assetsDirectory: dir)
+        XCTAssertEqual(result.tracks.first { $0.kind == .caption }?.elements.count, 1,
+                       "CP1252 编码的 SRT 应能展开（编码回落不能倒退）")
+        XCTAssertTrue(result.notices.isEmpty)
+    }
+
+    func testMigratesV2RangeFallback() throws {
+        // fixture 全是 source，v2 的 range 回落分支要用手写 JSON 覆盖
+        let json = """
+        {"version":2,"assets":[{"id":"aaaaaaaa-0000-0000-0000-000000000001","kind":"video",
+        "fileName":"clip1.mp4","origin":"synthesized","duration":4}],
+        "clips":[{"id":"11111111-1111-1111-1111-111111111111",
+        "assetID":"aaaaaaaa-0000-0000-0000-000000000001","range":[0,3]}]}
+        """.data(using: .utf8)!
+        let legacy = try JSONDecoder().decode(LegacyPlanV3.self, from: json)
+
+        let result = PlanMigration.migrate(legacy, assetsDirectory: nil)
+        XCTAssertEqual(result.tracks[0].elements.count, 1)
+        XCTAssertEqual(result.tracks[0].elements[0].duration, 3, accuracy: 0.001,
+                       "v2 的 range 应回落到 .video(range)")
+    }
+
+    func testMigratesStillClip() throws {
+        let json = """
+        {"version":3,"assets":[{"id":"aaaaaaaa-0000-0000-0000-000000000001","kind":"image",
+        "fileName":"a.png","origin":"synthesized"}],
+        "clips":[{"id":"11111111-1111-1111-1111-111111111111",
+        "assetID":"aaaaaaaa-0000-0000-0000-000000000001","source":{"type":"still","duration":3}}]}
+        """.data(using: .utf8)!
+        let legacy = try JSONDecoder().decode(LegacyPlanV3.self, from: json)
+
+        let result = PlanMigration.migrate(legacy, assetsDirectory: nil)
+        XCTAssertEqual(result.tracks[0].elements[0].duration, 3, accuracy: 0.001)
+    }
+
+    func testReportsClipMissingSource() throws {
+        // 既无 source 也无 range：丢弃元素 + notice，**不回落成 .video(0...0) 零长度畸形片段**
+        let json = """
+        {"version":3,"assets":[{"id":"aaaaaaaa-0000-0000-0000-000000000001","kind":"video",
+        "fileName":"clip1.mp4","origin":"synthesized","duration":4}],
+        "clips":[{"id":"11111111-1111-1111-1111-111111111111",
+        "assetID":"aaaaaaaa-0000-0000-0000-000000000001"}]}
+        """.data(using: .utf8)!
+        let legacy = try JSONDecoder().decode(LegacyPlanV3.self, from: json)
+
+        let result = PlanMigration.migrate(legacy, assetsDirectory: nil)
+        XCTAssertTrue(result.tracks[0].elements.isEmpty, "无法还原的片段应被丢弃而不是造零长度片段")
+        XCTAssertEqual(result.notices,
+                       [.clipSourceMissing(clipID: UUID(uuidString: "11111111-1111-1111-1111-111111111111")!)])
+    }
 }
 ```
 
@@ -1522,62 +1613,116 @@ struct LegacyPlanV3: Decodable {
     }
 }
 
+/// 迁移期的数据问题。**必须能被调用方看见**——迁移是静默发生的，
+/// 丢掉的字幕如果没人报，用户只会看到字幕莫名变少。
+/// 公开类型：Task 6 的 ProjectStore / App 与 CLI 都要消费它。
+public enum MigrationNotice: Equatable, Sendable, CustomStringConvertible {
+    /// 字幕来源文件读不出来（缺失 / 编码不支持）。字幕轨会留空。
+    case captionSourceUnreadable(assetID: UUID)
+    /// 字幕来源里有些块解析不出来，被跳过了。
+    case captionBlocksSkipped(assetID: UUID, count: Int)
+    /// 片段既没有 source 也没有旧 range，无法还原，已丢弃。
+    case clipSourceMissing(clipID: UUID)
+
+    public var description: String {
+        switch self {
+        case .captionSourceUnreadable(let id):
+            return "字幕来源文件读不出来，字幕未迁移（素材 \(id.uuidString.prefix(8))）"
+        case .captionBlocksSkipped(let id, let count):
+            return "字幕有 \(count) 条无法解析、已跳过（素材 \(id.uuidString.prefix(8))）"
+        case .clipSourceMissing(let id):
+            return "片段 \(id.uuidString.prefix(8)) 缺少源区间，已丢弃"
+        }
+    }
+}
+
 /// 迁移产物：只含轨道与素材，不含 EditPlan（Task 6 才引入 v4 的 EditPlan）。
 struct MigratedPlanParts {
     var assets: [AssetItem]
     var tracks: [PlanTrack]
     var primaryTrackID: UUID
     var preset: OutputPreset
+    /// 迁移期的问题。调用方（Task 6 的 ProjectStore / App）负责并进工程完整性报告，
+    /// **不得静默丢弃**。
+    var notices: [MigrationNotice] = []
 }
 
 /// v3 → v4：扁平 clips → 单主轨；整片 captions → 绝对定位字幕轨。
 enum PlanMigration {
 
     static func migrate(_ legacy: LegacyPlanV3, assetsDirectory: URL?) -> MigratedPlanParts {
-        let primary = PlanTrack(kind: .video, placement: .chained,
-                                elements: legacy.clips.map { clip in
-            PlanElement(id: clip.id ?? UUID(),
-                        content: .content(TrackPayload(PlanClip(
-                            assetID: clip.assetID,
-                            source: clip.source ?? clip.range.map { .video($0) } ?? .video(0...0),
-                            speed: clip.speed ?? .flat(1.0),
-                            transitionAfter: clip.transitionAfter))))
-        })
+        var notices: [MigrationNotice] = []
+        // 既没有 source 也没有旧 range 时**丢弃该元素并记 notice**——
+        // 不要回落到 `.video(0...0)`（那是零长度畸形片段，而 PlanClip.init(from:) 在同样情况下是抛错的）
+        let elements: [PlanElement] = legacy.clips.compactMap { clip in
+            guard let source = clip.source ?? clip.range.map({ .video($0) }) else {
+                notices.append(.clipSourceMissing(clipID: clip.id ?? UUID()))
+                return nil
+            }
+            return PlanElement(id: clip.id ?? UUID(),
+                               content: .content(TrackPayload(PlanClip(
+                                   assetID: clip.assetID,
+                                   source: source,
+                                   speed: clip.speed ?? .flat(1.0),
+                                   transitionAfter: clip.transitionAfter))))
+        }
+        let primary = PlanTrack(kind: .video, placement: .chained, elements: elements)
 
         var tracks = [primary]
         if let captions = legacy.captions {
-            tracks.append(makeCaptionTrack(captions, assets: legacy.assets, assetsDirectory: assetsDirectory))
+            let (track, captionNotices) = makeCaptionTrack(captions, assets: legacy.assets,
+                                                           assetsDirectory: assetsDirectory)
+            tracks.append(track)
+            notices.append(contentsOf: captionNotices)
         }
 
         return MigratedPlanParts(assets: legacy.assets, tracks: tracks,
-                                 primaryTrackID: primary.id, preset: legacy.preset ?? .reelsAndShorts)
+                                 primaryTrackID: primary.id,
+                                 preset: legacy.preset ?? .reelsAndShorts,
+                                 notices: notices)
     }
 
-    /// SRT 可读时展开成 cue 元素；不可读时留空轨——settings 保留 sourceAssetID，
-    /// 工程完整性报告会显式提示，不静默丢。
+    /// SRT 可读时展开成 cue 元素；读不出来时留空轨并记 notice（settings 仍保留 sourceAssetID）。
+    /// **不得静默丢**——迁移是静默发生的，丢掉的字幕如果没人报，用户只会看到字幕莫名变少。
     private static func makeCaptionTrack(_ legacy: LegacyPlanV3.LegacyCaptionTrackV3,
                                          assets: [AssetItem],
-                                         assetsDirectory: URL?) -> PlanTrack {
+                                         assetsDirectory: URL?) -> (PlanTrack, [MigrationNotice]) {
         let settings = CaptionTrackSettings(
             fontSize: legacy.style?.fontSize ?? 48,
             isBold: legacy.style?.isBold ?? true,
             isEnabled: legacy.isEnabled ?? true,
             sourceAssetID: legacy.assetID)
 
+        var notices: [MigrationNotice] = []
         var elements: [PlanElement] = []
+
         if let assetsDirectory,
-           let fileName = assets.first(where: { $0.id == legacy.assetID })?.fileName,
-           let text = try? String(contentsOf: assetsDirectory.appendingPathComponent(fileName),
-                                  encoding: .utf8) {
-            elements = SRTParser.parse(text).cues.map { cue in
-                PlanElement(at: cue.start,
-                            content: .content(TrackPayload(
-                                CaptionCuePayload(text: cue.text, duration: cue.duration))))
+           let fileName = assets.first(where: { $0.id == legacy.assetID })?.fileName {
+            let url = assetsDirectory.appendingPathComponent(fileName)
+            // 与旧路径（KadrCaptions 的 Caption.load(srt:)）保持一致的编码回落：
+            // UTF-8 读不出时试 windowsCP1252。不这么做就是行为倒退——
+            // 旧路径从不会因为编码问题静默产出零条 cue。
+            if let data = try? Data(contentsOf: url),
+               let text = String(data: data, encoding: .utf8)
+                   ?? String(data: data, encoding: .windowsCP1252) {
+                let parsed = SRTParser.parse(text)
+                elements = parsed.cues.map { cue in
+                    PlanElement(at: cue.start,
+                                content: .content(TrackPayload(
+                                    CaptionCuePayload(text: cue.text, duration: cue.duration))))
+                }
+                if parsed.skippedBlocks > 0 {
+                    notices.append(.captionBlocksSkipped(assetID: legacy.assetID,
+                                                         count: parsed.skippedBlocks))
+                }
+            } else {
+                notices.append(.captionSourceUnreadable(assetID: legacy.assetID))
             }
         }
+        // assetsDirectory 为 nil 是调用方没给素材目录（不是数据问题），不报 notice
 
-        return PlanTrack(kind: .caption, placement: .absolute,
-                         settings: TrackPayload(settings), elements: elements)
+        return (PlanTrack(kind: .caption, placement: .absolute,
+                          settings: TrackPayload(settings), elements: elements), notices)
     }
 }
 ```
@@ -1585,9 +1730,14 @@ enum PlanMigration {
 - [ ] **Step 5: 运行确认通过**
 
 Run: `cd Packages/JangyCore && swift test --filter PlanMigrationTests`
-Expected: PASS（6 个用例）
+Expected: PASS（13 个用例）
 
-- [ ] **Step 6: 提交**
+- [ ] **Step 6: 全量回归**
+
+Run: `cd Packages/JangyCore && swift test`
+Expected: 226 个既有用例 + 本任务 13 个新用例 = 239，全部通过。
+
+- [ ] **Step 7: 提交**
 
 ```bash
 git add Packages/JangyCore/Sources/JangyCore/PlanMigration.swift \
@@ -1858,13 +2008,22 @@ extension EditPlan {
 ```swift
 public enum PlanLoader {
 
+    /// 加载结果：plan + 迁移期通知。
+    /// **迁移通知必须能流到用户面前**——迁移是静默发生的，丢掉的字幕如果没人报，
+    /// 用户只会看到字幕莫名变少（Task 5 的 `MigrationNotice`）。
+    public struct LoadResult: Sendable {
+        public let plan: EditPlan
+        /// 空表示没发生迁移、或迁移无问题。
+        public let migrationNotices: [MigrationNotice]
+    }
+
     /// - Parameter assetsDirectory: 提供时，v3 及更早的 plan 会就地迁移（含 SRT 展开）。
-    public static func load(from url: URL, assetsDirectory: URL? = nil) throws -> EditPlan {
+    public static func load(from url: URL, assetsDirectory: URL? = nil) throws -> LoadResult {
         let data = try Data(contentsOf: url)
         return try decode(data, assetsDirectory: assetsDirectory)
     }
 
-    static func decode(_ data: Data, assetsDirectory: URL?) throws -> EditPlan {
+    static func decode(_ data: Data, assetsDirectory: URL?) throws -> LoadResult {
         let probe: VersionProbe
         do {
             probe = try JSONDecoder().decode(VersionProbe.self, from: data)
@@ -1875,7 +2034,8 @@ public enum PlanLoader {
 
         if (probe.version ?? 4) >= 4 {
             do {
-                return try JSONDecoder().decode(EditPlan.self, from: data)
+                return LoadResult(plan: try JSONDecoder().decode(EditPlan.self, from: data),
+                                  migrationNotices: [])
             } catch let error as DecodingError {
                 let (path, message) = describe(error)
                 throw PlanLoaderError.decodingFailed(path: path, message: message)
@@ -1890,8 +2050,9 @@ public enum PlanLoader {
             throw PlanLoaderError.decodingFailed(path: path, message: message)
         }
         let parts = PlanMigration.migrate(legacy, assetsDirectory: assetsDirectory)
-        return EditPlan(version: 4, assets: parts.assets, tracks: parts.tracks,
-                        primaryTrackID: parts.primaryTrackID, preset: parts.preset)
+        let plan = EditPlan(version: 4, assets: parts.assets, tracks: parts.tracks,
+                            primaryTrackID: parts.primaryTrackID, preset: parts.preset)
+        return LoadResult(plan: plan, migrationNotices: parts.notices)
     }
 
     struct VersionProbe: Decodable { let version: Int? }
@@ -1899,6 +2060,8 @@ public enum PlanLoader {
     // describe / pathString 不变
 }
 ```
+
+> 调用方大多只要 plan，写 `try PlanLoader.load(...).plan` 即可（`ProjectStore` / `ProjectPackage` / CLI 的调用点都这么改）。
 
 - [ ] **Step 6: 改 L2 基础设施**
 
@@ -1908,13 +2071,34 @@ public enum PlanLoader {
     public static let currentSchemaVersion = 4
 ```
 
-`loadProject` 与 `migrateLegacyLayoutIfNeeded` 里的 load 加素材目录：
+`loadProject` 与 `migrateLegacyLayoutIfNeeded` 里的 load 加素材目录，并**把迁移通知透出去**：
 
 ```swift
-        let plan = try PlanLoader.load(from: url, assetsDirectory: assetsDir)
+    /// 加载结果：plan + 迁移期通知（v4 plan 加载时通知恒为空）。
+    public struct LoadResult: Sendable {
+        public let plan: EditPlan
+        public let migrationNotices: [MigrationNotice]
+    }
+
+    public func loadProject(id: UUID) throws -> LoadResult {
+        let url = projectDirectory(id: id).appendingPathComponent(Self.planFileName)
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            throw ProjectStoreError.projectNotFound(id)
+        }
+        let loaded = try PlanLoader.load(from: url, assetsDirectory: assetsDir)
+        guard loaded.plan.version <= Self.currentSchemaVersion else {
+            throw ProjectStoreError.unsupportedVersion(found: loaded.plan.version,
+                                                       supported: Self.currentSchemaVersion)
+        }
+        return LoadResult(plan: loaded.plan, migrationNotices: loaded.migrationNotices)
+    }
 ```
 
 其中 `assetsDir` = `root.appendingPathComponent(AssetLibrary.assetsDirName, isDirectory: true)`。
+
+**其余调用点**（`duplicateProject` / `summary(for:)` / `migrateLegacyLayoutIfNeeded`）只要 plan，写 `try loadProject(id: id).plan` / `try PlanLoader.load(...).plan` 即可。
+
+> **迁移通知必须最终到达用户**：`ProjectListModel.openProject` 打开工程时把 `migrationNotices` 拼进已有的 `restoreNotice` 字符串（`AppModel.init(..., restoreNotice:)` → `AppModel.projectMessage` → EditorView 的橙色提示行）。这一步在 Task 8 里做。**不做的话，Task 5 那套 notice 就白加了**——迁移静默发生、字幕静默变少，正是它要防的事。
 
 `createProject`：
 
@@ -2203,7 +2387,25 @@ git commit -m "Core: EditPlan 切换到多轨 v4 模型（clips/captions → tra
 
 > 只保证 **App 编译通过 + 行为与今天一致**。时间线 UI 的真正改造属阶段②。
 
-- [ ] **Step 1: 改 AppModel**
+- [ ] **Step 1: 改 ProjectListModel —— 把迁移通知送到用户面前**
+
+`ProjectListModel.openProject` 打开工程时，`ProjectStore.loadProject` 会带回 `migrationNotices`（v4 plan 恒为空）。把它们拼进已有的 `restoreNotice` 字符串——它经 `AppModel.init(..., restoreNotice:)` 落到 `AppModel.projectMessage`，最终显示在 EditorView 的橙色提示行。
+
+```swift
+        let loaded = try projectStore.loadProject(id: id)
+        // 迁移期丢过东西必须让用户看见：迁移是静默发生的，
+        // 丢掉的字幕如果没人报，用户只会看到字幕莫名变少。
+        let notice = loaded.migrationNotices.isEmpty
+            ? nil
+            : loaded.migrationNotices.map(\.description).joined(separator: "；")
+        let model = AppModel(projectID: id, store: EditStore(initial: loaded.plan),
+                             resolver: resolver, projectStore: projectStore,
+                             restoreNotice: notice)
+```
+
+> 具体的构造调用以 `ProjectListModel` 现有写法为准，本步只加「取 notices → 拼字符串 → 传进 restoreNotice」这一段。
+
+- [ ] **Step 2: 改 AppModel**
 
 `appendAssetToTimeline` / `appendImageToTimeline` 的追加改成往主轨写：
 
@@ -2217,7 +2419,7 @@ git commit -m "Core: EditPlan 切换到多轨 v4 模型（clips/captions → tra
 
 三处调用点改为 `Self.appendClip(PlanClip(...), to: &plan)`。
 
-- [ ] **Step 2: 改 TimelineView / EditorView**
+- [ ] **Step 3: 改 TimelineView / EditorView**
 
 - `model.store.plan.clips` → `model.store.plan.primaryTrack?.elements ?? []`
 - `model.store.plan.clips.isEmpty` → `model.store.plan.primaryTrack?.elements.isEmpty ?? true`
@@ -2251,7 +2453,7 @@ extension EditPlan {
 }
 ```
 
-- [ ] **Step 3: App 构建通过**
+- [ ] **Step 4: App 构建通过**
 
 Run:
 ```bash
@@ -2260,7 +2462,7 @@ xcodebuild -project Jangy.xcodeproj -scheme Jangy \
 ```
 Expected: `BUILD SUCCEEDED`
 
-- [ ] **Step 4: CLI 冒烟**
+- [ ] **Step 5: CLI 冒烟**
 
 Run:
 ```bash
@@ -2272,7 +2474,7 @@ swift run jangy-cli export /tmp/jangy-draft.json -o /tmp/jangy-out.mp4 --assets 
 ```
 Expected: `validate` 输出 `{"valid":true}`；`export` 输出 progress/done JSONL 且退出码 0
 
-- [ ] **Step 5: 提交（Task 6 + 7 + 8 一起）**
+- [ ] **Step 6: 提交（Task 6 + 7 + 8 一起）**
 
 ```bash
 git add -A Packages/JangyCore Jangy
