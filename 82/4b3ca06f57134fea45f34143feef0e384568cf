@@ -1,0 +1,26 @@
+Packages/JangyCore/Tests/JangyAgentTests/AgentToolsTests.swift
+  s_9a70defc13b235::t_a4d0a60aa2cc52 64
+  s_9a70defc13b235::t_b8a6812857e5e1 107
+  s_9a70defc13b235::t_e07d2d44147b70 153-154
+  s_9a70defc13b235::t_3c3a7f92e6e611 95
+  s_9a70defc13b235::t_71d25b631319cd 115-152,155-165
+  s_9a70defc13b235::t_086c4daedd1130 76
+Packages/JangyCore/Sources/JangyAgent/AgentTools.swift
+  s_9a70defc13b235::t_cf21e08aecfd98 133,137,139-142,145-146,156-158,163-169,172-188,194-200,211-217,219
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "824b3ca06f57134fea45f34143feef0e384568cf",
+  "prompts": {},
+  "sessions": {
+    "s_9a70defc13b235": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8b9cd9a4-be2a-41b5-8f01-e1390b420087",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Michael <yiliforever@qq.com>"
+    }
+  }
+}
