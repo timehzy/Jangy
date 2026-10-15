@@ -63,4 +63,72 @@ final class VideoFeatureTests: XCTestCase {
             track: track,
             context: context(assets: [AssetItem(id: assetID, kind: .video, fileName: "v.mp4", duration: 4)])).isEmpty)
     }
+
+    // MARK: - 边界用例：钉住从旧 EditPlanValidator 平移过来的规则（Task 6 删旧代码后仍要绿）
+
+    /// 规则：图片片段（.still）必须引用图片素材。
+    func testValidateRejectsStillClipReferencingNonImageAsset() {
+        let track = PlanTrack(kind: .video, placement: .chained, elements: [
+            PlanElement(content: .content(TrackPayload(PlanClip(assetID: assetID, source: .still(duration: 3))))),
+        ])
+        let issues = VideoFeature.validate(
+            track: track,
+            context: context(assets: [AssetItem(id: assetID, kind: .video, fileName: "v.mp4")]))
+        XCTAssertTrue(issues.contains { $0.message.contains("图片片段必须引用图片素材") })
+    }
+
+    /// 规则：图片时长必须为正（0 或负都拒）。
+    func testValidateRejectsNonPositiveStillDuration() {
+        let track = PlanTrack(kind: .video, placement: .chained, elements: [
+            PlanElement(content: .content(TrackPayload(PlanClip(assetID: assetID, source: .still(duration: 0))))),
+        ])
+        let issues = VideoFeature.validate(
+            track: track,
+            context: context(assets: [AssetItem(id: assetID, kind: .image, fileName: "a.png")]))
+        XCTAssertTrue(issues.contains { $0.message.contains("图片时长必须为正") })
+    }
+
+    /// 规则：变速倍率必须落在 EditPlanValidator.speedRange 内（这里取越界值 9.0）。
+    func testValidateRejectsOutOfRangeSpeed() {
+        let track = PlanTrack(kind: .video, placement: .chained, elements: [
+            PlanElement(content: .content(TrackPayload(
+                PlanClip(assetID: assetID, source: .video(0...3), speed: .flat(9.0))))),
+        ])
+        let issues = VideoFeature.validate(
+            track: track,
+            context: context(assets: [AssetItem(id: assetID, kind: .video, fileName: "v.mp4", duration: 4)]))
+        XCTAssertTrue(issues.contains { $0.message.contains("变速倍率必须在") })
+    }
+
+    /// 规则：转场时长不得超过相邻较短者的时长（这里相邻为 3s 与 1s，转场 2s 越界）。
+    func testValidateRejectsTransitionExceedingAdjacentDuration() {
+        let track = PlanTrack(kind: .video, placement: .chained, elements: [
+            PlanElement(content: .content(TrackPayload(PlanClip(assetID: assetID, source: .video(0...3),
+                                                                transitionAfter: .dissolve(duration: 2))))),
+            PlanElement(content: .content(TrackPayload(PlanClip(assetID: assetID, source: .video(0...1))))),
+        ])
+        let issues = VideoFeature.validate(
+            track: track,
+            context: context(assets: [AssetItem(id: assetID, kind: .video, fileName: "v.mp4", duration: 4)]))
+        XCTAssertTrue(issues.contains { $0.message.contains("转场时长不能超过相邻片段时长") })
+    }
+
+    /// 规则：最后一个元素不能挂转场（没有「下一个」可转）。
+    func testValidateRejectsTransitionOnLastElement() {
+        let track = PlanTrack(kind: .video, placement: .chained, elements: [
+            PlanElement(content: .content(TrackPayload(PlanClip(assetID: assetID, source: .video(0...3),
+                                                                transitionAfter: .dissolve(duration: 0.5))))),
+        ])
+        let issues = VideoFeature.validate(track: track, context: context(assets: []))
+        XCTAssertTrue(issues.contains { $0.message.contains("最后一个片段不能挂转场") })
+    }
+
+    /// 规则：引用必须落在素材登记表里。
+    func testValidateRejectsUnregisteredAsset() {
+        let track = PlanTrack(kind: .video, placement: .chained, elements: [
+            PlanElement(content: .content(TrackPayload(PlanClip(assetID: assetID, source: .video(0...3))))),
+        ])
+        let issues = VideoFeature.validate(track: track, context: context(assets: []))
+        XCTAssertTrue(issues.contains { $0.message.contains("引用了未登记的素材") })
+    }
 }
