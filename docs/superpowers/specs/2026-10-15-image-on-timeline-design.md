@@ -70,8 +70,9 @@ extension PlanClip {
 ## 校验（EditPlanValidator）
 
 - clips 允许 video / image 素材（现第 53–54 行硬拒非视频，放开）。
-- **source 与素材 kind 一致**：`.video` ↔ 素材 kind `.video`、`.still` ↔ 素材 kind `.image`，不一致报 `clips[i].source`。
-- `.still`：`duration > 0`（区间非空检查只对 `.video` 的 range）。
+- **source 与素材 kind 一致**：`.video` ↔ 素材 kind `.video`、`.still` ↔ 素材 kind `.image`，不一致报 `clips[i].assetID`。
+- 视频 range 校验（起点非负 / 区间非空 / 不超素材时长）path 为 `clips[i].source.range`。
+- `.still`：`duration > 0`，path `clips[i].source.duration`（区间检查只对 `.video`）。
 - 转场检查：**无改动**——已用 `clip.outputDuration`，对 still 自然成立。
 
 ## Agent 工具（改 3 个）
