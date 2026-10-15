@@ -435,6 +435,15 @@ public struct TrackValidationContext: Sendable {
     }
 
     public func asset(withID id: UUID) -> AssetItem? { assets.first { $0.id == id } }
+
+    /// 轨道在 tracks 里的下标，用于拼诊断路径。
+    /// `path` 是给人/Agent 读的 JSON 字段路径（下标即可，对应 plan JSON 的数组位置）；
+    /// 机器定位一律用 `ValidationIssue.elementID`，它不受下标漂移影响。
+    /// 取不到下标时回落 `?`——诊断串不该因为查不到就崩或抛错。
+    public func pathPrefix(for track: PlanTrack) -> String {
+        let index = tracks.firstIndex { $0.id == track.id }.map(String.init) ?? "?"
+        return "tracks[\(index)]"
+    }
 }
 
 /// 一类轨的特性模块（L2 片）。L3 引擎映射与 L0 呈现是同一 kind 的另外两片，
@@ -695,13 +704,15 @@ public enum VideoFeature: TrackFeature {
         var issues: [ValidationIssue] = []
 
         if track.placement != .chained {
-            issues.append(ValidationIssue(path: "tracks[\(track.id)].placement",
+            issues.append(ValidationIssue(path: "\(context.pathPrefix(for: track)).placement",
                                           message: "视频轨必须是链式（.chained）"))
         }
 
         for (i, element) in track.elements.enumerated() {
-            let path = "tracks[\(track.id)].elements[\(i)]"
-            // gap 在链式轨上合法（删除留下的空档），不校验内容
+            let path = "\(context.pathPrefix(for: track)).elements[\(i)]"
+            // gap 在链式轨上合法（删除留下的空档），不校验内容；
+            // 出现别的 payload 类型（kind 与 payload 不匹配）时同样跳过——
+            // 那类错误由引擎层（EngineBridge.UnknownPayloadError）兜底，不在这里判。
             guard case .content(let payload) = element.content,
                   let clip = payload.value as? PlanClip else { continue }
 
@@ -792,12 +803,21 @@ public enum VideoFeature: TrackFeature {
 - [ ] **Step 7: 运行确认通过**
 
 Run: `cd Packages/JangyCore && swift test --filter VideoFeatureTests`
-Expected: PASS（6 个用例）
+Expected: PASS（12 个用例）
+
+> 上面前 6 条是计划给的；**另需补 6 条边界用例**——因为本步之后同一套校验规则会有**两份**（`EditPlanValidator.validate(_:)` 里那份旧的 + `VideoFeature` 这份新的），Task 6 会删掉旧的那份。若新实现没被独立测试钉住，平移过程中的细微差异会在删掉旧代码后**静默失去覆盖**：
+>
+> 1. `.still` 片段引用非图片素材 → 「图片片段必须引用图片素材」
+> 2. `.still` 时长为 0 或负 → 「图片时长必须为正」
+> 3. 变速倍率越界（如 9.0）→ 「变速倍率必须在」
+> 4. 转场时长超过相邻较短者 → 「转场时长不能超过相邻片段时长」
+> 5. 最后一个元素挂转场 → 「最后一个片段不能挂转场」
+> 6. 引用未登记素材 → 「引用了未登记的素材」
 
 - [ ] **Step 8: 全量回归**
 
 Run: `cd Packages/JangyCore && swift test`
-Expected: 190 个既有用例 + 本任务 6 个新用例，全部通过。**本步不破坏任何现有代码**（`PlanClip` 只加协议一致性、没动 `id`），所以这是一次干净的绿色提交。
+Expected: 190 个既有用例 + 本任务 12 个新用例 = 202，全部通过。**本步不破坏任何现有代码**（`PlanClip` 只加协议一致性、没动 `id`），所以这是一次干净的绿色提交。
 
 - [ ] **Step 9: 提交**
 
@@ -992,12 +1012,12 @@ public enum CaptionFeature: TrackFeature {
         var issues: [ValidationIssue] = []
 
         if track.placement != .absolute {
-            issues.append(ValidationIssue(path: "tracks[\(track.id)].placement",
+            issues.append(ValidationIssue(path: "\(context.pathPrefix(for: track)).placement",
                                           message: "字幕轨必须是绝对定位（.absolute）"))
         }
 
         for (i, element) in track.elements.enumerated() {
-            let path = "tracks[\(track.id)].elements[\(i)]"
+            let path = "\(context.pathPrefix(for: track)).elements[\(i)]"
             guard let at = element.at else {
                 issues.append(ValidationIssue(path: "\(path).at", elementID: element.id,
                                               message: "绝对定位轨的元素必须带 at"))
@@ -1020,10 +1040,10 @@ public enum CaptionFeature: TrackFeature {
         if let sourceID = settings(of: track).sourceAssetID {
             switch context.asset(withID: sourceID) {
             case nil:
-                issues.append(ValidationIssue(path: "tracks[\(track.id)].settings.sourceAssetID",
+                issues.append(ValidationIssue(path: "\(context.pathPrefix(for: track)).settings.sourceAssetID",
                                               message: "引用了未登记的字幕素材: \(sourceID)"))
             case let asset? where asset.kind != .subtitle:
-                issues.append(ValidationIssue(path: "tracks[\(track.id)].settings.sourceAssetID",
+                issues.append(ValidationIssue(path: "\(context.pathPrefix(for: track)).settings.sourceAssetID",
                                               message: "字幕来源必须是字幕素材，实际为 \(asset.kind.rawValue)"))
             default:
                 break
@@ -3133,7 +3153,7 @@ enum StickerFeature: TrackFeature {
             guard case .content(let payload) = element.content,
                   let sticker = payload.value as? StickerPayload,
                   sticker.imageName.isEmpty else { return nil }
-            return ValidationIssue(path: "tracks[\(track.id)]", elementID: element.id,
+            return ValidationIssue(path: context.pathPrefix(for: track), elementID: element.id,
                                    message: "贴纸缺图片名")
         }
     }
