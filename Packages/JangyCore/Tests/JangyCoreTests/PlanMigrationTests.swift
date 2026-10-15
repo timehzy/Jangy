@@ -20,7 +20,7 @@ final class PlanMigrationTests: XCTestCase {
         let legacy = try JSONDecoder().decode(LegacyPlanV3.self, from: try fixtureData())
         XCTAssertEqual(legacy.clips.count, 3)
         XCTAssertEqual(legacy.captions?.style?.fontSize, 48)
-        XCTAssertEqual(legacy.assets.count, 4)
+        XCTAssertEqual(legacy.assets?.count, 4)
     }
 
     func testMigrateBuildsSingleChainedPrimaryTrack() throws {

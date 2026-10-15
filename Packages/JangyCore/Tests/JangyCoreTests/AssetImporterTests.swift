@@ -57,7 +57,7 @@ final class AssetImporterTests: XCTestCase {
         let source = workDir.appendingPathComponent("Source/clip3.mp4")
         let importer = AssetImporter(directory: libraryDir)
         let item = try await importer.importVideo(from: source, origin: .photoLibrary)
-        let plan = EditPlan(assets: [item],
+        let plan = PlanTestSupport.plan(assets: [item],
                             clips: [PlanClip(assetID: item.id, source: .video(0...(item.duration ?? 0)))])
         XCTAssertTrue(EditPlanValidator().validate(plan).isEmpty)
         XCTAssertTrue(EditPlanValidator().validateAssets(plan, resolver: AssetResolver(directory: libraryDir)).isEmpty)

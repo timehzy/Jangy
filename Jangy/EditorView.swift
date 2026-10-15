@@ -20,11 +20,21 @@ struct EditorView: View {
         self._projectName = State(initialValue: projectName)
     }
 
+    /// 字幕轨（v4：字幕是绝对定位轨，开关读轨级 settings）。
+    private var captionTrack: PlanTrack? {
+        model.store.plan.tracks.first { $0.kind == .caption }
+    }
+
+    private var captionEnabled: Bool {
+        guard let track = captionTrack else { return false }
+        return CaptionFeature.settings(of: track).isEnabled
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             ZStack {
                 PreviewView(player: model.player)
-                if model.store.plan.clips.isEmpty {
+                if model.store.plan.primaryTrack?.elements.isEmpty ?? true {
                     VStack(spacing: 12) {
                         Button { showLibrary = true } label: {
                             Label("添加素材", systemImage: "plus")
@@ -44,16 +54,21 @@ struct EditorView: View {
                 Button("撤销") { model.undo() }.disabled(!model.store.canUndo || model.agent.isRunning)
                 Button("重做") { model.redo() }.disabled(!model.store.canRedo || model.agent.isRunning)
                 Spacer()
-                Button(model.store.plan.captions?.isEnabled == true ? "字幕：开" : "字幕：关") {
-                    model.edit { $0.captions?.isEnabled.toggle() }
+                Button(captionEnabled ? "字幕：开" : "字幕：关") {
+                    model.edit { plan in
+                        guard let ti = plan.tracks.firstIndex(where: { $0.kind == .caption }) else { return }
+                        var settings = CaptionFeature.settings(of: plan.tracks[ti])
+                        settings.isEnabled.toggle()
+                        plan.tracks[ti].settings = TrackPayload(settings)
+                    }
                 }
-                .disabled(model.store.plan.captions == nil || model.agent.isRunning)
+                .disabled(captionTrack == nil || model.agent.isRunning)
                 Button("素材库") { showLibrary = true }
                     .disabled(model.agent.isRunning)
                 Button("Agent") { showAgent = true }
                     .disabled(!model.agent.isConfigured)
                 Button("导出成片") { showExportPanel = true }
-                    .disabled(model.exportProgress != nil || model.agent.isRunning || model.store.plan.clips.isEmpty)
+                    .disabled(model.exportProgress != nil || model.agent.isRunning || (model.store.plan.primaryTrack?.elements.isEmpty ?? true))
             }
             .padding(.horizontal)
 

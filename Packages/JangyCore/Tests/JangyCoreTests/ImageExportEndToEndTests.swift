@@ -54,7 +54,7 @@ final class ImageExportEndToEndTests: XCTestCase {
 
     func testPureImageExportDurationAndContent() async throws {
         let image = imageAsset
-        let plan = EditPlan(assets: [image],
+        let plan = PlanTestSupport.plan(assets: [image],
                             clips: [PlanClip(assetID: image.id, source: .still(duration: 2.0))])
         let out = try await export(plan, to: "img-only.mp4")
 
@@ -81,7 +81,7 @@ final class ImageExportEndToEndTests: XCTestCase {
         let v2 = AssetItem(kind: .video, fileName: "clip2.mp4", origin: .synthesized,
                            duration: 4.0, pixelWidth: 1280, pixelHeight: 720, hasAudio: false)
         let image = imageAsset
-        let plan = EditPlan(assets: [v1, image, v2], clips: [
+        let plan = PlanTestSupport.plan(assets: [v1, image, v2], clips: [
             PlanClip(assetID: v1.id, source: .video(0...3), transitionAfter: .dissolve(duration: 0.5)),
             PlanClip(assetID: image.id, source: .still(duration: 2.0), transitionAfter: .fade(duration: 0.5)),
             PlanClip(assetID: v2.id, source: .video(0...3)),
@@ -106,7 +106,7 @@ final class ImageExportEndToEndTests: XCTestCase {
 
     func testSnapshotInsideStillRegion() async throws {
         let image = imageAsset
-        let plan = EditPlan(assets: [image],
+        let plan = PlanTestSupport.plan(assets: [image],
                             clips: [PlanClip(assetID: image.id, source: .still(duration: 3.0))])
         let frames = try await FrameSnapshotter.snapshots(plan: plan, resolver: resolver, at: [1.5])
         let png = try XCTUnwrap(frames[1.5])
@@ -123,7 +123,7 @@ final class ImageExportEndToEndTests: XCTestCase {
 
     func testStillSpeedHalvesOutputDuration() async throws {
         let image = imageAsset
-        let plan = EditPlan(assets: [image],
+        let plan = PlanTestSupport.plan(assets: [image],
                             clips: [PlanClip(assetID: image.id, source: .still(duration: 4.0), speed: .flat(2.0))])
         let out = try await export(plan, to: "img-speed.mp4")
         let duration = try await CMTimeGetSeconds(AVURLAsset(url: out).load(.duration))

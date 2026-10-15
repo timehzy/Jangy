@@ -42,7 +42,7 @@ public struct ReferenceScanner: Sendable {
                 guard let loaded = try? projectStore.loadProject(id: id) else {
                     throw ReferenceScanError.corruptProject(id)
                 }
-                plan = loaded
+                plan = loaded.plan
             }
             for asset in plan.assets {
                 result[asset.id, default: []].insert(id)

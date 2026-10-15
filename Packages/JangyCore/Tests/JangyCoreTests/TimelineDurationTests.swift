@@ -12,7 +12,7 @@ final class TimelineDurationTests: XCTestCase {
     }
 
     private func plan(_ clips: [PlanClip]) -> EditPlan {
-        EditPlan(clips: clips)
+        PlanTestSupport.plan(clips: clips)
     }
 
     func testOutputDurationDividesBySpeed() {

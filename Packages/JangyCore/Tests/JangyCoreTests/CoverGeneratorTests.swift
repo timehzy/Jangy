@@ -29,7 +29,7 @@ final class CoverGeneratorTests: XCTestCase {
     func testEmptyPlanRemovesCover() async throws {
         let cover = workDir.appendingPathComponent("cover.jpg")
         try Data("old".utf8).write(to: cover)
-        await CoverGenerator.generate(for: EditPlan(clips: []), resolver: resolver, to: cover)
+        await CoverGenerator.generate(for: PlanTestSupport.plan(clips: []), resolver: resolver, to: cover)
         XCTAssertFalse(FileManager.default.fileExists(atPath: cover.path), "空时间线清掉旧封面")
     }
 
@@ -40,7 +40,7 @@ final class CoverGeneratorTests: XCTestCase {
 
         let asset = AssetItem(kind: .image, fileName: AssetSynthesizer.imageFileName,
                               origin: .synthesized, pixelWidth: 640, pixelHeight: 360)
-        let plan = EditPlan(assets: [asset], clips: [PlanClip(assetID: asset.id, source: .still(duration: 3.0))])
+        let plan = PlanTestSupport.plan(assets: [asset], clips: [PlanClip(assetID: asset.id, source: .still(duration: 3.0))])
         let cover = workDir.appendingPathComponent("cover-img.jpg")
         await CoverGenerator.generate(for: plan, resolver: resolver, to: cover)
         XCTAssertTrue(FileManager.default.fileExists(atPath: cover.path))

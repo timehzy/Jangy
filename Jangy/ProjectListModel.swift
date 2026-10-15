@@ -122,7 +122,7 @@ final class ProjectListModel {
 
     /// 「查看信息」的占用空间：本项目引用素材的体积和。
     func referencedStorageSize(of id: UUID) -> Int64 {
-        guard let plan = try? projectStore.loadProject(id: id) else { return 0 }
+        guard let plan = try? projectStore.loadProject(id: id).plan else { return 0 }
         let fm = FileManager.default
         return plan.assets.reduce(Int64(0)) { total, asset in
             let url = resolver.resolve(asset)

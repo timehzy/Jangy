@@ -46,7 +46,8 @@ struct Agent: AsyncParsableCommand {
 
         // 初始 plan：有路径则加载 + 校验（exit 1/2 与既有子命令同契约）；缺省空时间线起步
         let resolver = AssetResolver(directory: URL(fileURLWithPath: assets))
-        var initialPlan = EditPlan(clips: [])
+        let emptyPrimary = PlanTrack(kind: .video, placement: .chained)
+        var initialPlan = EditPlan(tracks: [emptyPrimary], primaryTrackID: emptyPrimary.id)
         if let plan {
             (initialPlan, _) = try loadValidatedPlan(plan, assets: assets)
         }

@@ -163,11 +163,19 @@ struct ProjectListView: View {
 
     private func makeEditorModel(for summary: ProjectSummary) -> AppModel {
         do {
-            let plan = try model.projectStore.loadProject(id: summary.id)
-            return AppModel(projectID: summary.id, store: EditStore(initial: plan),
-                            resolver: model.resolver, projectStore: model.projectStore)
+            let loaded = try model.projectStore.loadProject(id: summary.id)
+            // 迁移期丢过东西必须让用户看见：迁移是静默发生的，
+            // 丢掉的字幕如果没人报，用户只会看到字幕莫名变少。
+            let notice = loaded.migrationNotices.isEmpty
+                ? nil
+                : loaded.migrationNotices.map(\.description).joined(separator: "；")
+            return AppModel(projectID: summary.id, store: EditStore(initial: loaded.plan),
+                            resolver: model.resolver, projectStore: model.projectStore,
+                            restoreNotice: notice)
         } catch {
-            return AppModel(projectID: summary.id, store: EditStore(initial: EditPlan(clips: [])),
+            let primary = PlanTrack(kind: .video, placement: .chained)
+            return AppModel(projectID: summary.id,
+                            store: EditStore(initial: EditPlan(tracks: [primary], primaryTrackID: primary.id)),
                             resolver: model.resolver, projectStore: model.projectStore,
                             restoreNotice: "工程恢复失败（\(error.localizedDescription)），已从空时间线起步")
         }

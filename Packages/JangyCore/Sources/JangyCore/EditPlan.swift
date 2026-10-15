@@ -2,42 +2,41 @@ import Foundation
 
 /// 唯一事实源：撤销栈快照、磁盘存档、CLI 输入、Agent 生成目标共用此模型。
 ///
-/// v2：新增素材登记表 `assets`（工程内素材库），clip/字幕轨道用 `assetID` 引用
-/// 登记表条目，不再直接引用文件名。
-/// v3：clip 的 `range` 演进为 `source` 枚举（.video(range)/.still(duration)），
-/// 图片等无源区间素材不再用魔法值表达（公约 §3.4）。
+/// v4：扁平 `clips` + 整片 `captions` 换成 `tracks`。主轨由 `primaryTrackID` 显式指向，
+/// 不靠「第一条就是主轨」的约定。轨道类型开放（TrackKind 包 String），
+/// 元素 payload 由注册的特性模块解释（见 Features/Manifest.swift）。
 public struct EditPlan: Codable, Equatable, Sendable {
     public var version: Int
     public var assets: [AssetItem]
-    public var clips: [PlanClip]
-    public var captions: CaptionTrack?
+    public var tracks: [PlanTrack]
+    public var primaryTrackID: UUID
     public var preset: OutputPreset
 
-    public init(version: Int = 3, assets: [AssetItem] = [], clips: [PlanClip], captions: CaptionTrack? = nil, preset: OutputPreset = .reelsAndShorts) {
+    public init(version: Int = 4, assets: [AssetItem] = [],
+                tracks: [PlanTrack], primaryTrackID: UUID,
+                preset: OutputPreset = .reelsAndShorts) {
         self.version = version
         self.assets = assets
-        self.clips = clips
-        self.captions = captions
+        self.tracks = tracks
+        self.primaryTrackID = primaryTrackID
         self.preset = preset
     }
 
-    private enum CodingKeys: String, CodingKey {
-        case version, assets, clips, captions, preset
-    }
-
-    /// Agent 友好的宽容解码：仅 `clips` 必填，其余缺省落回默认值。编码仍为合成实现。
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        version = try container.decodeIfPresent(Int.self, forKey: .version) ?? 3
-        assets = try container.decodeIfPresent([AssetItem].self, forKey: .assets) ?? []
-        clips = try container.decode([PlanClip].self, forKey: .clips)
-        captions = try container.decodeIfPresent(CaptionTrack.self, forKey: .captions)
-        preset = try container.decodeIfPresent(OutputPreset.self, forKey: .preset) ?? .reelsAndShorts
-    }
+    /// 主轨（链式，决定成片时长）。校验器保证它存在且 placement == .chained。
+    public var primaryTrack: PlanTrack? { tracks.first { $0.id == primaryTrackID } }
 
     /// 按 ID 查素材登记项。引擎层/表现层取素材元数据的唯一入口。
-    public func asset(withID id: UUID) -> AssetItem? {
-        assets.first { $0.id == id }
+    public func asset(withID id: UUID) -> AssetItem? { assets.first { $0.id == id } }
+}
+
+extension EditPlan {
+    /// 在主轨上就地改某个元素的 payload。取不到（下标越界 / 是 gap / payload 类型不对）时是 no-op。
+    public mutating func updatePrimaryClip(at index: Int, _ mutate: (inout PlanClip) -> Void) {
+        guard let ti = tracks.firstIndex(where: { $0.id == primaryTrackID }),
+              case .content(let payload) = tracks[ti].elements[index].content,
+              var clip = payload.value as? PlanClip else { return }
+        mutate(&clip)
+        tracks[ti].elements[index].content = .content(TrackPayload(clip))
     }
 }
 
@@ -89,12 +88,11 @@ public enum PlanClipSource: Codable, Equatable, Sendable {
 }
 
 /// 视频轨的元素 payload。`type` 判别字段由 TrackPayload box 注入，这里不写。
-/// **`id` 本步仍在这里**——它要到后续 Task 才挪去 PlanElement（届时删掉字段与它的编解码）。
+/// **纯 payload**：无 id——寻址一律走 `PlanElement.id`（位置/标识归元素层）。
 /// 转场挂在片段尾部（`transitionAfter`），与 Kadr DSL 中 Transition 作为时间线一等元素的位置一一对应。
 public struct PlanClip: Codable, Equatable, Sendable, TrackElementPayload {
     public static let payloadType = "clip"
 
-    public var id: UUID
     /// 素材引用：指向 EditPlan.assets 中的条目（v2 起替代文件名直引）。
     public var assetID: UUID
     /// 片段来源：视频源区间 / 静态素材时长。
@@ -102,9 +100,8 @@ public struct PlanClip: Codable, Equatable, Sendable, TrackElementPayload {
     public var speed: SpeedPlan
     public var transitionAfter: PlanTransition?
 
-    public init(id: UUID = UUID(), assetID: UUID, source: PlanClipSource,
+    public init(assetID: UUID, source: PlanClipSource,
                 speed: SpeedPlan = .flat(1.0), transitionAfter: PlanTransition? = nil) {
-        self.id = id
         self.assetID = assetID
         self.source = source
         self.speed = speed
@@ -115,7 +112,7 @@ public struct PlanClip: Codable, Equatable, Sendable, TrackElementPayload {
     public var duration: TimeInterval { source.length / speed.rate }
 
     private enum CodingKeys: String, CodingKey {
-        case id, assetID, source, speed, transitionAfter
+        case assetID, source, speed, transitionAfter
     }
 
     /// v2 旧字段：向后兼容解码（无 source 时回落到 .video(range)）。
@@ -123,11 +120,10 @@ public struct PlanClip: Codable, Equatable, Sendable, TrackElementPayload {
         case range
     }
 
-    /// Agent 友好的宽容解码：`id` 缺省随机生成；`source` 缺省时回落 v2 旧 `range`。
+    /// Agent 友好的宽容解码：`source` 缺省时回落 v2 旧 `range`。
     /// 编码走合成实现（只写 source，不写 range）。
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
         assetID = try container.decode(UUID.self, forKey: .assetID)
         if let source = try container.decodeIfPresent(PlanClipSource.self, forKey: .source) {
             self.source = source
@@ -222,29 +218,6 @@ public enum PlanTransition: Codable, Equatable, Sendable {
             try container.encode("fade", forKey: .type)
             try container.encode(duration, forKey: .duration)
         }
-    }
-}
-
-public struct CaptionTrack: Codable, Equatable, Sendable {
-    /// 字幕文件引用：指向 EditPlan.assets 中 kind 为 .subtitle 的条目。
-    public var assetID: UUID
-    public var isEnabled: Bool
-    public var style: CaptionStyle
-
-    public init(assetID: UUID, isEnabled: Bool, style: CaptionStyle) {
-        self.assetID = assetID
-        self.isEnabled = isEnabled
-        self.style = style
-    }
-}
-
-public struct CaptionStyle: Codable, Equatable, Sendable {
-    public var fontSize: Double
-    public var isBold: Bool
-
-    public init(fontSize: Double, isBold: Bool) {
-        self.fontSize = fontSize
-        self.isBold = isBold
     }
 }
 

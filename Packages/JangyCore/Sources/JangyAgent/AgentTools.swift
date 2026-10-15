@@ -43,11 +43,14 @@ enum ToolEnvelope {
     }
 }
 
-/// 工具公共件：步数闸门 + clip 查找。
+/// 工具公共件：步数闸门 + 元素查找。
 enum AgentToolCommon {
     struct LookupError: Error {
         let message: String
     }
+
+    /// 元素定位：elementID → (轨道下标, 元素下标)。
+    struct ElementLocation { let trackIndex: Int; let elementIndex: Int }
 
     /// 步数闸门：超限后返回收尾提示（非 nil 表示应直接返回该结果，不再执行）。
     static func stepLimitIfExceeded(_ context: AgentRunContext) -> String? {
@@ -56,14 +59,23 @@ enum AgentToolCommon {
             : ToolEnvelope.error("已达到工具调用步数上限（\(context.maxToolCalls)），请停止调用工具，用文字总结已完成的编辑")
     }
 
-    /// clipID 字符串 → clips 下标；失败返回错误信封文本。
-    static func clipIndex(_ plan: EditPlan, clipID: String) -> Result<Int, LookupError> {
-        guard let uuid = UUID(uuidString: clipID),
-              let index = plan.clips.firstIndex(where: { $0.id == uuid })
-        else {
-            return .failure(LookupError(message: ToolEnvelope.error("找不到片段 \(clipID)，请先用 get_plan 获取当前片段 ID")))
+    /// 元素定位：全轨查找 elementID → (轨道下标, 元素下标)；失败返回错误信封文本。
+    static func locate(_ plan: EditPlan, elementID: String) -> Result<ElementLocation, LookupError> {
+        guard let uuid = UUID(uuidString: elementID) else {
+            return .failure(LookupError(message: ToolEnvelope.error("无效的元素 ID: \(elementID)")))
         }
-        return .success(index)
+        for (ti, track) in plan.tracks.enumerated() {
+            if let ei = track.elements.firstIndex(where: { $0.id == uuid }) {
+                return .success(ElementLocation(trackIndex: ti, elementIndex: ei))
+            }
+        }
+        return .failure(LookupError(message: ToolEnvelope.error(
+            "找不到元素 \(elementID)，请先用 get_plan 获取当前元素 ID")))
+    }
+
+    /// 主轨下标（`add_clip` 等主轨操作仍按主轨定位）。
+    static func primaryTrackIndex(_ plan: EditPlan) -> Int? {
+        plan.tracks.firstIndex { $0.id == plan.primaryTrackID }
     }
 }
 
@@ -221,12 +233,13 @@ struct AddClipTool: DefensiveAgentTool {
                                     source: .video(args.rangeStart!...args.rangeEnd!),
                                     speed: .flat(rate))
                 }
-                plan.clips.append(clip)
+                guard let ti = AgentToolCommon.primaryTrackIndex(plan) else { return }
+                plan.tracks[ti].elements.append(PlanElement(content: .content(TrackPayload(clip))))
             }
             return ToolEnvelope.applied(result) { plan in
-                let clip = plan.clips.last!
+                let elementID = plan.primaryTrack?.elements.last?.id.uuidString ?? ""
                 let registered = plan.assets.first { $0.fileName == asset.fileName }!
-                return Payload(clipID: clip.id.uuidString, assetID: registered.id.uuidString,
+                return Payload(clipID: elementID, assetID: registered.id.uuidString,
                                registeredNewAsset: !existingFileNames.contains(asset.fileName),
                                renderedDuration: plan.renderedDuration)
             }
@@ -256,12 +269,17 @@ struct SplitClipTool: DefensiveAgentTool {
     func call(parsed args: Args) async throws -> String {
         if let limit = AgentToolCommon.stepLimitIfExceeded(context) { return limit }
         return await context.withStore { store in
-            let index: Int
-            switch AgentToolCommon.clipIndex(store.plan, clipID: args.clipID) {
-            case .success(let i): index = i
+            let location: AgentToolCommon.ElementLocation
+            switch AgentToolCommon.locate(store.plan, elementID: args.clipID) {
+            case .success(let found): location = found
             case .failure(let error): return error.message
             }
-            let clip = store.plan.clips[index]
+            guard case .content(let payload) = store.plan.tracks[location.trackIndex]
+                    .elements[location.elementIndex].content,
+                  let clip = payload.value as? PlanClip else {
+                return ToolEnvelope.error("元素 \(args.clipID) 不是视频/图片片段，无法分割")
+            }
+            let originalID = store.plan.tracks[location.trackIndex].elements[location.elementIndex].id
             switch clip.source {
             case .video(let range):
                 guard args.at > range.lowerBound, args.at < range.upperBound else {
@@ -269,13 +287,17 @@ struct SplitClipTool: DefensiveAgentTool {
                 }
                 let secondID = UUID()
                 let result = store.apply { plan in
-                    var first = plan.clips[index]
-                    var second = plan.clips[index]
+                    guard case .content(let p) = plan.tracks[location.trackIndex]
+                            .elements[location.elementIndex].content,
+                          var first = p.value as? PlanClip else { return }
+                    var second = first
                     first.source = .video(range.lowerBound...args.at)
                     first.transitionAfter = nil
-                    second.id = secondID
                     second.source = .video(args.at...range.upperBound)
-                    plan.clips.replaceSubrange(index...index, with: [first, second])
+                    plan.tracks[location.trackIndex].elements.replaceSubrange(
+                        location.elementIndex...location.elementIndex,
+                        with: [PlanElement(id: originalID, content: .content(TrackPayload(first))),
+                               PlanElement(id: secondID, content: .content(TrackPayload(second)))])
                 }
                 return ToolEnvelope.applied(result) { plan in
                     Payload(firstClipID: args.clipID, secondClipID: secondID.uuidString,
@@ -288,13 +310,17 @@ struct SplitClipTool: DefensiveAgentTool {
                 }
                 let secondID = UUID()
                 let result = store.apply { plan in
-                    var first = plan.clips[index]
-                    var second = plan.clips[index]
+                    guard case .content(let p) = plan.tracks[location.trackIndex]
+                            .elements[location.elementIndex].content,
+                          var first = p.value as? PlanClip else { return }
+                    var second = first
                     first.source = .still(duration: args.at)
                     first.transitionAfter = nil
-                    second.id = secondID
                     second.source = .still(duration: duration - args.at)
-                    plan.clips.replaceSubrange(index...index, with: [first, second])
+                    plan.tracks[location.trackIndex].elements.replaceSubrange(
+                        location.elementIndex...location.elementIndex,
+                        with: [PlanElement(id: originalID, content: .content(TrackPayload(first))),
+                               PlanElement(id: secondID, content: .content(TrackPayload(second)))])
                 }
                 return ToolEnvelope.applied(result) { plan in
                     Payload(firstClipID: args.clipID, secondClipID: secondID.uuidString,
@@ -331,19 +357,24 @@ struct TrimClipTool: DefensiveAgentTool {
             return ToolEnvelope.error("区间不能为空：rangeStart（\(args.rangeStart)）须小于 rangeEnd（\(args.rangeEnd)）")
         }
         return await context.withStore { store in
-            let index: Int
-            switch AgentToolCommon.clipIndex(store.plan, clipID: args.clipID) {
-            case .success(let i): index = i
+            let location: AgentToolCommon.ElementLocation
+            switch AgentToolCommon.locate(store.plan, elementID: args.clipID) {
+            case .success(let found): location = found
             case .failure(let error): return error.message
             }
             let result = store.apply { plan in
-                switch plan.clips[index].source {
+                guard case .content(let payload) = plan.tracks[location.trackIndex]
+                        .elements[location.elementIndex].content,
+                      var clip = payload.value as? PlanClip else { return }
+                switch clip.source {
                 case .video:
-                    plan.clips[index].source = .video(args.rangeStart...args.rangeEnd)
+                    clip.source = .video(args.rangeStart...args.rangeEnd)
                 case .still:
                     // 图片无源区间：以 rangeEnd − rangeStart 作为新基准时长。
-                    plan.clips[index].source = .still(duration: args.rangeEnd - args.rangeStart)
+                    clip.source = .still(duration: args.rangeEnd - args.rangeStart)
                 }
+                plan.tracks[location.trackIndex].elements[location.elementIndex].content =
+                    .content(TrackPayload(clip))
             }
             return ToolEnvelope.applied(result) { plan in
                 Payload(clipID: args.clipID, renderedDuration: plan.renderedDuration)
@@ -373,20 +404,21 @@ struct MoveClipTool: DefensiveAgentTool {
     func call(parsed args: Args) async throws -> String {
         if let limit = AgentToolCommon.stepLimitIfExceeded(context) { return limit }
         return await context.withStore { store in
-            let index: Int
-            switch AgentToolCommon.clipIndex(store.plan, clipID: args.clipID) {
-            case .success(let i): index = i
+            let location: AgentToolCommon.ElementLocation
+            switch AgentToolCommon.locate(store.plan, elementID: args.clipID) {
+            case .success(let found): location = found
             case .failure(let error): return error.message
             }
-            guard store.plan.clips.indices.contains(args.toIndex) else {
-                return ToolEnvelope.error("目标下标 \(args.toIndex) 越界（当前共 \(store.plan.clips.count) 个片段）")
+            let track = store.plan.tracks[location.trackIndex]
+            guard track.elements.indices.contains(args.toIndex) else {
+                return ToolEnvelope.error("目标下标 \(args.toIndex) 越界（当前共 \(track.elements.count) 个片段）")
             }
             let result = store.apply { plan in
-                let clip = plan.clips.remove(at: index)
-                plan.clips.insert(clip, at: args.toIndex)
+                let element = plan.tracks[location.trackIndex].elements.remove(at: location.elementIndex)
+                plan.tracks[location.trackIndex].elements.insert(element, at: args.toIndex)
             }
             return ToolEnvelope.applied(result) { plan in
-                Payload(clipOrder: plan.clips.map { $0.id.uuidString },
+                Payload(clipOrder: plan.tracks[location.trackIndex].elements.map { $0.id.uuidString },
                         renderedDuration: plan.renderedDuration)
             }
         }
@@ -412,16 +444,18 @@ struct RemoveClipTool: DefensiveAgentTool {
     func call(parsed args: Args) async throws -> String {
         if let limit = AgentToolCommon.stepLimitIfExceeded(context) { return limit }
         return await context.withStore { store in
-            let index: Int
-            switch AgentToolCommon.clipIndex(store.plan, clipID: args.clipID) {
-            case .success(let i): index = i
+            let location: AgentToolCommon.ElementLocation
+            switch AgentToolCommon.locate(store.plan, elementID: args.clipID) {
+            case .success(let found): location = found
             case .failure(let error): return error.message
             }
+            let elementID = store.plan.tracks[location.trackIndex].elements[location.elementIndex].id
             let result = store.apply { plan in
-                plan.clips.remove(at: index)
+                TrackOperations.removeElement(elementID, in: &plan)
             }
             return ToolEnvelope.applied(result) { plan in
-                Payload(renderedDuration: plan.renderedDuration, remainingClips: plan.clips.count)
+                Payload(renderedDuration: plan.renderedDuration,
+                        remainingClips: plan.primaryTrack?.elements.count ?? 0)
             }
         }
     }
@@ -449,13 +483,18 @@ struct SetSpeedTool: DefensiveAgentTool {
     func call(parsed args: Args) async throws -> String {
         if let limit = AgentToolCommon.stepLimitIfExceeded(context) { return limit }
         return await context.withStore { store in
-            let index: Int
-            switch AgentToolCommon.clipIndex(store.plan, clipID: args.clipID) {
-            case .success(let i): index = i
+            let location: AgentToolCommon.ElementLocation
+            switch AgentToolCommon.locate(store.plan, elementID: args.clipID) {
+            case .success(let found): location = found
             case .failure(let error): return error.message
             }
             let result = store.apply { plan in
-                plan.clips[index].speed = .flat(args.rate)
+                guard case .content(let payload) = plan.tracks[location.trackIndex]
+                        .elements[location.elementIndex].content,
+                      var clip = payload.value as? PlanClip else { return }
+                clip.speed = .flat(args.rate)
+                plan.tracks[location.trackIndex].elements[location.elementIndex].content =
+                    .content(TrackPayload(clip))
             }
             return ToolEnvelope.applied(result) { plan in
                 Payload(clipID: args.clipID, rate: args.rate,
@@ -499,13 +538,18 @@ struct SetTransitionTool: DefensiveAgentTool {
             return ToolEnvelope.error("未知转场类型 '\(args.type)'；支持：dissolve / fade / none")
         }
         return await context.withStore { store in
-            let index: Int
-            switch AgentToolCommon.clipIndex(store.plan, clipID: args.clipID) {
-            case .success(let i): index = i
+            let location: AgentToolCommon.ElementLocation
+            switch AgentToolCommon.locate(store.plan, elementID: args.clipID) {
+            case .success(let found): location = found
             case .failure(let error): return error.message
             }
             let result = store.apply { plan in
-                plan.clips[index].transitionAfter = transition
+                guard case .content(let payload) = plan.tracks[location.trackIndex]
+                        .elements[location.elementIndex].content,
+                      var clip = payload.value as? PlanClip else { return }
+                clip.transitionAfter = transition
+                plan.tracks[location.trackIndex].elements[location.elementIndex].content =
+                    .content(TrackPayload(clip))
             }
             return ToolEnvelope.applied(result) { plan in
                 Payload(clipID: args.clipID, renderedDuration: plan.renderedDuration)
@@ -547,6 +591,18 @@ struct SetCaptionsTool: DefensiveAgentTool {
             return ToolEnvelope.error("字幕文件不存在: \(args.fileName)。请用 list_assets 查看可用素材")
         }
 
+        // 字幕逐句化：SRT 导入展开成 cue 元素（位置进 element.at，payload 只留文本与时长）。
+        // 读文件在事务外——store.apply 的闭包是纯内存操作，不做 IO。
+        let srtURL = context.resolver.resolve(fileName: args.fileName)
+        guard let data = try? Data(contentsOf: srtURL),
+              let text = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .windowsCP1252) else {
+            return ToolEnvelope.error("字幕文件读不出来: \(args.fileName)")
+        }
+        let cueElements = SRTParser.parse(text).cues.map { cue in
+            PlanElement(at: cue.start, content: .content(TrackPayload(
+                CaptionCuePayload(text: cue.text, duration: cue.duration))))
+        }
+
         return await context.withStore { store in
             let result = store.apply { plan in
                 let assetID: UUID
@@ -558,15 +614,21 @@ struct SetCaptionsTool: DefensiveAgentTool {
                     plan.assets.append(asset)
                     assetID = asset.id
                 }
-                plan.captions = CaptionTrack(
-                    assetID: assetID,
-                    isEnabled: args.enabled ?? true,
-                    style: CaptionStyle(fontSize: args.fontSize ?? 48, isBold: args.isBold ?? true)
-                )
+                let settings = CaptionTrackSettings(
+                    fontSize: args.fontSize ?? 48, isBold: args.isBold ?? true,
+                    isEnabled: args.enabled ?? true, sourceAssetID: assetID)
+                if let ti = plan.tracks.firstIndex(where: { $0.kind == .caption }) {
+                    plan.tracks[ti].settings = TrackPayload(settings)
+                    plan.tracks[ti].elements = cueElements
+                } else {
+                    plan.tracks.append(PlanTrack(kind: .caption, placement: .absolute,
+                                                 settings: TrackPayload(settings), elements: cueElements))
+                }
             }
             return ToolEnvelope.applied(result) { plan in
-                Payload(captionAssetID: plan.captions?.assetID.uuidString ?? "",
-                        isEnabled: plan.captions?.isEnabled ?? false)
+                let settings = plan.tracks.first { $0.kind == .caption }.map(CaptionFeature.settings(of:))
+                return Payload(captionAssetID: settings?.sourceAssetID?.uuidString ?? "",
+                               isEnabled: settings?.isEnabled ?? false)
             }
         }
     }

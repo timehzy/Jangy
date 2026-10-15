@@ -9,8 +9,10 @@ import UniformTypeIdentifiers
 public enum CoverGenerator {
     public static func generate(for plan: EditPlan, resolver: AssetResolver, to url: URL) async {
         let fm = FileManager.default
-        guard let first = plan.clips.first,
-              let asset = plan.asset(withID: first.assetID),
+        guard let first = plan.primaryTrack?.elements.first,
+              case .content(let payload) = first.content,
+              let clip = payload.value as? PlanClip,
+              let asset = plan.asset(withID: clip.assetID),
               resolver.exists(asset) else {
             try? fm.removeItem(at: url)
             return

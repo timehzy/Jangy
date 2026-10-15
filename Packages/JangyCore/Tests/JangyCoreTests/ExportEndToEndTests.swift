@@ -194,7 +194,7 @@ final class ExportEndToEndTests: XCTestCase {
             assets.append(asset)
             planClips.append(PlanClip(assetID: asset.id, source: .video(spec.range), speed: .flat(spec.speed)))
         }
-        return EditPlan(assets: assets, clips: planClips)
+        return PlanTestSupport.plan(assets: assets, clips: planClips)
     }
 
     /// 跑一遍导出并断言以 done 结束，返回输出文件 URL。

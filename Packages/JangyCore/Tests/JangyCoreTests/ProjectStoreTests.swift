@@ -23,7 +23,12 @@ final class ProjectStoreTests: XCTestCase {
     func testCreateAndLoadRoundTrip() throws {
         let summary = try store.createProject(name: "测试项目")
         XCTAssertEqual(summary.name, "测试项目")
-        XCTAssertEqual(try store.loadProject(id: summary.id), EditPlan(clips: []))
+        // 新建项目 = 空主轨（主轨 id 随机，故断言结构而非整模型相等）
+        let plan = try store.loadProject(id: summary.id).plan
+        XCTAssertEqual(plan.version, ProjectStore.currentSchemaVersion)
+        XCTAssertTrue(plan.assets.isEmpty)
+        XCTAssertEqual(plan.primaryTrack?.elements.count, 0)
+        XCTAssertEqual(summary.clipCount, 0)
         XCTAssertEqual(try store.loadMeta(id: summary.id).name, "测试项目")
     }
 
@@ -31,7 +36,7 @@ final class ProjectStoreTests: XCTestCase {
         let summary = try store.createProject(name: "A")
         let plan = SamplePlan.make()
         try store.saveProject(id: summary.id, plan: plan)
-        XCTAssertEqual(try store.loadProject(id: summary.id), plan)
+        XCTAssertEqual(try store.loadProject(id: summary.id).plan, plan)
     }
 
     func testRepeatedSavesAreByteIdentical() throws {
@@ -47,7 +52,7 @@ final class ProjectStoreTests: XCTestCase {
     func testSchemaGuardRejectsNewerVersion() throws {
         let summary = try store.createProject(name: "A")
         // 直接写一个「更新版本」的文件（模拟更新版 App 产出）；不走 saveProject——它会归一化版本
-        var plan = EditPlan(clips: [])
+        var plan = PlanTestSupport.plan(clips: [])
         plan.version = ProjectStore.currentSchemaVersion + 1
         let url = store.projectDirectory(id: summary.id).appendingPathComponent(ProjectStore.planFileName)
         let encoder = JSONEncoder()
@@ -65,7 +70,7 @@ final class ProjectStoreTests: XCTestCase {
         let a = try store.createProject(name: "A")
         let b = try store.createProject(name: "B")
         // 触碰 A 使其修改时间更新
-        try store.saveProject(id: a.id, plan: EditPlan(clips: []))
+        try store.saveProject(id: a.id, plan: PlanTestSupport.plan(clips: []))
         let names = try store.listProjects().map(\.name)
         XCTAssertEqual(names, ["A", "B"], "修改时间倒序；同秒精度下后写入的 A 在前")
         _ = b
@@ -90,7 +95,7 @@ final class ProjectStoreTests: XCTestCase {
         try store.saveProject(id: summary.id, plan: SamplePlan.make())
         let copy = try store.duplicateProject(id: summary.id)
         XCTAssertEqual(copy.name, "原始 副本")
-        XCTAssertEqual(try store.loadProject(id: copy.id), SamplePlan.make(), "plan 深拷贝（引用语义下无需拷素材）")
+        XCTAssertEqual(try store.loadProject(id: copy.id).plan, SamplePlan.make(), "plan 深拷贝（引用语义下无需拷素材）")
         XCTAssertNotEqual(copy.id, summary.id)
     }
 
@@ -129,7 +134,7 @@ final class ProjectStoreTests: XCTestCase {
         let projects = try store.listProjects()
         XCTAssertEqual(projects.count, 1)
         XCTAssertEqual(projects[0].name, "未命名项目")
-        XCTAssertEqual(try store.loadProject(id: projects[0].id), plan)
+        XCTAssertEqual(try store.loadProject(id: projects[0].id).plan, plan)
 
         // 素材进 Assets/，agent-config.json 原地不动
         let library = AssetLibrary(root: root)
@@ -152,6 +157,6 @@ final class ProjectStoreTests: XCTestCase {
         legacy.version = 2
         try store.saveProject(id: summary.id, plan: legacy)
         let url = store.projectDirectory(id: summary.id).appendingPathComponent(ProjectStore.planFileName)
-        XCTAssertEqual(try PlanLoader.load(from: url).version, ProjectStore.currentSchemaVersion)
+        XCTAssertEqual(try PlanLoader.load(from: url).plan.version, ProjectStore.currentSchemaVersion)
     }
 }

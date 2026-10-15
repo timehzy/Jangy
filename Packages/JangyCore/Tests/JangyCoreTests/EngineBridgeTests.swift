@@ -1,7 +1,6 @@
 import XCTest
 import CoreMedia
 import Kadr
-import KadrCaptions
 @testable import JangyCore
 @testable import JangyTestSupport
 
@@ -42,7 +41,11 @@ final class EngineBridgeTests: XCTestCase {
 
     func testCaptionsDisabledProducesNoOverlays() async throws {
         var plan = SamplePlan.make()
-        plan.captions?.isEnabled = false
+        if let ti = plan.tracks.firstIndex(where: { $0.kind == .caption }) {
+            var settings = CaptionFeature.settings(of: plan.tracks[ti])
+            settings.isEnabled = false
+            plan.tracks[ti].settings = TrackPayload(settings)
+        }
         let video = try await EngineBridge.makeComposition(from: plan, resolver: resolver)
         XCTAssertEqual(video.captions.count, 0)
         XCTAssertEqual(video.overlays.count, 0)
@@ -65,10 +68,9 @@ final class EngineBridgeTests: XCTestCase {
 
     func testSingleClipNoTransition() async throws {
         let assetID = UUID()
-        let plan = EditPlan(
+        let plan = PlanTestSupport.plan(
             assets: [AssetItem(id: assetID, kind: .video, fileName: "clip1.mp4", duration: 4.0)],
-            clips: [PlanClip(assetID: assetID, source: .video(0...3))]
-        )
+            clips: [PlanClip(assetID: assetID, source: .video(0...3))])
         let video = try await EngineBridge.makeComposition(from: plan, resolver: resolver)
         XCTAssertEqual(video.clips.count, 1)
         XCTAssertEqual(CMTimeGetSeconds(video.duration), 3.0, accuracy: 0.01)
@@ -77,7 +79,8 @@ final class EngineBridgeTests: XCTestCase {
     func testCaptionOverlayVisibilityRangeMatchesCue() async throws {
         let plan = SamplePlan.make()
         let video = try await EngineBridge.makeComposition(from: plan, resolver: resolver)
-        let cues = try await Kadr.Caption.load(srt: resolver.resolve(plan.asset(withID: plan.captions!.assetID)!))
+        let track = plan.tracks.first { $0.kind == .caption }!
+        let cues = CaptionEngine.makeCues(track: track)
         // 烧录走 ImageOverlay（macOS headless 下 CATextLayer 不渲染，见 CaptionImageRenderer 注释）
         let overlay = try XCTUnwrap(video.overlays.first as? Kadr.ImageOverlay)
         let visibility = try XCTUnwrap(overlay.visibilityRange)
@@ -85,8 +88,8 @@ final class EngineBridgeTests: XCTestCase {
         XCTAssertEqual(CMTimeGetSeconds(visibility.start), CMTimeGetSeconds(cueRange.start), accuracy: 0.01)
         XCTAssertEqual(CMTimeGetSeconds(CMTimeRangeGetEnd(visibility)),
                        CMTimeGetSeconds(CMTimeRangeGetEnd(cueRange)), accuracy: 0.01)
-        // CMTimeRange 直达（无双秒往返）：SRT 解析为 timescale 1000，overlay 必须原样保留，
-        // 不得被 ClosedRange<TimeInterval> 重定量化到 600。
+        // CMTimeRange 直达（无双秒往返）：cue 位置由 element.at 以 timescale 1000 构造，
+        // overlay 必须原样保留，不得被 ClosedRange<TimeInterval> 重定量化到 600。
         XCTAssertEqual(visibility.start.timescale, cueRange.start.timescale)
         XCTAssertEqual(visibility.duration.timescale, cueRange.duration.timescale)
     }

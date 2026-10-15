@@ -32,6 +32,18 @@ public enum EngineBridge {
         public var description: String { "图片素材无法解码: \(assetID)" }
     }
 
+    /// plan 的 primaryTrackID 指向的轨道不存在。
+    public struct MissingPrimaryTrackError: Error, CustomStringConvertible {
+        public var description: String { "plan 没有主轨（primaryTrackID 指向的轨道不存在）" }
+    }
+
+    /// 轨道类型与 payload 类型对不上（如视频轨里塞了字幕 cue）。
+    public struct UnknownPayloadError: Error, CustomStringConvertible {
+        public let kind: TrackKind
+        public let payloadType: String
+        public var description: String { "轨道类型 \(kind.rawValue) 不认识 payload 类型 '\(payloadType)'" }
+    }
+
     /// - Parameter options: 导出配置（仅导出链路关心 SDR 降级；预览走默认 HDR 直通）。
     public static func makeComposition(from plan: EditPlan, resolver: AssetResolver,
                                        options: ExportOptions = .default) async throws -> Kadr.Video {
@@ -48,32 +60,49 @@ public enum EngineBridge {
                 : .custom(width: 1080, height: 1920, frameRate: 30, codec: .h264)
         }
 
+        guard let primary = plan.primaryTrack else { throw MissingPrimaryTrackError() }
+
+        // 主轨：链式。gap 映射成纯黑 ImageClip，链保持连续（转场路径不受影响）。
         var elements: [any Kadr.Clip] = []
-        for clip in plan.clips {
-            guard let asset = plan.asset(withID: clip.assetID) else {
-                throw MissingAssetError(assetID: clip.assetID)
-            }
-            let sourceURL = resolver.resolve(asset)
-            switch clip.source {
-            case .video(let range):
-                var videoClip = Kadr.VideoClip(url: sourceURL)
-                    .trimmed(to: range)
-                // Kadr 1.x 校准：`speed(_:)` 只接受 Speed 枚举（Double 重载在 v0.14 被移除）。
-                if clip.speed.rate != 1.0 {
-                    videoClip = videoClip.speed(.flat(clip.speed.rate))
+        for element in primary.elements {
+            switch element.content {
+            case .gap(let duration):
+                elements.append(Kadr.ImageClip.color(PlatformColor.black, duration: duration))
+            case .content(let payload):
+                guard let clip = payload.value as? PlanClip else {
+                    throw UnknownPayloadError(kind: primary.kind, payloadType: payload.payloadType)
                 }
-                elements.append(videoClip)
-            case .still(let duration):
-                // 图片无源区间：预合成到 preset 画幅（消除 Kadr 拉伸变形），
-                // 时长 = 基准 / 倍速（图片「变速」即改输出时长）。
-                guard let image = StillImagePreparer.prepare(url: sourceURL, canvas: preset.resolution) else {
-                    throw ImageDecodeError(assetID: clip.assetID)
+                guard let asset = plan.asset(withID: clip.assetID) else {
+                    throw MissingAssetError(assetID: clip.assetID)
                 }
-                elements.append(Kadr.ImageClip(image, duration: duration / clip.speed.rate))
+                let sourceURL = resolver.resolve(asset)
+                switch clip.source {
+                case .video(let range):
+                    var videoClip = Kadr.VideoClip(url: sourceURL).trimmed(to: range)
+                    // Kadr 1.x 校准：`speed(_:)` 只接受 Speed 枚举（Double 重载在 v0.14 被移除）。
+                    if clip.speed.rate != 1.0 {
+                        videoClip = videoClip.speed(.flat(clip.speed.rate))
+                    }
+                    elements.append(videoClip)
+                case .still(let duration):
+                    // 图片无源区间：预合成到 preset 画幅（消除 Kadr 拉伸变形），
+                    // 时长 = 基准 / 倍速（图片「变速」即改输出时长）。
+                    guard let image = StillImagePreparer.prepare(url: sourceURL, canvas: preset.resolution) else {
+                        throw ImageDecodeError(assetID: clip.assetID)
+                    }
+                    elements.append(Kadr.ImageClip(image, duration: duration / clip.speed.rate))
+                }
+                if let transition = clip.transitionAfter {
+                    elements.append(kadrTransition(transition))
+                }
             }
-            if let transition = clip.transitionAfter {
-                elements.append(kadrTransition(transition))
-            }
+        }
+
+        // 叠加视频轨 → Kadr.Track。Track 本身是 Clip，直接进 builder 数组
+        // （Kadr.Video 没有 track(_:) modifier）。声明顺序 = 绘制顺序，后面的盖前面的。
+        for track in plan.tracks where track.id != primary.id && track.kind == .video {
+            elements.append(try await VideoEngine.makeParallelTrack(track: track, plan: plan,
+                                                                    resolver: resolver, preset: preset))
         }
 
         // Kadr 1.x 校准：VideoBuilder 的 buildExpression 只接受单个 Clip，
@@ -82,14 +111,13 @@ public enum EngineBridge {
             for element in elements { element }
         }.preset(preset)
 
-        if let track = plan.captions, track.isEnabled {
-            guard let captionAsset = plan.asset(withID: track.assetID) else {
-                throw MissingAssetError(assetID: track.assetID)
-            }
-            let cues = try await Kadr.Caption.load(srt: resolver.resolve(captionAsset))
+        // 字幕轨（可能多条，accumulate）
+        for track in plan.tracks where track.kind == .caption {
+            let cues = CaptionEngine.makeCues(track: track)
+            guard !cues.isEmpty else { continue }
             video = video.captions(cues)                    // 软字幕：AVMetadataItem
             for cue in cues {
-                video = video.overlay(captionOverlay(cue, style: track.style))  // 烧录：ImageOverlay（见 captionOverlay 注释）
+                video = video.overlay(captionOverlay(cue, style: CaptionFeature.settings(of: track)))  // 烧录：ImageOverlay（见 captionOverlay 注释）
             }
         }
         return video
@@ -108,7 +136,7 @@ public enum EngineBridge {
     /// ImageOverlay（CGImage contents）则稳定可见。
     /// 位置语义与原 TextOverlay 方案一致：底部居中、CMTimeRange 直达的可见窗口。
     /// 正式版：长 SRT（数百 cue）考虑合并同时点 cue 或分页渲染，避免 layer/图片数量爆炸。
-    static func captionOverlay(_ cue: Kadr.Caption, style: CaptionStyle) -> Kadr.ImageOverlay {
+    static func captionOverlay(_ cue: Kadr.Caption, style: CaptionTrackSettings) -> Kadr.ImageOverlay {
         let image = CaptionImageRenderer.render(cue.text, fontSize: style.fontSize, isBold: style.isBold)
         return Kadr.ImageOverlay(image)
             .position(.normalized(x: 0.5, y: 0.92))  // 底部居中，留 8% 安全边距

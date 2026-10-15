@@ -25,11 +25,22 @@ extension PlanTransition {
 }
 
 extension EditPlan {
-    /// 渲染输出总时长（实测口径）= Σ 片段输出时长 − Σ 转场重叠量。
+    /// 渲染输出总时长（实测口径）= 主轨链长 = Σ 元素输出时长 − Σ 转场重叠量。
     /// 样例工程实测锚点：3s@1x + 3s@0.5x + 2s@2x 挂 0.5s dissolve → 9.5s
-    /// （≠ Kadr.Video.duration 求和值 10.5s）。e2e 断言基于此属性，
-    /// 与导出产物实测时长互相锚定。
+    /// （≠ Kadr.Video.duration 求和值 10.5s）。e2e 断言基于此属性。
+    ///
+    /// 多轨不变式：主轨从 0 起连续覆盖 [0, renderedDuration]，其他轨元素不得超出主轨末端
+    /// （由 TrackOperations 维持、EditPlanValidator 兜底）。故成片时长恒等于主轨链长。
     public var renderedDuration: TimeInterval {
-        clips.reduce(0) { $0 + $1.outputDuration - ($1.transitionAfter?.overlapDuration ?? 0) }
+        guard let track = primaryTrack else { return 0 }
+        return track.elements.reduce(0) { total, element in
+            var overlap: TimeInterval = 0
+            if case .content(let payload) = element.content,
+               let clip = payload.value as? PlanClip,
+               let transition = clip.transitionAfter {
+                overlap = transition.overlapDuration
+            }
+            return total + element.duration - overlap
+        }
     }
 }

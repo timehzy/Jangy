@@ -45,12 +45,18 @@ final class ProjectPackageTests: XCTestCase {
             idMap[asset.id] = lib.id
             plan.assets[index] = lib
         }
-        plan.clips = plan.clips.map { PlanClip(id: $0.id, assetID: idMap[$0.assetID]!,
-                                               source: $0.source, speed: $0.speed,
-                                               transitionAfter: $0.transitionAfter) }
-        if let captions = plan.captions {
-            plan.captions = CaptionTrack(assetID: idMap[captions.assetID]!,
-                                         isEnabled: captions.isEnabled, style: captions.style)
+        for ti in plan.tracks.indices {
+            for ei in plan.tracks[ti].elements.indices {
+                guard case .content(let payload) = plan.tracks[ti].elements[ei].content,
+                      var clip = payload.value as? PlanClip else { continue }
+                clip.assetID = idMap[clip.assetID]!
+                plan.tracks[ti].elements[ei].content = .content(TrackPayload(clip))
+            }
+            if var settings = plan.tracks[ti].settings?.value as? CaptionTrackSettings,
+               let source = settings.sourceAssetID, let mapped = idMap[source] {
+                settings.sourceAssetID = mapped
+                plan.tracks[ti].settings = TrackPayload(settings)
+            }
         }
         try store.saveProject(id: summary.id, plan: plan)
         return summary
@@ -63,10 +69,10 @@ final class ProjectPackageTests: XCTestCase {
                                   library: library, resolver: library.resolver, to: zip)
         XCTAssertTrue(FileManager.default.fileExists(atPath: zip.path))
 
-        let expectedPlan = try store.loadProject(id: project.id)
+        let expectedPlan = try store.loadProject(id: project.id).plan
         let imported = try await ProjectPackage.import(from: zip, into: store, library: library)
         XCTAssertEqual(imported.name, "我的项目 2", "名称冲突加后缀")
-        XCTAssertEqual(try store.loadProject(id: imported.id), expectedPlan,
+        XCTAssertEqual(try store.loadProject(id: imported.id).plan, expectedPlan,
                        "同库导入：素材哈希全部命中，plan 引用不变")
     }
 
@@ -82,10 +88,11 @@ final class ProjectPackageTests: XCTestCase {
         let store2 = ProjectStore(root: root2)
         let library2 = AssetLibrary(root: root2)
         let imported = try await ProjectPackage.import(from: zip, into: store2, library: library2)
-        let plan = try store2.loadProject(id: imported.id)
+        let plan = try store2.loadProject(id: imported.id).plan
         let registry = try library2.load()
         XCTAssertEqual(registry.count, plan.assets.count, "素材全部入库")
-        for clip in plan.clips {
+        for element in plan.primaryTrack?.elements ?? [] {
+            guard let clip = element.content.clipPayload else { continue }
             XCTAssertTrue(registry.contains { $0.id == clip.assetID }, "clip 引用有效")
         }
         for asset in plan.assets {
@@ -108,7 +115,7 @@ final class ProjectPackageTests: XCTestCase {
     func testExportFailsOnMissingAsset() throws {
         let project = try makeProject(name: "P")
         // 删掉一个被引用的素材文件
-        let plan = try store.loadProject(id: project.id)
+        let plan = try store.loadProject(id: project.id).plan
         try FileManager.default.removeItem(at: library.resolver.resolve(plan.assets[0]))
         XCTAssertThrowsError(try ProjectPackage.export(projectID: project.id, from: store,
                                                        library: library, resolver: library.resolver,
@@ -136,7 +143,7 @@ final class ProjectPackageTests: XCTestCase {
         let staging = root.appendingPathComponent("staging")
         try ZipArchive.unzip(zip, into: staging)
         let planURL = staging.appendingPathComponent(ProjectStore.planFileName)
-        var plan = try PlanLoader.load(from: planURL)
+        var plan = try PlanLoader.load(from: planURL).plan
         plan.version = ProjectStore.currentSchemaVersion + 1
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]

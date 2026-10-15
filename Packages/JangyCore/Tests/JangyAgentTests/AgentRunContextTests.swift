@@ -8,8 +8,19 @@ import XCTest
 /// AgentRunContext 注入化：共享 store、调度器、didApply 联动、步数计数重置。
 final class AgentRunContextTests: XCTestCase {
 
+    /// 去掉字幕轨：字幕是绝对定位轨，clip 变速会缩短主轨、使越界的 cue 被校验拦下。
+    /// 本文件测的是 store 共享/联动，与字幕无关。
     private func makeStore() -> EditStore {
-        EditStore(initial: SamplePlan.make())
+        var plan = SamplePlan.make()
+        plan.tracks.removeAll { $0.kind == .caption }
+        return EditStore(initial: plan)
+    }
+
+    /// 主轨第 i 个元素解出的 clip（v4：片段在主轨元素里）。
+    private func clip(_ plan: EditPlan, _ i: Int) -> PlanClip? {
+        guard let element = plan.primaryTrack?.elements[i],
+              case .content(let payload) = element.content else { return nil }
+        return payload.value as? PlanClip
     }
 
     func testInjectedStoreIsShared() async {
@@ -20,9 +31,9 @@ final class AgentRunContextTests: XCTestCase {
             framesDirectory: FileManager.default.temporaryDirectory
         )
         await context.withStore { s in
-            _ = s.apply { $0.clips[0].speed = .flat(2.0) }
+            _ = s.apply { $0.updatePrimaryClip(at: 0) { $0.speed = .flat(2.0) } }
         }
-        XCTAssertEqual(store.plan.clips[0].speed, .flat(2.0), "写入直达注入的共享 store")
+        XCTAssertEqual(clip(store.plan, 0)?.speed, .flat(2.0), "写入直达注入的共享 store")
         XCTAssertEqual(store.historyCount, 2, "共享 store 的撤销栈同步增长")
     }
 
@@ -39,11 +50,11 @@ final class AgentRunContextTests: XCTestCase {
         _ = await context.plan  // 纯读：不触发
         XCTAssertTrue(fired.isEmpty)
         await context.withStore { s in
-            _ = s.apply { $0.clips[0].speed = .flat(2.0) }
+            _ = s.apply { $0.updatePrimaryClip(at: 0) { $0.speed = .flat(2.0) } }
         }
         XCTAssertEqual(fired.count, 1, "plan 变化触发一次 didApply")
         await context.withStore { s in
-            _ = s.apply { $0.clips[0].speed = .flat(99) }  // 校验失败，plan 不变
+            _ = s.apply { $0.updatePrimaryClip(at: 0) { $0.speed = .flat(99) } }  // 校验失败，plan 不变
         }
         XCTAssertEqual(fired.count, 1, "失败 apply 不触发 didApply")
     }

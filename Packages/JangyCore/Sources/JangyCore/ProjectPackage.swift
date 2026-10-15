@@ -52,7 +52,7 @@ public enum ProjectPackage {
     public static func export(projectID: UUID, from projectStore: ProjectStore,
                               library: AssetLibrary, resolver: AssetResolver,
                               to zipURL: URL) throws {
-        let plan = try projectStore.loadProject(id: projectID)
+        let plan = try projectStore.loadProject(id: projectID).plan
         let meta = try projectStore.loadMeta(id: projectID)
         let fm = FileManager.default
 
@@ -98,7 +98,7 @@ public enum ProjectPackage {
         }
         let planURL = staging.appendingPathComponent(ProjectStore.planFileName)
         guard fm.fileExists(atPath: planURL.path) else { throw ProjectPackageError.missingPlan }
-        var plan = try PlanLoader.load(from: planURL)
+        var plan = try PlanLoader.load(from: planURL).plan
         guard plan.version <= ProjectStore.currentSchemaVersion else {
             throw ProjectStoreError.unsupportedVersion(found: plan.version,
                                                        supported: ProjectStore.currentSchemaVersion)
@@ -139,13 +139,19 @@ public enum ProjectPackage {
             plan.assets[index] = item
         }
 
-        // 改写 plan 内全部引用
-        plan.clips = plan.clips.map {
-            PlanClip(id: $0.id, assetID: idMap[$0.assetID] ?? $0.assetID,
-                     source: $0.source, speed: $0.speed, transitionAfter: $0.transitionAfter)
-        }
-        if let captions = plan.captions, let mapped = idMap[captions.assetID] {
-            plan.captions = CaptionTrack(assetID: mapped, isEnabled: captions.isEnabled, style: captions.style)
+        // 改写 plan 内全部引用：元素 payload（clip 的 assetID）+ 字幕轨 settings 的来源素材
+        for ti in plan.tracks.indices {
+            for ei in plan.tracks[ti].elements.indices {
+                guard case .content(let payload) = plan.tracks[ti].elements[ei].content,
+                      var clip = payload.value as? PlanClip else { continue }
+                clip.assetID = idMap[clip.assetID] ?? clip.assetID
+                plan.tracks[ti].elements[ei].content = .content(TrackPayload(clip))
+            }
+            if var settings = plan.tracks[ti].settings?.value as? CaptionTrackSettings,
+               let source = settings.sourceAssetID, let mapped = idMap[source] {
+                settings.sourceAssetID = mapped
+                plan.tracks[ti].settings = TrackPayload(settings)
+            }
         }
 
         // 一切就绪才落库：登记表 + 新项目（createProject 写空 plan + meta，再覆盖 plan）

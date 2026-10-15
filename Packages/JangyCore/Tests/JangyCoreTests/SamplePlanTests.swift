@@ -20,10 +20,12 @@ final class SamplePlanTests: XCTestCase {
     /// 样例工程的 clip/字幕引用必须全部落在素材登记表里（v2 引用完整性）。
     func testSamplePlanReferencesResolve() {
         let plan = SamplePlan.make()
-        for clip in plan.clips {
-            XCTAssertNotNil(plan.asset(withID: clip.assetID), "clip \(clip.id) 引用了未登记素材")
+        for element in plan.primaryTrack?.elements ?? [] {
+            guard let clip = element.content.clipPayload else { continue }
+            XCTAssertNotNil(plan.asset(withID: clip.assetID), "元素 \(element.id) 引用了未登记素材")
         }
-        XCTAssertNotNil(plan.asset(withID: plan.captions!.assetID))
+        let captionTrack = plan.tracks.first { $0.kind == .caption }!
+        XCTAssertNotNil(plan.asset(withID: CaptionFeature.settings(of: captionTrack).sourceAssetID!))
     }
 
     func testSynthesizeProducesAssets() throws {

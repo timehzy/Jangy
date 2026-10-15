@@ -99,10 +99,10 @@ final class AppModel {
             }
             switch item.kind {
             case .image:
-                plan.clips.append(PlanClip(assetID: item.id, source: .still(duration: Self.defaultStillDuration)))
+                Self.appendClip(PlanClip(assetID: item.id, source: .still(duration: Self.defaultStillDuration)), to: &plan)
             case .video:
                 if let duration = item.duration {
-                    plan.clips.append(PlanClip(assetID: item.id, source: .video(0...duration)))
+                    Self.appendClip(PlanClip(assetID: item.id, source: .video(0...duration)), to: &plan)
                 }
             case .audio, .subtitle:
                 break
@@ -116,7 +116,7 @@ final class AppModel {
             if plan.asset(withID: item.id) == nil {
                 plan.assets.append(item)
             }
-            plan.clips.append(PlanClip(assetID: item.id, source: .video(range)))
+            Self.appendClip(PlanClip(assetID: item.id, source: .video(range)), to: &plan)
         }
     }
 
@@ -126,8 +126,14 @@ final class AppModel {
             if plan.asset(withID: item.id) == nil {
                 plan.assets.append(item)
             }
-            plan.clips.append(PlanClip(assetID: item.id, source: .still(duration: duration)))
+            Self.appendClip(PlanClip(assetID: item.id, source: .still(duration: duration)), to: &plan)
         }
+    }
+
+    /// 往主轨追加一个元素（本文件三处上轨入口共用）。
+    private static func appendClip(_ clip: PlanClip, to plan: inout EditPlan) {
+        guard let index = plan.tracks.firstIndex(where: { $0.id == plan.primaryTrackID }) else { return }
+        plan.tracks[index].elements.append(PlanElement(content: .content(TrackPayload(clip))))
     }
 
     /// 图片上轨默认时长（秒）。

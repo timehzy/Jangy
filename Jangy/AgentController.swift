@@ -107,7 +107,7 @@ final class AgentController {
                 baseURL: credentials.baseURL.flatMap { URL(string: $0) },
                 apiKey: credentials.apiKey
             ),
-            hasInitialPlan: !store.plan.clips.isEmpty,
+            hasInitialPlan: !(store.plan.primaryTrack?.elements.isEmpty ?? true),
             onEvent: { [weak self] event in
                 // 事件顺序依赖 MainActor 队列 FIFO（发射端串行发射）：
                 // toolResult 对 toolCall 卡片的回填依赖此保序，换并发分发会交叉。

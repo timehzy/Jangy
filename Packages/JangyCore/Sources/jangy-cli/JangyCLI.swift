@@ -23,7 +23,8 @@ enum CLIError {
 func loadValidatedPlan(_ path: String, assets: String) throws -> (plan: EditPlan, resolver: AssetResolver) {
     let plan: EditPlan
     do {
-        plan = try PlanLoader.load(from: URL(fileURLWithPath: path))
+        plan = try PlanLoader.load(from: URL(fileURLWithPath: path),
+                                   assetsDirectory: URL(fileURLWithPath: assets)).plan
     } catch let error as PlanLoaderError {
         CLIError.stderr("\(error)")
         throw ExitCode(1)

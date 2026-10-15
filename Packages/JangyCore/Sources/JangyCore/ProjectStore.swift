@@ -92,7 +92,7 @@ public struct ProjectStore: Sendable {
     public static let metaFileName = "meta.json"
     public static let coverFileName = "cover.jpg"
     /// 当前支持的 EditPlan schema 版本（与 EditPlan.version 默认值一致）
-    public static let currentSchemaVersion = 3
+    public static let currentSchemaVersion = 4
 
     /// App 支持目录根（Application Support/Jangy）
     public let root: URL
@@ -102,6 +102,9 @@ public struct ProjectStore: Sendable {
     }
 
     public var projectsDir: URL { root.appendingPathComponent(Self.projectsDirName, isDirectory: true) }
+
+    /// 全局素材库目录（v3→v4 迁移期展开 SRT 需要读源文件）。
+    var assetsDir: URL { root.appendingPathComponent(AssetLibrary.assetsDirName, isDirectory: true) }
 
     public func projectDirectory(id: UUID) -> URL {
         projectsDir.appendingPathComponent(id.uuidString, isDirectory: true)
@@ -114,20 +117,28 @@ public struct ProjectStore: Sendable {
         let dir = projectDirectory(id: id)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         try saveMeta(ProjectMeta(id: id, name: name))
-        try saveProject(id: id, plan: EditPlan(clips: []))
+        let primary = PlanTrack(kind: .video, placement: .chained)
+        try saveProject(id: id, plan: EditPlan(tracks: [primary], primaryTrackID: primary.id))
         return try summary(for: id)
     }
 
-    public func loadProject(id: UUID) throws -> EditPlan {
+    /// 加载结果：plan + 迁移期通知（v4 plan 加载时通知恒为空）。
+    public struct LoadResult: Sendable {
+        public let plan: EditPlan
+        public let migrationNotices: [MigrationNotice]
+    }
+
+    public func loadProject(id: UUID) throws -> LoadResult {
         let url = projectDirectory(id: id).appendingPathComponent(Self.planFileName)
         guard FileManager.default.fileExists(atPath: url.path) else {
             throw ProjectStoreError.projectNotFound(id)
         }
-        let plan = try PlanLoader.load(from: url)
-        guard plan.version <= Self.currentSchemaVersion else {
-            throw ProjectStoreError.unsupportedVersion(found: plan.version, supported: Self.currentSchemaVersion)
+        let loaded = try PlanLoader.load(from: url, assetsDirectory: assetsDir)
+        guard loaded.plan.version <= Self.currentSchemaVersion else {
+            throw ProjectStoreError.unsupportedVersion(found: loaded.plan.version,
+                                                       supported: Self.currentSchemaVersion)
         }
-        return plan
+        return LoadResult(plan: loaded.plan, migrationNotices: loaded.migrationNotices)
     }
 
     /// 原子写入：先写同目录临时文件再 rename，中途崩溃不留半截 JSON。
@@ -152,7 +163,7 @@ public struct ProjectStore: Sendable {
 
     /// 复制项目：plan 深拷贝生成新项目。全局素材库下素材零拷贝（引用语义）。
     public func duplicateProject(id: UUID) throws -> ProjectSummary {
-        let plan = try loadProject(id: id)
+        let plan = try loadProject(id: id).plan
         let meta = try loadMeta(id: id)
         let newID = UUID()
         let dir = projectDirectory(id: newID)
@@ -226,11 +237,11 @@ public struct ProjectStore: Sendable {
 
     private func summary(for id: UUID) throws -> ProjectSummary {
         let meta = try loadMeta(id: id)
-        let plan = try loadProject(id: id)
+        let plan = try loadProject(id: id).plan
         let planURL = projectDirectory(id: id).appendingPathComponent(Self.planFileName)
         let modified = (try? FileManager.default.attributesOfItem(atPath: planURL.path))?[.modificationDate] as? Date ?? meta.createdAt
         return ProjectSummary(id: id, name: meta.name, createdAt: meta.createdAt, modifiedAt: modified,
-                              clipCount: plan.clips.count, duration: plan.renderedDuration,
+                              clipCount: plan.primaryTrack?.elements.count ?? 0, duration: plan.renderedDuration,
                               referencedAssetCount: plan.assets.count, directory: projectDirectory(id: id))
     }
 
@@ -281,7 +292,7 @@ public struct ProjectStore: Sendable {
 
         let legacyDraft = root.appendingPathComponent("draft.json")
         if fm.fileExists(atPath: legacyDraft.path) {
-            let plan = try PlanLoader.load(from: legacyDraft)
+            let plan = try PlanLoader.load(from: legacyDraft, assetsDirectory: assetsDir).plan
             guard plan.version <= Self.currentSchemaVersion else {
                 throw ProjectStoreError.unsupportedVersion(found: plan.version, supported: Self.currentSchemaVersion)
             }
@@ -312,7 +323,7 @@ public struct ProjectStore: Sendable {
         if !fm.fileExists(atPath: library.fileURL.path) {
             var registry: [AssetItem] = []
             for summary in (try? listProjects()) ?? [] {
-                guard let plan = try? loadProject(id: summary.id) else { continue }
+                guard let plan = try? loadProject(id: summary.id).plan else { continue }
                 for var asset in plan.assets where !registry.contains(where: { $0.id == asset.id }) {
                     let fileURL = library.resolver.resolve(asset)
                     asset.sha256 = try? AssetHasher.sha256(of: fileURL)

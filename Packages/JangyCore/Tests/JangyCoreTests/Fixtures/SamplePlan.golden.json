@@ -41,65 +41,139 @@
       "origin" : "synthesized"
     }
   ],
-  "captions" : {
-    "assetID" : "AAAAAAAA-0000-0000-0000-0000000000F1",
-    "isEnabled" : true,
-    "style" : {
-      "fontSize" : 48,
-      "isBold" : true
-    }
-  },
-  "clips" : [
+  "preset" : "reelsAndShorts",
+  "primaryTrackID" : "44444444-4444-4444-4444-444444444444",
+  "tracks" : [
     {
-      "assetID" : "AAAAAAAA-0000-0000-0000-000000000001",
-      "id" : "11111111-1111-1111-1111-111111111111",
-      "source" : {
-        "range" : [
-          0,
-          3
-        ],
-        "type" : "video"
-      },
-      "speed" : {
-        "rate" : 1,
-        "type" : "flat"
-      },
-      "transitionAfter" : {
-        "duration" : 0.5,
-        "type" : "dissolve"
-      }
+      "elements" : [
+        {
+          "content" : {
+            "payload" : {
+              "assetID" : "AAAAAAAA-0000-0000-0000-000000000001",
+              "source" : {
+                "range" : [
+                  0,
+                  3
+                ],
+                "type" : "video"
+              },
+              "speed" : {
+                "rate" : 1,
+                "type" : "flat"
+              },
+              "transitionAfter" : {
+                "duration" : 0.5,
+                "type" : "dissolve"
+              },
+              "type" : "clip"
+            },
+            "type" : "content"
+          },
+          "id" : "11111111-1111-1111-1111-111111111111"
+        },
+        {
+          "content" : {
+            "payload" : {
+              "assetID" : "AAAAAAAA-0000-0000-0000-000000000002",
+              "source" : {
+                "range" : [
+                  0,
+                  3
+                ],
+                "type" : "video"
+              },
+              "speed" : {
+                "rate" : 0.5,
+                "type" : "flat"
+              },
+              "type" : "clip"
+            },
+            "type" : "content"
+          },
+          "id" : "22222222-2222-2222-2222-222222222222"
+        },
+        {
+          "content" : {
+            "payload" : {
+              "assetID" : "AAAAAAAA-0000-0000-0000-000000000003",
+              "source" : {
+                "range" : [
+                  0,
+                  2
+                ],
+                "type" : "video"
+              },
+              "speed" : {
+                "rate" : 2,
+                "type" : "flat"
+              },
+              "type" : "clip"
+            },
+            "type" : "content"
+          },
+          "id" : "33333333-3333-3333-3333-333333333333"
+        }
+      ],
+      "id" : "44444444-4444-4444-4444-444444444444",
+      "isHidden" : false,
+      "isLocked" : false,
+      "isMuted" : false,
+      "kind" : "video",
+      "placement" : "chained"
     },
     {
-      "assetID" : "AAAAAAAA-0000-0000-0000-000000000002",
-      "id" : "22222222-2222-2222-2222-222222222222",
-      "source" : {
-        "range" : [
-          0,
-          3
-        ],
-        "type" : "video"
-      },
-      "speed" : {
-        "rate" : 0.5,
-        "type" : "flat"
-      }
-    },
-    {
-      "assetID" : "AAAAAAAA-0000-0000-0000-000000000003",
-      "id" : "33333333-3333-3333-3333-333333333333",
-      "source" : {
-        "range" : [
-          0,
-          2
-        ],
-        "type" : "video"
-      },
-      "speed" : {
-        "rate" : 2,
-        "type" : "flat"
+      "elements" : [
+        {
+          "at" : 0,
+          "content" : {
+            "payload" : {
+              "duration" : 2.5,
+              "text" : "第一段：开场",
+              "type" : "caption-cue"
+            },
+            "type" : "content"
+          },
+          "id" : "66666666-6666-6666-6666-666666666666"
+        },
+        {
+          "at" : 3,
+          "content" : {
+            "payload" : {
+              "duration" : 4.5,
+              "text" : "第二段：慢动作",
+              "type" : "caption-cue"
+            },
+            "type" : "content"
+          },
+          "id" : "77777777-7777-7777-7777-777777777777"
+        },
+        {
+          "at" : 8,
+          "content" : {
+            "payload" : {
+              "duration" : 1,
+              "text" : "第三段：收尾",
+              "type" : "caption-cue"
+            },
+            "type" : "content"
+          },
+          "id" : "88888888-8888-8888-8888-888888888888"
+        }
+      ],
+      "id" : "55555555-5555-5555-5555-555555555555",
+      "isHidden" : false,
+      "isLocked" : false,
+      "isMuted" : false,
+      "kind" : "caption",
+      "placement" : "absolute",
+      "settings" : {
+        "fontSize" : 48,
+        "isBold" : true,
+        "isEnabled" : true,
+        "sourceAssetID" : "AAAAAAAA-0000-0000-0000-0000000000F1",
+        "type" : "caption-settings"
       }
     }
   ],
-  "preset" : "reelsAndShorts",
-  "version" : 3
+  "version" : 4
 }

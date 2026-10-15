@@ -25,7 +25,7 @@ final class ReferenceScannerTests: XCTestCase {
         let a = try store.createProject(name: "A")
         let b = try store.createProject(name: "B")
         try store.saveProject(id: a.id, plan: SamplePlan.make())
-        try store.saveProject(id: b.id, plan: EditPlan(clips: []))
+        try store.saveProject(id: b.id, plan: PlanTestSupport.plan(clips: []))
 
         let refs = try scanner.scan()
         // SamplePlan 的全部素材都引用自项目 A；空项目 B 不产生任何条目
@@ -39,7 +39,7 @@ final class ReferenceScannerTests: XCTestCase {
         let a = try store.createProject(name: "A")
         try store.saveProject(id: a.id, plan: SamplePlan.make())
         // 内存 plan 已是空时间线（未落盘）：扫描应以内存为准
-        let refs = try scanner.scan(currentProjectID: a.id, currentPlan: EditPlan(clips: []))
+        let refs = try scanner.scan(currentProjectID: a.id, currentPlan: PlanTestSupport.plan(clips: []))
         XCTAssertTrue(refs.isEmpty, "当前项目的未落盘编辑要参与扫描")
     }
 

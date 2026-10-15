@@ -45,81 +45,54 @@ public struct EditPlanValidator: Sendable {
             }
         }
 
-        if plan.clips.isEmpty {
-            issues.append(ValidationIssue(path: "clips", message: "至少需要一个片段"))
-        }
-
-        for (i, clip) in plan.clips.enumerated() {
-            // 素材引用必须落在登记表里，且 source 与素材 kind 一致（视频↔video、图片↔image）
-            let asset = plan.asset(withID: clip.assetID)
-            if asset == nil {
-                issues.append(ValidationIssue(path: "clips[\(i)].assetID", message: "引用了未登记的素材: \(clip.assetID)"))
-            } else if let asset {
-                switch clip.source {
-                case .video where asset.kind != .video:
-                    issues.append(ValidationIssue(path: "clips[\(i)].assetID",
-                                                  message: "视频片段必须引用视频素材，实际为 \(asset.kind.rawValue)"))
-                case .still where asset.kind != .image:
-                    issues.append(ValidationIssue(path: "clips[\(i)].assetID",
-                                                  message: "图片片段必须引用图片素材，实际为 \(asset.kind.rawValue)"))
-                default:
-                    break
-                }
+        // 轨道自身一致性：ID 唯一；kind 必须有注册的特性模块
+        var trackIDs: Set<UUID> = []
+        for (i, track) in plan.tracks.enumerated() {
+            if !trackIDs.insert(track.id).inserted {
+                issues.append(ValidationIssue(path: "tracks[\(i)].id", message: "轨道 ID 重复: \(track.id)"))
             }
-
-            switch clip.source {
-            case .video(let range):
-                if range.lowerBound < 0 {
-                    issues.append(ValidationIssue(path: "clips[\(i)].source.range", message: "裁剪起点不能为负"))
-                } else if range.upperBound <= range.lowerBound {
-                    issues.append(ValidationIssue(path: "clips[\(i)].source.range", message: "裁剪区间不能为空"))
-                } else if let duration = asset?.duration,
-                          range.upperBound > duration + Self.durationTolerance {
-                    issues.append(ValidationIssue(path: "clips[\(i)].source.range",
-                                                  message: "裁剪终点超出素材时长（\(duration)s）"))
-                }
-            case .still(let duration):
-                if duration <= 0 {
-                    issues.append(ValidationIssue(path: "clips[\(i)].source.duration", message: "图片时长必须为正"))
-                }
-            }
-
-            if !Self.speedRange.contains(clip.speed.rate) {
-                issues.append(ValidationIssue(path: "clips[\(i)].speed",
-                                              message: "变速倍率必须在 \(Self.speedRange.lowerBound)–\(Self.speedRange.upperBound) 之间"))
-            }
-
-            if let transition = clip.transitionAfter {
-                guard i + 1 < plan.clips.count else {
-                    issues.append(ValidationIssue(path: "clips[\(i)].transitionAfter", message: "最后一个片段不能挂转场"))
-                    continue
-                }
-                if transition.duration <= 0 {
-                    issues.append(ValidationIssue(path: "clips[\(i)].transitionAfter", message: "转场时长必须为正"))
-                    continue
-                }
-                // Kadr CompositionBuilder 按变速后时长（裁剪时长 / speedRate）检查转场适配。
-                // 这里刻意保持保守：用完整转场时长对 min(两侧)，而非 Kadr 的 fade 每侧 duration/2——
-                // 过严安全（误拒少数合法 plan），过松危险（放行 Kadr 导出期才拒绝的 plan）。
-                let thisDuration = clip.outputDuration
-                let next = plan.clips[i + 1]
-                let nextDuration = next.outputDuration
-                if transition.duration > min(thisDuration, nextDuration) {
-                    issues.append(ValidationIssue(path: "clips[\(i)].transitionAfter", message: "转场时长不能超过相邻片段时长"))
-                }
+            if TrackFeatureRegistry.feature(for: track.kind) == nil {
+                issues.append(ValidationIssue(path: "tracks[\(i)].kind",
+                                              message: "未注册的轨道类型 '\(track.kind.rawValue)'"))
             }
         }
 
-        if let captions = plan.captions, captions.isEnabled {
-            switch plan.asset(withID: captions.assetID) {
-            case nil:
-                issues.append(ValidationIssue(path: "captions.assetID", message: "引用了未登记的素材: \(captions.assetID)"))
-            case let asset? where asset.kind != .subtitle:
-                issues.append(ValidationIssue(path: "captions.assetID", message: "字幕轨道必须引用字幕素材，实际为 \(asset.kind.rawValue)"))
-            case let asset? where !asset.fileName.lowercased().hasSuffix(".srt"):
-                issues.append(ValidationIssue(path: "captions.assetID", message: "POC 仅支持 SRT 字幕文件"))
-            default:
-                break
+        // 主轨：必须存在、链式、非空
+        guard let primary = plan.primaryTrack else {
+            issues.append(ValidationIssue(path: "primaryTrackID", message: "主轨不存在: \(plan.primaryTrackID)"))
+            return issues
+        }
+        if primary.placement != .chained {
+            issues.append(ValidationIssue(path: "primaryTrackID", message: "主轨必须是链式（.chained）"))
+        }
+        if primary.elements.isEmpty {
+            issues.append(ValidationIssue(path: "tracks[\(primary.id)].elements", message: "主轨至少需要一个元素"))
+        }
+
+        // 逐轨分派给特性模块。
+        // mainTrackEnd 必须是 renderedDuration（扣过转场重叠的成片时长），
+        // 不能用 primary.span——链式轨的 span 是 Σ 元素时长，样例工程两者差 0.5s。
+        let context = TrackValidationContext(assets: plan.assets,
+                                             mainTrackEnd: plan.renderedDuration,
+                                             tracks: plan.tracks)
+        for track in plan.tracks {
+            if let feature = TrackFeatureRegistry.feature(for: track.kind) {
+                issues.append(contentsOf: feature.validate(track: track, context: context))
+            }
+        }
+
+        // 核心不变式兜底：任何轨的元素不得超出主轨末端。
+        // 用 renderedDuration 而非 primary.span——链式轨的 span 不含转场重叠。
+        let mainEnd = plan.renderedDuration
+        for track in plan.tracks where track.id != primary.id {
+            for (i, element) in track.elements.enumerated() {
+                let end = (element.at ?? 0) + element.duration
+                if end > mainEnd + Self.durationTolerance {
+                    issues.append(ValidationIssue(
+                        path: "\(context.pathPrefix(for: track)).elements[\(i)].at",
+                        elementID: element.id,
+                        message: "元素末端 \(end)s 超出主轨末端 \(mainEnd)s"))
+                }
             }
         }
 

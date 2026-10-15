@@ -3,7 +3,8 @@ import Foundation
 /// v3 及更早的 plan 形状。仅用于迁移读取，不参与 v4 编码。
 struct LegacyPlanV3: Decodable {
     var version: Int?
-    var assets: [AssetItem]
+    /// 素材登记表是 v2 新增的**可选**字段：省略时按空表处理（Agent 渐进式采用）。
+    var assets: [AssetItem]?
     var clips: [LegacyClipV3]
     var captions: LegacyCaptionTrackV3?
     var preset: OutputPreset?
@@ -87,12 +88,12 @@ enum PlanMigration {
 
         var tracks = [primary]
         if let captions = legacy.captions {
-            let caption = makeCaptionTrack(captions, assets: legacy.assets, assetsDirectory: assetsDirectory)
+            let caption = makeCaptionTrack(captions, assets: legacy.assets ?? [], assetsDirectory: assetsDirectory)
             tracks.append(caption.track)
             notices.append(contentsOf: caption.notices)
         }
 
-        return MigratedPlanParts(assets: legacy.assets, tracks: tracks,
+        return MigratedPlanParts(assets: legacy.assets ?? [], tracks: tracks,
                                  primaryTrackID: primary.id, preset: legacy.preset ?? .reelsAndShorts,
                                  notices: notices)
     }

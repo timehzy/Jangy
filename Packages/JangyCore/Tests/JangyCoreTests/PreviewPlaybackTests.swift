@@ -31,7 +31,7 @@ final class PreviewPlaybackTests: XCTestCase {
     /// 4 倍速扫过整段时间轴（dissolve + 0.5x 变速段），转场边界处 rate 掉 0 即回归。
     @MainActor
     func testPlaybackDoesNotStallAtTransitionBoundary() async throws {
-        let plan = EditPlan(
+        let plan = PlanTestSupport.plan(
             assets: [
                 AssetItem(id: SamplePlan.assetID1, kind: .video, fileName: "clip1.mp4",
                           origin: .synthesized, duration: 4.0, pixelWidth: 1280, pixelHeight: 720, hasAudio: false),
@@ -75,7 +75,7 @@ final class PreviewPlaybackTests: XCTestCase {
                                                   seconds: 4, width: 1080, height: 1920)
         let tallID = UUID()
         func makePlan(secondClipAsset: UUID) -> EditPlan {
-            EditPlan(
+            PlanTestSupport.plan(
                 assets: [
                     AssetItem(id: SamplePlan.assetID1, kind: .video, fileName: "clip1.mp4",
                               origin: .synthesized, duration: 4.0, pixelWidth: 1280, pixelHeight: 720, hasAudio: false),
@@ -109,7 +109,7 @@ final class PreviewPlaybackTests: XCTestCase {
         try AssetSynthesizer.writeSolidColorVideo(to: tallURL, color: CGColor(red: 0.9, green: 0.8, blue: 0.2, alpha: 1),
                                                   seconds: 4, width: 1080, height: 1920)
         let tallID = UUID()
-        let plan = EditPlan(
+        let plan = PlanTestSupport.plan(
             assets: [
                 AssetItem(id: SamplePlan.assetID1, kind: .video, fileName: "clip1.mp4",
                           origin: .synthesized, duration: 4.0, pixelWidth: 1280, pixelHeight: 720, hasAudio: false),
