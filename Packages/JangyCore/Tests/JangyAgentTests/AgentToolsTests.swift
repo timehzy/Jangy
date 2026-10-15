@@ -76,7 +76,7 @@ final class AgentToolsTests: XCTestCase {
     func testAddClipReusesRegisteredAsset() async throws {
         let context = makeContext()
         let result = try await AddClipTool(context: context)
-            .call(parsed: .init(fileName: "clip1.mp4", rangeStart: 0, rangeEnd: 1, speed: nil, duration: nil))
+            .call(parsed: .init(fileName: "clip1.mp4", rangeStart: 0, rangeEnd: 1, speed: nil, duration: nil, trackID: nil, at: nil))
         XCTAssertEqual(try decodeEnvelope(result).status, "ok")
         let plan = await context.plan
         XCTAssertEqual(primaryElements(plan).count, 4)
@@ -88,7 +88,7 @@ final class AgentToolsTests: XCTestCase {
     func testAddClipMissingFileReturnsError() async throws {
         let context = makeContext()
         let result = try await AddClipTool(context: context)
-            .call(parsed: .init(fileName: "nope.mp4", rangeStart: 0, rangeEnd: 1, speed: nil, duration: nil))
+            .call(parsed: .init(fileName: "nope.mp4", rangeStart: 0, rangeEnd: 1, speed: nil, duration: nil, trackID: nil, at: nil))
         let envelope = try decodeEnvelope(result)
         XCTAssertEqual(envelope.status, "error")
         XCTAssertTrue(envelope.message?.contains("素材文件不存在") == true)
@@ -107,7 +107,7 @@ final class AgentToolsTests: XCTestCase {
         // 换个登记表里没有的文件名引用同一份素材文件不行——用绝对路径直引（AssetItem 支持 "/" 前缀）
         let absolutePath = resolver.directory.appendingPathComponent("clip1.mp4").path
         let result = try await AddClipTool(context: context)
-            .call(parsed: .init(fileName: absolutePath, rangeStart: 0, rangeEnd: 2, speed: 1.5, duration: nil))
+            .call(parsed: .init(fileName: absolutePath, rangeStart: 0, rangeEnd: 2, speed: 1.5, duration: nil, trackID: nil, at: nil))
         XCTAssertEqual(try decodeEnvelope(result).status, "ok")
         let plan = await context.plan
         XCTAssertEqual(plan.assets.count, 5, "未登记素材在同一次编辑内登记")
@@ -119,7 +119,7 @@ final class AgentToolsTests: XCTestCase {
         let context = makeContext()
         // clip1 素材时长 4s，range 越界
         let result = try await AddClipTool(context: context)
-            .call(parsed: .init(fileName: "clip1.mp4", rangeStart: 0, rangeEnd: 99, speed: nil, duration: nil))
+            .call(parsed: .init(fileName: "clip1.mp4", rangeStart: 0, rangeEnd: 99, speed: nil, duration: nil, trackID: nil, at: nil))
         let envelope = try decodeEnvelope(result)
         XCTAssertEqual(envelope.status, "error")
         XCTAssertTrue(envelope.issues?.contains { $0.path == "tracks[0].elements[3].source.range" } == true)
@@ -141,7 +141,7 @@ final class AgentToolsTests: XCTestCase {
                                       resolver: AssetResolver(directory: dir),
                                       framesDirectory: dir, maxToolCalls: 30)
         let result = try await AddClipTool(context: context)
-            .call(parsed: .init(fileName: "photo.png", rangeStart: nil, rangeEnd: nil, speed: nil, duration: 4.0))
+            .call(parsed: .init(fileName: "photo.png", rangeStart: nil, rangeEnd: nil, speed: nil, duration: 4.0, trackID: nil, at: nil))
         XCTAssertEqual(try decodeEnvelope(result).status, "ok")
         let plan = await context.plan
         XCTAssertEqual(primaryElements(plan).count, 4)
@@ -163,7 +163,7 @@ final class AgentToolsTests: XCTestCase {
                                       resolver: AssetResolver(directory: dir),
                                       framesDirectory: dir, maxToolCalls: 30)
         let result = try await AddClipTool(context: context)
-            .call(parsed: .init(fileName: "photo.png", rangeStart: nil, rangeEnd: nil, speed: nil, duration: nil))
+            .call(parsed: .init(fileName: "photo.png", rangeStart: nil, rangeEnd: nil, speed: nil, duration: nil, trackID: nil, at: nil))
         XCTAssertEqual(try decodeEnvelope(result).status, "ok")
         let plan = await context.plan
         XCTAssertEqual(primaryClips(plan).last?.source, .still(duration: 3.0))
@@ -172,7 +172,7 @@ final class AgentToolsTests: XCTestCase {
     func testAddVideoClipStillRequiresRange() async throws {
         let context = makeContext()
         let result = try await AddClipTool(context: context)
-            .call(parsed: .init(fileName: "clip1.mp4", rangeStart: nil, rangeEnd: nil, speed: nil, duration: nil))
+            .call(parsed: .init(fileName: "clip1.mp4", rangeStart: nil, rangeEnd: nil, speed: nil, duration: nil, trackID: nil, at: nil))
         let envelope = try decodeEnvelope(result)
         XCTAssertEqual(envelope.status, "error")
         XCTAssertTrue(envelope.message?.contains("rangeStart") == true)
@@ -184,7 +184,7 @@ final class AgentToolsTests: XCTestCase {
         let plan = makePlan(assets: SamplePlan.make().assets + [audio], clips: sampleClips())
         let context = makeContext(plan: plan)
         let result = try await AddClipTool(context: context)
-            .call(parsed: .init(fileName: "bgm.mp3", rangeStart: nil, rangeEnd: nil, speed: nil, duration: nil))
+            .call(parsed: .init(fileName: "bgm.mp3", rangeStart: nil, rangeEnd: nil, speed: nil, duration: nil, trackID: nil, at: nil))
         let envelope = try decodeEnvelope(result)
         XCTAssertEqual(envelope.status, "error")
         XCTAssertTrue(envelope.message?.contains("音频") == true)
@@ -198,7 +198,7 @@ final class AgentToolsTests: XCTestCase {
         let context = makeContext()
         // clip1: range 0...3, speed 1.0, transitionAfter dissolve 0.5
         let result = try await SplitClipTool(context: context)
-            .call(parsed: .init(clipID: clip1, at: 1.5))
+            .call(parsed: .init(elementID: clip1, at: 1.5))
         XCTAssertEqual(try decodeEnvelope(result).status, "ok")
 
         let plan = await context.plan
@@ -215,7 +215,7 @@ final class AgentToolsTests: XCTestCase {
     func testSplitClipAtBoundaryReturnsError() async throws {
         let context = makeContext()
         let result = try await SplitClipTool(context: context)
-            .call(parsed: .init(clipID: clip1, at: 3.0))
+            .call(parsed: .init(elementID: clip1, at: 3.0))
         XCTAssertEqual(try decodeEnvelope(result).status, "error")
         let plan = await context.plan
         XCTAssertEqual(primaryElements(plan).count, 3)
@@ -224,7 +224,7 @@ final class AgentToolsTests: XCTestCase {
     func testUnknownClipIDReturnsError() async throws {
         let context = makeContext()
         let result = try await SetSpeedTool(context: context)
-            .call(parsed: .init(clipID: "99999999-9999-9999-9999-999999999999", rate: 2.0))
+            .call(parsed: .init(elementID: "99999999-9999-9999-9999-999999999999", rate: 2.0))
         XCTAssertEqual(try decodeEnvelope(result).status, "error")
     }
 
@@ -233,7 +233,7 @@ final class AgentToolsTests: XCTestCase {
     func testTrimClipUpdatesRange() async throws {
         let context = makeContext()
         let result = try await TrimClipTool(context: context)
-            .call(parsed: .init(clipID: clip1, rangeStart: 1, rangeEnd: 2.5))
+            .call(parsed: .init(elementID: clip1, rangeStart: 1, rangeEnd: 2.5))
         XCTAssertEqual(try decodeEnvelope(result).status, "ok")
         let after = await context.plan
         XCTAssertEqual(primaryClips(after)[0].source, .video(1...2.5))
@@ -244,28 +244,30 @@ final class AgentToolsTests: XCTestCase {
     func testTrimClipEmptyRangeFailsValidation() async throws {
         let context = makeContext()
         let result = try await TrimClipTool(context: context)
-            .call(parsed: .init(clipID: clip1, rangeStart: 2, rangeEnd: 1))
+            .call(parsed: .init(elementID: clip1, rangeStart: 2, rangeEnd: 1))
         XCTAssertEqual(try decodeEnvelope(result).status, "error")
         let plan = await context.plan
         XCTAssertEqual(primaryClips(plan)[0].source, .video(0...3), "失败不留痕")
     }
 
-    func testMoveClipReorders() async throws {
+    func testMoveElementReordersByAnchorID() async throws {
         let context = makeContext()
-        let result = try await MoveClipTool(context: context)
-            .call(parsed: .init(clipID: clip3, toIndex: 0))
+        // 把 clip3 插到 clip1 之前（ID 相对定位，废除下标寻址）
+        let result = try await MoveElementTool(context: context)
+            .call(parsed: .init(elementID: clip3, toTrackID: nil, beforeElementID: clip1, at: nil))
         XCTAssertEqual(try decodeEnvelope(result).status, "ok")
         let plan = await context.plan
         XCTAssertEqual(primaryClips(plan).map(\.assetID),
                        [SamplePlan.assetID3, SamplePlan.assetID1, SamplePlan.assetID2])
     }
 
-    func testMoveClipWithTransitionToLastClearsTransition() async throws {
+    func testMoveElementWithTransitionToLastClearsTransition() async throws {
         let context = makeContext()
-        // clip1 挂着 dissolve，移到最后一段：末位不能挂转场 → 归一化清掉，移动本身成功
-        //（EditStore.apply 统一归一化，与删除末位元素同一条路径）。
-        let result = try await MoveClipTool(context: context)
-            .call(parsed: .init(clipID: clip1, toIndex: 2))
+        // clip1 挂着 dissolve，移到主轨末尾（toTrackID = 主轨、不给 beforeElementID → 追加到末尾）：
+        // 末位不能挂转场 → 归一化清掉，移动本身成功（EditStore.apply 统一归一化，与删除末位元素同一条路径）。
+        let primaryID = await context.plan.primaryTrackID.uuidString
+        let result = try await MoveElementTool(context: context)
+            .call(parsed: .init(elementID: clip1, toTrackID: primaryID, beforeElementID: nil, at: nil))
         XCTAssertEqual(try decodeEnvelope(result).status, "ok")
         let plan = await context.plan
         XCTAssertEqual(primaryClips(plan).map(\.assetID),
@@ -278,7 +280,7 @@ final class AgentToolsTests: XCTestCase {
                                         clips: [sampleClips()[2]])
         let context = makeContext(plan: plan)
         let result = try await RemoveClipTool(context: context)
-            .call(parsed: .init(clipID: clip3))
+            .call(parsed: .init(elementID: clip3))
         XCTAssertEqual(try decodeEnvelope(result).status, "error")
         let resultingPlan = await context.plan
         XCTAssertEqual(primaryElements(resultingPlan).count, 1)
@@ -289,7 +291,7 @@ final class AgentToolsTests: XCTestCase {
     func testSetSpeedOutOfRangeFails() async throws {
         let context = makeContext()
         let result = try await SetSpeedTool(context: context)
-            .call(parsed: .init(clipID: clip1, rate: 5.0))
+            .call(parsed: .init(elementID: clip1, rate: 5.0))
         let envelope = try decodeEnvelope(result)
         XCTAssertEqual(envelope.status, "error")
         XCTAssertTrue(envelope.issues?.contains { $0.path == "tracks[0].elements[0].speed" } == true)
@@ -298,13 +300,13 @@ final class AgentToolsTests: XCTestCase {
     func testSetTransitionAndRemove() async throws {
         let context = makeContext()
         var result = try await SetTransitionTool(context: context)
-            .call(parsed: .init(clipID: clip2, type: "fade", duration: 0.3))
+            .call(parsed: .init(elementID: clip2, type: "fade", duration: 0.3))
         XCTAssertEqual(try decodeEnvelope(result).status, "ok")
         var plan = await context.plan
         XCTAssertEqual(primaryClips(plan)[1].transitionAfter, .fade(duration: 0.3))
 
         result = try await SetTransitionTool(context: context)
-            .call(parsed: .init(clipID: clip2, type: "none", duration: nil))
+            .call(parsed: .init(elementID: clip2, type: "none", duration: nil))
         XCTAssertEqual(try decodeEnvelope(result).status, "ok")
         plan = await context.plan
         XCTAssertNil(primaryClips(plan)[1].transitionAfter)
@@ -313,7 +315,7 @@ final class AgentToolsTests: XCTestCase {
     func testSetTransitionUnknownTypeReturnsError() async throws {
         let context = makeContext()
         let result = try await SetTransitionTool(context: context)
-            .call(parsed: .init(clipID: clip1, type: "zip", duration: nil))
+            .call(parsed: .init(elementID: clip1, type: "zip", duration: nil))
         XCTAssertEqual(try decodeEnvelope(result).status, "error")
     }
 
@@ -321,7 +323,7 @@ final class AgentToolsTests: XCTestCase {
     func testSetTransitionOnLastElementReturnsError() async throws {
         let context = makeContext()
         let result = try await SetTransitionTool(context: context)
-            .call(parsed: .init(clipID: clip3, type: "dissolve", duration: 0.5))
+            .call(parsed: .init(elementID: clip3, type: "dissolve", duration: 0.5))
         let envelope = try decodeEnvelope(result)
         XCTAssertEqual(envelope.status, "error")
         XCTAssertTrue(envelope.message?.contains("最后一个片段不能挂转场") == true)
@@ -329,17 +331,17 @@ final class AgentToolsTests: XCTestCase {
         XCTAssertNil(primaryClips(plan).last?.transitionAfter, "失败不留痕")
     }
 
-    // MARK: - set_captions
+    // MARK: - set_caption_track
 
     func testSetCaptionsUpdatesStyle() async throws {
-        // set_captions 现在导入 SRT 逐句展开，需要一个真实素材目录
+        // set_caption_track 导入 SRT 逐句展开，需要一个真实素材目录
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent("jangy-agent-caps-\(UUID().uuidString)", isDirectory: true)
         let resolver = try AssetSynthesizer.synthesize(into: dir)
         defer { try? FileManager.default.removeItem(at: dir) }
         let context = AgentRunContext(plan: SamplePlan.make(), resolver: resolver,
                                       framesDirectory: dir, maxToolCalls: 30)
-        let result = try await SetCaptionsTool(context: context)
+        let result = try await SetCaptionTrackTool(context: context)
             .call(parsed: .init(fileName: "sample.srt", fontSize: 30, isBold: false, enabled: true))
         XCTAssertEqual(try decodeEnvelope(result).status, "ok")
         let plan = await context.plan
@@ -353,7 +355,7 @@ final class AgentToolsTests: XCTestCase {
 
     func testSetCaptionsRejectsNonSRT() async throws {
         let context = makeContext()
-        let result = try await SetCaptionsTool(context: context)
+        let result = try await SetCaptionTrackTool(context: context)
             .call(parsed: .init(fileName: "subs.vtt", fontSize: nil, isBold: nil, enabled: nil))
         XCTAssertEqual(try decodeEnvelope(result).status, "error")
     }

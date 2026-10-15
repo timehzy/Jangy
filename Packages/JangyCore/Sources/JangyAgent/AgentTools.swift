@@ -27,7 +27,7 @@ enum ToolEnvelope {
         encode(Err(message: message, issues: issues))
     }
 
-    /// apply 结果 → 信封：校验失败回 {"status":"error","issues":[...]}（path 形如 clips[1].speed）。
+    /// apply 结果 → 信封：校验失败回 {"status":"error","issues":[...]}（path 形如 tracks[0].elements[1].speed）。
     static func applied(_ result: Result<EditPlan, ValidationFailure>, payload: (EditPlan) -> some Encodable) -> String {
         switch result {
         case .success(let plan):
@@ -73,9 +73,10 @@ enum AgentToolCommon {
             "找不到元素 \(elementID)，请先用 get_plan 获取当前元素 ID")))
     }
 
-    /// 主轨下标（`add_clip` 等主轨操作仍按主轨定位）。
-    static func primaryTrackIndex(_ plan: EditPlan) -> Int? {
-        plan.tracks.firstIndex { $0.id == plan.primaryTrackID }
+    /// 轨道下标（按 id）。
+    static func trackIndex(_ plan: EditPlan, trackID: String) -> Int? {
+        guard let uuid = UUID(uuidString: trackID) else { return nil }
+        return plan.tracks.firstIndex { $0.id == uuid }
     }
 }
 
@@ -104,20 +105,53 @@ extension DefensiveAgentTool {
 struct GetPlanTool: DefensiveAgentTool {
     let context: AgentRunContext
     let name = "get_plan"
-    let description = "读取当前时间线的完整 EditPlan JSON 和渲染总时长 renderedDuration（秒）。开始编辑前、或不确定当前状态时调用。"
+    let description = "读取当前时间线。payload.elements 是**扁平元素视图**（含 elementID/trackID/payloadType，字幕 cue 还带 text），payload.plan 是完整 EditPlan JSON，payload.renderedDuration 是成片总时长（秒）。开始编辑前、或不确定当前状态时调用。"
 
     @Generable
     struct Args {}
 
     struct Payload: Encodable {
+        struct ElementView: Encodable {
+            let elementID: String
+            let trackID: String
+            let trackKind: String
+            let at: TimeInterval?
+            let duration: TimeInterval
+            let payloadType: String?
+            /// 字幕 cue 的文本，便于模型直接读。
+            let text: String?
+        }
         let renderedDuration: TimeInterval
+        let primaryTrackID: String
+        /// 扁平视图：模型不必自己遍历 tracks[].elements[]。
+        let elements: [ElementView]
+        /// 原始 plan JSON。
         let plan: EditPlan
     }
 
     func call(parsed _: Args) async throws -> String {
         if let limit = AgentToolCommon.stepLimitIfExceeded(context) { return limit }
         let plan = await context.plan
-        return ToolEnvelope.ok(Payload(renderedDuration: plan.renderedDuration, plan: plan))
+        let views = plan.tracks.flatMap { track in
+            track.elements.map { element -> Payload.ElementView in
+                var payloadType: String?
+                var text: String?
+                if case .content(let payload) = element.content {
+                    payloadType = payload.payloadType
+                    text = (payload.value as? CaptionCuePayload)?.text
+                }
+                return Payload.ElementView(elementID: element.id.uuidString,
+                                           trackID: track.id.uuidString,
+                                           trackKind: track.kind.rawValue,
+                                           at: element.at,
+                                           duration: element.duration,
+                                           payloadType: payloadType,
+                                           text: text)
+            }
+        }
+        return ToolEnvelope.ok(Payload(renderedDuration: plan.renderedDuration,
+                                       primaryTrackID: plan.primaryTrackID.uuidString,
+                                       elements: views, plan: plan))
     }
 }
 
@@ -142,7 +176,7 @@ struct ListAssetsTool: DefensiveAgentTool {
 struct AddClipTool: DefensiveAgentTool {
     let context: AgentRunContext
     let name = "add_clip"
-    let description = "把素材追加为时间线末尾的片段。视频：提供 rangeStart/rangeEnd（源区间）；图片：提供可选 duration（秒，缺省 3），忽略 range。fileName 未登记时会在同一次编辑里自动登记（先探测素材元数据）。"
+    let description = "把素材加为片段。缺省追加到主轨末尾（链式）；给了 trackID 则加到该轨（绝对定位轨必须同时给 at）。视频：提供 rangeStart/rangeEnd（源区间）；图片：提供可选 duration（秒，缺省 3），忽略 range。fileName 未登记时会在同一次编辑里自动登记（先探测素材元数据）。"
 
     @Generable
     struct Args {
@@ -156,10 +190,14 @@ struct AddClipTool: DefensiveAgentTool {
         let speed: Double?
         @Guide(description: "图片显示时长（秒），缺省 3.0。视频忽略。")
         let duration: Double?
+        @Guide(description: "目标轨道 ID，缺省 = 主轨（追加到末尾）")
+        let trackID: String?
+        @Guide(description: "绝对定位轨上的起点（秒）。目标是绝对定位轨时必填；主轨忽略。")
+        let at: Double?
     }
 
     struct Payload: Encodable {
-        let clipID: String
+        let elementID: String
         let assetID: String
         let registeredNewAsset: Bool
         let renderedDuration: TimeInterval
@@ -172,6 +210,24 @@ struct AddClipTool: DefensiveAgentTool {
         if let limit = AgentToolCommon.stepLimitIfExceeded(context) { return limit }
         let currentPlan = await context.plan
         let existingFileNames = Set(currentPlan.assets.map(\.fileName))
+
+        // 目标轨：缺省主轨；显式指定时必须是已存在的轨，且是视频轨
+        let targetTrackID: UUID
+        if let raw = args.trackID {
+            guard let index = AgentToolCommon.trackIndex(currentPlan, trackID: raw) else {
+                return ToolEnvelope.error("找不到轨道 \(raw)，请先用 get_plan 获取当前轨道 ID")
+            }
+            let track = currentPlan.tracks[index]
+            guard track.kind == .video else {
+                return ToolEnvelope.error("add_clip 只能往视频轨加片段（字幕请用 set_caption_track）")
+            }
+            if track.placement == .absolute, args.at == nil {
+                return ToolEnvelope.error("轨道 \(raw) 是绝对定位轨，必须提供 at（起点秒数）")
+            }
+            targetTrackID = track.id
+        } else {
+            targetTrackID = currentPlan.primaryTrackID
+        }
 
         // 登记素材：已登记则复用；未登记先按扩展名判图片、探测元数据
         // （文件不存在直接报错，免得到引擎期才炸）
@@ -198,12 +254,12 @@ struct AddClipTool: DefensiveAgentTool {
             }
         }
         guard let asset else { return ToolEnvelope.error("素材登记失败") }
-        // 已登记的非上轨类型（音频后置；字幕走 set_captions）直接拒绝——
+        // 已登记的非视频/图片类型（音频后置；字幕走 set_caption_track）直接拒绝——
         // 否则下面的 .video 分支会对缺失的 range 强解包崩溃。
         // 注意：未登记文件在探测阶段按扩展名归类（image vs 其余），不在此 guard 范围。
         guard asset.kind == .video || asset.kind == .image else {
             let label = asset.kind == .audio ? "音频" : "字幕"
-            return ToolEnvelope.error("不支持把\(label)素材加入时间线（音频后置；字幕请用 set_captions）")
+            return ToolEnvelope.error("不支持把\(label)素材加入时间线（音频后置；字幕请用 set_caption_track）")
         }
         let rate = args.speed ?? 1.0
 
@@ -233,13 +289,16 @@ struct AddClipTool: DefensiveAgentTool {
                                     source: .video(args.rangeStart!...args.rangeEnd!),
                                     speed: .flat(rate))
                 }
-                guard let ti = AgentToolCommon.primaryTrackIndex(plan) else { return }
-                plan.tracks[ti].elements.append(PlanElement(content: .content(TrackPayload(clip))))
+                guard let ti = plan.tracks.firstIndex(where: { $0.id == targetTrackID }) else { return }
+                // 绝对定位轨用 at 锚定；链式轨的 at 恒为 nil（位置由顺序推出）。
+                let at = plan.tracks[ti].placement == .absolute ? args.at : nil
+                plan.tracks[ti].elements.append(PlanElement(at: at, content: .content(TrackPayload(clip))))
             }
             return ToolEnvelope.applied(result) { plan in
-                let elementID = plan.primaryTrack?.elements.last?.id.uuidString ?? ""
+                let track = plan.tracks.first { $0.id == targetTrackID }
+                let elementID = track?.elements.last?.id.uuidString ?? ""
                 let registered = plan.assets.first { $0.fileName == asset.fileName }!
-                return Payload(clipID: elementID, assetID: registered.id.uuidString,
+                return Payload(elementID: elementID, assetID: registered.id.uuidString,
                                registeredNewAsset: !existingFileNames.contains(asset.fileName),
                                renderedDuration: plan.renderedDuration)
             }
@@ -254,15 +313,15 @@ struct SplitClipTool: DefensiveAgentTool {
 
     @Generable
     struct Args {
-        @Guide(description: "片段 ID（get_plan 返回的 clip id）")
-        let clipID: String
+        @Guide(description: "片段元素 ID（get_plan 返回的 elementID）")
+        let elementID: String
         @Guide(description: "分割点（秒）。视频为源区间内时刻，图片为片段基准时长内时刻；须严格落在区间内部")
         let at: Double
     }
 
     struct Payload: Encodable {
-        let firstClipID: String
-        let secondClipID: String
+        let firstElementID: String
+        let secondElementID: String
         let renderedDuration: TimeInterval
     }
 
@@ -270,14 +329,14 @@ struct SplitClipTool: DefensiveAgentTool {
         if let limit = AgentToolCommon.stepLimitIfExceeded(context) { return limit }
         return await context.withStore { store in
             let location: AgentToolCommon.ElementLocation
-            switch AgentToolCommon.locate(store.plan, elementID: args.clipID) {
+            switch AgentToolCommon.locate(store.plan, elementID: args.elementID) {
             case .success(let found): location = found
             case .failure(let error): return error.message
             }
             guard case .content(let payload) = store.plan.tracks[location.trackIndex]
                     .elements[location.elementIndex].content,
                   let clip = payload.value as? PlanClip else {
-                return ToolEnvelope.error("元素 \(args.clipID) 不是视频/图片片段，无法分割")
+                return ToolEnvelope.error("元素 \(args.elementID) 不是视频/图片片段，无法分割")
             }
             let originalID = store.plan.tracks[location.trackIndex].elements[location.elementIndex].id
             switch clip.source {
@@ -290,17 +349,23 @@ struct SplitClipTool: DefensiveAgentTool {
                     guard case .content(let p) = plan.tracks[location.trackIndex]
                             .elements[location.elementIndex].content,
                           var first = p.value as? PlanClip else { return }
+                    // 绝对定位轨要保留 at：前半段沿用原位，后半段顺延前半段的输出时长。
+                    // 链式轨 at 恒为 nil，两段都不带 at。
+                    let originalAt = plan.tracks[location.trackIndex].elements[location.elementIndex].at
                     var second = first
                     first.source = .video(range.lowerBound...args.at)
                     first.transitionAfter = nil
                     second.source = .video(args.at...range.upperBound)
+                    let firstElement = PlanElement(id: originalID, at: originalAt,
+                                                   content: .content(TrackPayload(first)))
+                    let secondElement = PlanElement(at: originalAt.map { $0 + firstElement.duration },
+                                                    content: .content(TrackPayload(second)))
                     plan.tracks[location.trackIndex].elements.replaceSubrange(
                         location.elementIndex...location.elementIndex,
-                        with: [PlanElement(id: originalID, content: .content(TrackPayload(first))),
-                               PlanElement(id: secondID, content: .content(TrackPayload(second)))])
+                        with: [firstElement, secondElement])
                 }
                 return ToolEnvelope.applied(result) { plan in
-                    Payload(firstClipID: args.clipID, secondClipID: secondID.uuidString,
+                    Payload(firstElementID: args.elementID, secondElementID: secondID.uuidString,
                             renderedDuration: plan.renderedDuration)
                 }
             case .still(let duration):
@@ -313,17 +378,21 @@ struct SplitClipTool: DefensiveAgentTool {
                     guard case .content(let p) = plan.tracks[location.trackIndex]
                             .elements[location.elementIndex].content,
                           var first = p.value as? PlanClip else { return }
+                    let originalAt = plan.tracks[location.trackIndex].elements[location.elementIndex].at
                     var second = first
                     first.source = .still(duration: args.at)
                     first.transitionAfter = nil
                     second.source = .still(duration: duration - args.at)
+                    let firstElement = PlanElement(id: originalID, at: originalAt,
+                                                   content: .content(TrackPayload(first)))
+                    let secondElement = PlanElement(at: originalAt.map { $0 + firstElement.duration },
+                                                    content: .content(TrackPayload(second)))
                     plan.tracks[location.trackIndex].elements.replaceSubrange(
                         location.elementIndex...location.elementIndex,
-                        with: [PlanElement(id: originalID, content: .content(TrackPayload(first))),
-                               PlanElement(id: secondID, content: .content(TrackPayload(second)))])
+                        with: [firstElement, secondElement])
                 }
                 return ToolEnvelope.applied(result) { plan in
-                    Payload(firstClipID: args.clipID, secondClipID: secondID.uuidString,
+                    Payload(firstElementID: args.elementID, secondElementID: secondID.uuidString,
                             renderedDuration: plan.renderedDuration)
                 }
             }
@@ -338,8 +407,8 @@ struct TrimClipTool: DefensiveAgentTool {
 
     @Generable
     struct Args {
-        @Guide(description: "片段 ID")
-        let clipID: String
+        @Guide(description: "片段元素 ID")
+        let elementID: String
         @Guide(description: "新区间起点（秒，相对素材自身时间轴）")
         let rangeStart: Double
         @Guide(description: "新区间终点（秒）")
@@ -347,7 +416,7 @@ struct TrimClipTool: DefensiveAgentTool {
     }
 
     struct Payload: Encodable {
-        let clipID: String
+        let elementID: String
         let renderedDuration: TimeInterval
     }
 
@@ -358,7 +427,7 @@ struct TrimClipTool: DefensiveAgentTool {
         }
         return await context.withStore { store in
             let location: AgentToolCommon.ElementLocation
-            switch AgentToolCommon.locate(store.plan, elementID: args.clipID) {
+            switch AgentToolCommon.locate(store.plan, elementID: args.elementID) {
             case .success(let found): location = found
             case .failure(let error): return error.message
             }
@@ -377,49 +446,108 @@ struct TrimClipTool: DefensiveAgentTool {
                     .content(TrackPayload(clip))
             }
             return ToolEnvelope.applied(result) { plan in
-                Payload(clipID: args.clipID, renderedDuration: plan.renderedDuration)
+                Payload(elementID: args.elementID, renderedDuration: plan.renderedDuration)
             }
         }
     }
 }
 
-struct MoveClipTool: DefensiveAgentTool {
+struct MoveElementTool: DefensiveAgentTool {
     let context: AgentRunContext
-    let name = "move_clip"
-    let description = "把片段移动到时间线的另一个位置（按下标）。"
+    let name = "move_element"
+    let description = "移动元素。给 beforeElementID = 插到该元素之前（相对定位）；给 at = 放到该绝对时间（仅绝对定位轨）；给 toTrackID = 换轨（不给 beforeElementID 则追加到目标轨末尾）。至少给一个。"
 
     @Generable
     struct Args {
-        @Guide(description: "片段 ID")
-        let clipID: String
-        @Guide(description: "目标下标（0 起）")
-        let toIndex: Int
+        @Guide(description: "要移动的元素 ID")
+        let elementID: String
+        @Guide(description: "目标轨道 ID；缺省 = 不换轨")
+        let toTrackID: String?
+        @Guide(description: "插到这个元素之前（同轨内的相对定位）。不给则追加到目标轨末尾。")
+        let beforeElementID: String?
+        @Guide(description: "放到这个绝对时间（秒），仅绝对定位轨")
+        let at: Double?
     }
 
     struct Payload: Encodable {
-        let clipOrder: [String]
+        let elementID: String
+        let trackID: String
         let renderedDuration: TimeInterval
     }
 
     func call(parsed args: Args) async throws -> String {
         if let limit = AgentToolCommon.stepLimitIfExceeded(context) { return limit }
+        guard args.toTrackID != nil || args.beforeElementID != nil || args.at != nil else {
+            return ToolEnvelope.error("至少要给 toTrackID / beforeElementID / at 其中之一")
+        }
         return await context.withStore { store in
+            // 目标元素
             let location: AgentToolCommon.ElementLocation
-            switch AgentToolCommon.locate(store.plan, elementID: args.clipID) {
+            switch AgentToolCommon.locate(store.plan, elementID: args.elementID) {
             case .success(let found): location = found
             case .failure(let error): return error.message
             }
-            let track = store.plan.tracks[location.trackIndex]
-            guard track.elements.indices.contains(args.toIndex) else {
-                return ToolEnvelope.error("目标下标 \(args.toIndex) 越界（当前共 \(track.elements.count) 个片段）")
+            let movedID = store.plan.tracks[location.trackIndex].elements[location.elementIndex].id
+
+            // 锚点元素（校验存在；记 id 而非下标——移除后下标会漂移）
+            var beforeID: UUID?
+            if let raw = args.beforeElementID {
+                guard let uuid = UUID(uuidString: raw) else {
+                    return ToolEnvelope.error("无效的元素 ID: \(raw)")
+                }
+                guard store.plan.tracks.contains(where: { $0.elements.contains { $0.id == uuid } }) else {
+                    return ToolEnvelope.error("找不到元素 \(raw)，请先用 get_plan 获取当前元素 ID")
+                }
+                beforeID = uuid
             }
+
+            // 目标轨（校验存在）
+            var targetTrackID: UUID?
+            if let raw = args.toTrackID {
+                guard let index = AgentToolCommon.trackIndex(store.plan, trackID: raw) else {
+                    return ToolEnvelope.error("找不到轨道 \(raw)，请先用 get_plan 获取当前轨道 ID")
+                }
+                targetTrackID = store.plan.tracks[index].id
+            }
+            let destinationIndex = targetTrackID.flatMap { id in
+                store.plan.tracks.firstIndex { $0.id == id }
+            } ?? location.trackIndex
+
+            // 锚点必须在**目标轨**内——跨轨锚点无从解释，静默退化成「追加到末尾」是假成功。
+            if let beforeID, !store.plan.tracks[destinationIndex].elements.contains(where: { $0.id == beforeID }) {
+                return ToolEnvelope.error("锚点元素 \(args.beforeElementID ?? "") 不在目标轨内，请用 get_plan 确认元素与轨道")
+            }
+
+            // 链式轨不接受 at（位置由顺序推出，两个事实源会打架）。
+            let destinationIsAbsolute = store.plan.tracks[destinationIndex].placement == .absolute
+            if args.at != nil, !destinationIsAbsolute {
+                return ToolEnvelope.error("目标轨是链式轨，不能指定 at；请用 beforeElementID 做相对定位")
+            }
+
             let result = store.apply { plan in
-                let element = plan.tracks[location.trackIndex].elements.remove(at: location.elementIndex)
-                plan.tracks[location.trackIndex].elements.insert(element, at: args.toIndex)
+                guard let from = plan.tracks.firstIndex(where: { $0.elements.contains { $0.id == movedID } }),
+                      let fi = plan.tracks[from].elements.firstIndex(where: { $0.id == movedID }) else { return }
+                var element = plan.tracks[from].elements.remove(at: fi)
+
+                let destination = targetTrackID.flatMap { id in
+                    plan.tracks.firstIndex { $0.id == id }
+                } ?? from
+
+                // 绝对定位轨用 at；链式轨的 at 恒为 nil。
+                element.at = plan.tracks[destination].placement == .absolute ? (args.at ?? element.at) : nil
+
+                if let beforeID,
+                   let anchor = plan.tracks[destination].elements.firstIndex(where: { $0.id == beforeID }) {
+                    plan.tracks[destination].elements.insert(element, at: anchor)
+                } else {
+                    plan.tracks[destination].elements.append(element)
+                }
             }
+
             return ToolEnvelope.applied(result) { plan in
-                Payload(clipOrder: plan.tracks[location.trackIndex].elements.map { $0.id.uuidString },
-                        renderedDuration: plan.renderedDuration)
+                let trackID = plan.tracks.first { $0.elements.contains { $0.id == movedID } }?.id.uuidString ?? ""
+                return Payload(elementID: args.elementID, trackID: trackID,
+                               renderedDuration: plan.renderedDuration)
             }
         }
     }
@@ -428,24 +556,24 @@ struct MoveClipTool: DefensiveAgentTool {
 struct RemoveClipTool: DefensiveAgentTool {
     let context: AgentRunContext
     let name = "remove_clip"
-    let description = "删除片段。被删片段尾部的转场一并消失；前一片段若挂着指向它的转场会被自动清除。"
+    let description = "删除元素。主轨（链式）删中间元素 = 原地留一段等长黑（成片时长不变）；删末尾元素才缩短。绝对定位轨直接移除。"
 
     @Generable
     struct Args {
-        @Guide(description: "片段 ID")
-        let clipID: String
+        @Guide(description: "要删除的元素 ID")
+        let elementID: String
     }
 
     struct Payload: Encodable {
         let renderedDuration: TimeInterval
-        let remainingClips: Int
+        let remainingElements: Int
     }
 
     func call(parsed args: Args) async throws -> String {
         if let limit = AgentToolCommon.stepLimitIfExceeded(context) { return limit }
         return await context.withStore { store in
             let location: AgentToolCommon.ElementLocation
-            switch AgentToolCommon.locate(store.plan, elementID: args.clipID) {
+            switch AgentToolCommon.locate(store.plan, elementID: args.elementID) {
             case .success(let found): location = found
             case .failure(let error): return error.message
             }
@@ -455,7 +583,7 @@ struct RemoveClipTool: DefensiveAgentTool {
             }
             return ToolEnvelope.applied(result) { plan in
                 Payload(renderedDuration: plan.renderedDuration,
-                        remainingClips: plan.primaryTrack?.elements.count ?? 0)
+                        remainingElements: plan.tracks[location.trackIndex].elements.count)
             }
         }
     }
@@ -468,14 +596,14 @@ struct SetSpeedTool: DefensiveAgentTool {
 
     @Generable
     struct Args {
-        @Guide(description: "片段 ID")
-        let clipID: String
+        @Guide(description: "片段元素 ID")
+        let elementID: String
         @Guide(description: "变速倍率，0.25–4.0")
         let rate: Double
     }
 
     struct Payload: Encodable {
-        let clipID: String
+        let elementID: String
         let rate: Double
         let renderedDuration: TimeInterval
     }
@@ -484,7 +612,7 @@ struct SetSpeedTool: DefensiveAgentTool {
         if let limit = AgentToolCommon.stepLimitIfExceeded(context) { return limit }
         return await context.withStore { store in
             let location: AgentToolCommon.ElementLocation
-            switch AgentToolCommon.locate(store.plan, elementID: args.clipID) {
+            switch AgentToolCommon.locate(store.plan, elementID: args.elementID) {
             case .success(let found): location = found
             case .failure(let error): return error.message
             }
@@ -497,7 +625,7 @@ struct SetSpeedTool: DefensiveAgentTool {
                     .content(TrackPayload(clip))
             }
             return ToolEnvelope.applied(result) { plan in
-                Payload(clipID: args.clipID, rate: args.rate,
+                Payload(elementID: args.elementID, rate: args.rate,
                         renderedDuration: plan.renderedDuration)
             }
         }
@@ -507,12 +635,12 @@ struct SetSpeedTool: DefensiveAgentTool {
 struct SetTransitionTool: DefensiveAgentTool {
     let context: AgentRunContext
     let name = "set_transition"
-    let description = "设置或移除片段尾部的转场。dissolve 与相邻片段全额重叠（扣总时长）；fade 不重叠。转场时长不能超过相邻两段中较短者的输出时长。"
+    let description = "设置或移除片段尾部的转场。dissolve 与相邻片段全额重叠（扣总时长）；fade 不重叠。转场时长不能超过相邻两段中较短者的输出时长。只对主轨（链式轨）有意义。"
 
     @Generable
     struct Args {
-        @Guide(description: "片段 ID（转场挂在该片段尾部，最后一段不能挂转场）")
-        let clipID: String
+        @Guide(description: "片段元素 ID（转场挂在该片段尾部，最后一段不能挂转场）")
+        let elementID: String
         @Guide(description: "转场类型：dissolve / fade / none（none = 移除转场）")
         let type: String
         @Guide(description: "转场时长（秒），type 为 none 时忽略，缺省 0.5")
@@ -520,7 +648,7 @@ struct SetTransitionTool: DefensiveAgentTool {
     }
 
     struct Payload: Encodable {
-        let clipID: String
+        let elementID: String
         let renderedDuration: TimeInterval
     }
 
@@ -539,7 +667,7 @@ struct SetTransitionTool: DefensiveAgentTool {
         }
         return await context.withStore { store in
             let location: AgentToolCommon.ElementLocation
-            switch AgentToolCommon.locate(store.plan, elementID: args.clipID) {
+            switch AgentToolCommon.locate(store.plan, elementID: args.elementID) {
             case .success(let found): location = found
             case .failure(let error): return error.message
             }
@@ -571,16 +699,18 @@ struct SetTransitionTool: DefensiveAgentTool {
                     .content(TrackPayload(clip))
             }
             return ToolEnvelope.applied(result) { plan in
-                Payload(clipID: args.clipID, renderedDuration: plan.renderedDuration)
+                Payload(elementID: args.elementID, renderedDuration: plan.renderedDuration)
             }
         }
     }
 }
 
-struct SetCaptionsTool: DefensiveAgentTool {
+// MARK: - 字幕工具
+
+struct SetCaptionTrackTool: DefensiveAgentTool {
     let context: AgentRunContext
-    let name = "set_captions"
-    let description = "设置外挂字幕（仅 SRT 文件），fileName 未登记时自动登记。enabled=false 关闭字幕显示。"
+    let name = "set_caption_track"
+    let description = "导入外挂字幕（仅 SRT 文件）并展开为逐句 cue，fileName 未登记时自动登记。enabled=false 关闭字幕显示。已有字幕轨则整体替换。"
 
     @Generable
     struct Args {
@@ -597,6 +727,7 @@ struct SetCaptionsTool: DefensiveAgentTool {
     struct Payload: Encodable {
         let captionAssetID: String
         let isEnabled: Bool
+        let cueCount: Int
     }
 
     func call(parsed args: Args) async throws -> String {
@@ -645,9 +776,219 @@ struct SetCaptionsTool: DefensiveAgentTool {
                 }
             }
             return ToolEnvelope.applied(result) { plan in
-                let settings = plan.tracks.first { $0.kind == .caption }.map(CaptionFeature.settings(of:))
+                let captionTrack = plan.tracks.first { $0.kind == .caption }
+                let settings = captionTrack.map(CaptionFeature.settings(of:))
                 return Payload(captionAssetID: settings?.sourceAssetID?.uuidString ?? "",
-                               isEnabled: settings?.isEnabled ?? false)
+                               isEnabled: settings?.isEnabled ?? false,
+                               cueCount: captionTrack?.elements.count ?? 0)
+            }
+        }
+    }
+}
+
+struct SetCaptionTextTool: DefensiveAgentTool {
+    let context: AgentRunContext
+    let name = "set_caption_text"
+    let description = "修改单条字幕 cue 的文本（字幕已逐句化，文本进 plan）。用 get_plan 的元素视图拿到字幕 cue 的 elementID。"
+
+    @Generable
+    struct Args {
+        @Guide(description: "字幕 cue 的元素 ID")
+        let elementID: String
+        @Guide(description: "新的字幕文本")
+        let text: String
+    }
+
+    struct Payload: Encodable {
+        let elementID: String
+    }
+
+    func call(parsed args: Args) async throws -> String {
+        if let limit = AgentToolCommon.stepLimitIfExceeded(context) { return limit }
+        return await context.withStore { store in
+            let location: AgentToolCommon.ElementLocation
+            switch AgentToolCommon.locate(store.plan, elementID: args.elementID) {
+            case .success(let found): location = found
+            case .failure(let error): return error.message
+            }
+            guard case .content(let payload) = store.plan.tracks[location.trackIndex]
+                    .elements[location.elementIndex].content,
+                  payload.value is CaptionCuePayload else {
+                return ToolEnvelope.error("元素 \(args.elementID) 不是字幕 cue，无法改文本")
+            }
+            let result = store.apply { plan in
+                guard case .content(let p) = plan.tracks[location.trackIndex]
+                        .elements[location.elementIndex].content,
+                      var cue = p.value as? CaptionCuePayload else { return }
+                cue.text = args.text
+                plan.tracks[location.trackIndex].elements[location.elementIndex].content =
+                    .content(TrackPayload(cue))
+            }
+            return ToolEnvelope.applied(result) { _ in
+                Payload(elementID: args.elementID)
+            }
+        }
+    }
+}
+
+// MARK: - 轨工具
+
+struct AddTrackTool: DefensiveAgentTool {
+    let context: AgentRunContext
+    let name = "add_track"
+    let description = "新增一条轨，返回新轨 ID。kind 如 video（叠加视频轨）/ caption（字幕轨）；placement 只支持 absolute（叠加轨，主轨唯一不可新增）。"
+
+    @Generable
+    struct Args {
+        @Guide(description: "轨道类型：video / caption")
+        let kind: String
+        @Guide(description: "定位方式，缺省 absolute（叠加轨）。chained 仅主轨，不可新增。")
+        let placement: String?
+        @Guide(description: "轨名（可选，便于人读）")
+        let name: String?
+    }
+
+    struct Payload: Encodable {
+        let trackID: String
+        let kind: String
+    }
+
+    func call(parsed args: Args) async throws -> String {
+        if let limit = AgentToolCommon.stepLimitIfExceeded(context) { return limit }
+        let kind = TrackKind(rawValue: args.kind)
+        guard TrackFeatureRegistry.feature(for: kind) != nil else {
+            return ToolEnvelope.error("未注册的轨道类型 '\(args.kind)'")
+        }
+        let placement = TrackPlacement(rawValue: args.placement ?? TrackPlacement.absolute.rawValue)
+        guard let placement else {
+            return ToolEnvelope.error("未知的 placement '\(args.placement ?? "")'；支持：absolute")
+        }
+        guard placement == .absolute else {
+            return ToolEnvelope.error("只能新增绝对定位轨（主轨唯一且已存在）")
+        }
+        let track = PlanTrack(kind: kind, name: args.name, placement: placement)
+        return await context.withStore { store in
+            let result = store.apply { plan in plan.tracks.append(track) }
+            return ToolEnvelope.applied(result) { _ in
+                Payload(trackID: track.id.uuidString, kind: kind.rawValue)
+            }
+        }
+    }
+}
+
+struct RemoveTrackTool: DefensiveAgentTool {
+    let context: AgentRunContext
+    let name = "remove_track"
+    let description = "删除一条轨（连同其元素）。不能删除主轨。"
+
+    @Generable
+    struct Args {
+        @Guide(description: "要删除的轨道 ID")
+        let trackID: String
+    }
+
+    struct Payload: Encodable {
+        let trackID: String
+    }
+
+    func call(parsed args: Args) async throws -> String {
+        if let limit = AgentToolCommon.stepLimitIfExceeded(context) { return limit }
+        return await context.withStore { store in
+            guard let index = AgentToolCommon.trackIndex(store.plan, trackID: args.trackID) else {
+                return ToolEnvelope.error("找不到轨道 \(args.trackID)，请先用 get_plan 获取当前轨道 ID")
+            }
+            guard store.plan.tracks[index].id != store.plan.primaryTrackID else {
+                return ToolEnvelope.error("不能删除主轨")
+            }
+            let result = store.apply { plan in
+                plan.tracks.remove(at: index)
+            }
+            return ToolEnvelope.applied(result) { _ in
+                Payload(trackID: args.trackID)
+            }
+        }
+    }
+}
+
+struct MoveTrackTool: DefensiveAgentTool {
+    let context: AgentRunContext
+    let name = "move_track"
+    let description = "调整轨道顺序（数组下标，0 起）。轨序影响叠加轨的绘制层序（越靠后越在上层）。"
+
+    @Generable
+    struct Args {
+        @Guide(description: "要移动的轨道 ID")
+        let trackID: String
+        @Guide(description: "目标下标（0 起）")
+        let toIndex: Int
+    }
+
+    struct Payload: Encodable {
+        let trackOrder: [String]
+    }
+
+    func call(parsed args: Args) async throws -> String {
+        if let limit = AgentToolCommon.stepLimitIfExceeded(context) { return limit }
+        return await context.withStore { store in
+            guard let index = AgentToolCommon.trackIndex(store.plan, trackID: args.trackID) else {
+                return ToolEnvelope.error("找不到轨道 \(args.trackID)，请先用 get_plan 获取当前轨道 ID")
+            }
+            guard store.plan.tracks.indices.contains(args.toIndex) else {
+                return ToolEnvelope.error("目标下标 \(args.toIndex) 越界（当前共 \(store.plan.tracks.count) 条轨）")
+            }
+            let result = store.apply { plan in
+                let track = plan.tracks.remove(at: index)
+                plan.tracks.insert(track, at: args.toIndex)
+            }
+            return ToolEnvelope.applied(result) { plan in
+                Payload(trackOrder: plan.tracks.map { $0.id.uuidString })
+            }
+        }
+    }
+}
+
+struct SetTrackFlagsTool: DefensiveAgentTool {
+    let context: AgentRunContext
+    let name = "set_track_flags"
+    let description = "设置轨道的静音 / 隐藏 / 锁定标记。只传需要改的字段。"
+
+    @Generable
+    struct Args {
+        @Guide(description: "轨道 ID")
+        let trackID: String
+        @Guide(description: "是否静音；不传则不改")
+        let muted: Bool?
+        @Guide(description: "是否隐藏；不传则不改")
+        let hidden: Bool?
+        @Guide(description: "是否锁定；不传则不改")
+        let locked: Bool?
+    }
+
+    struct Payload: Encodable {
+        let trackID: String
+        let isMuted: Bool
+        let isHidden: Bool
+        let isLocked: Bool
+    }
+
+    func call(parsed args: Args) async throws -> String {
+        if let limit = AgentToolCommon.stepLimitIfExceeded(context) { return limit }
+        guard args.muted != nil || args.hidden != nil || args.locked != nil else {
+            return ToolEnvelope.error("至少要给 muted / hidden / locked 其中之一")
+        }
+        return await context.withStore { store in
+            guard let index = AgentToolCommon.trackIndex(store.plan, trackID: args.trackID) else {
+                return ToolEnvelope.error("找不到轨道 \(args.trackID)，请先用 get_plan 获取当前轨道 ID")
+            }
+            let result = store.apply { plan in
+                if let muted = args.muted { plan.tracks[index].isMuted = muted }
+                if let hidden = args.hidden { plan.tracks[index].isHidden = hidden }
+                if let locked = args.locked { plan.tracks[index].isLocked = locked }
+            }
+            return ToolEnvelope.applied(result) { plan in
+                let track = plan.tracks[index]
+                return Payload(trackID: args.trackID, isMuted: track.isMuted,
+                               isHidden: track.isHidden, isLocked: track.isLocked)
             }
         }
     }
@@ -714,11 +1055,16 @@ public enum AgentToolSet {
             AddClipTool(context: context),
             SplitClipTool(context: context),
             TrimClipTool(context: context),
-            MoveClipTool(context: context),
+            MoveElementTool(context: context),
             RemoveClipTool(context: context),
             SetSpeedTool(context: context),
             SetTransitionTool(context: context),
-            SetCaptionsTool(context: context),
+            SetCaptionTrackTool(context: context),
+            SetCaptionTextTool(context: context),
+            AddTrackTool(context: context),
+            RemoveTrackTool(context: context),
+            MoveTrackTool(context: context),
+            SetTrackFlagsTool(context: context),
             SnapshotTool(context: context),
         ]
     }
