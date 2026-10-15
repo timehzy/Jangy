@@ -17,7 +17,7 @@ iOS 视频剪辑 App（SwiftUI + AVFoundation），基于 [Kadr](https://github.
 ## 常用命令
 
 ```bash
-# 测试（174 个，含导出端到端；全绿才算过）
+# 测试（176 个，含导出端到端；全绿才算过）
 cd Packages/JangyCore && swift test
 
 # CLI 冒烟
