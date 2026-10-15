@@ -166,6 +166,14 @@ final class LibraryModel {
         toastSequence += 1
     }
 
+    /// 图片上轨（预览页时长选择器）。
+    func addImageToTimeline(_ item: AssetItem, duration: TimeInterval) {
+        guard let editor = attachedEditor, !editor.agent.isRunning else { return }
+        editor.appendImageToTimeline(item, duration: duration)
+        toastMessage = "已添加到时间线"
+        toastSequence += 1
+    }
+
     // MARK: - 删除保护 / 引用查询
 
     /// 删除素材：先引用扫描（当前打开项目用内存 plan），有引用则拒删。

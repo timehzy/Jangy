@@ -2,8 +2,8 @@ import AVKit
 import SwiftUI
 import JangyCore
 
-/// 素材预览页：视频（播放 + trim + 添加）、图片（缩放预览）、音频（播放示意）。
-/// 添加按钮仅剪辑页语境 + 视频类型显示；图片上轨属 Spec ②，音频维持后置。
+/// 素材预览页：视频（播放 + trim + 添加）、图片（缩放预览 + 时长选择 + 添加）、音频（播放示意）。
+/// 添加按钮在剪辑页语境显示（视频/图片）；音频维持后置。
 /// 信息面板：元数据 + 引用项目列表。预览页不提供删除。
 struct AssetPreviewView: View {
     let item: AssetItem
@@ -16,10 +16,17 @@ struct AssetPreviewView: View {
     @State private var zoomScale: CGFloat = 1
     @State private var showInfo = false
     @State private var referencingProjects: [String] = []
+    @State private var stillDuration: TimeInterval = 3.0
+    @State private var customStillDuration: Double = 3.0
 
     private var fileURL: URL { resolver.resolve(item) }
     private var canAdd: Bool {
-        model.attachedEditor != nil && item.kind == .video && item.duration != nil
+        guard model.attachedEditor != nil else { return false }
+        switch item.kind {
+        case .video: return item.duration != nil
+        case .image: return true
+        default: return false
+        }
     }
 
     var body: some View {
@@ -37,15 +44,39 @@ struct AssetPreviewView: View {
                 .padding()
             }
 
+            if item.kind == .image {
+                VStack(alignment: .leading, spacing: 8) {
+                    Picker("显示时长", selection: $stillDuration) {
+                        Text("2s").tag(2.0)
+                        Text("3s").tag(3.0)
+                        Text("5s").tag(5.0)
+                        Text("自定义").tag(-1.0)
+                    }
+                    .pickerStyle(.segmented)
+                    if stillDuration == -1.0 {
+                        HStack {
+                            Text("\(customStillDuration.formatted(.number.precision(.fractionLength(1))))s")
+                                .font(.caption).foregroundStyle(.secondary)
+                            Slider(value: $customStillDuration, in: 0.5...30, step: 0.5)
+                        }
+                    }
+                }
+                .padding()
+            }
+
             if canAdd {
                 Button {
-                    model.addToTimeline(item, range: trimRange)
+                    if item.kind == .image {
+                        let duration = stillDuration == -1.0 ? customStillDuration : stillDuration
+                        model.addImageToTimeline(item, duration: duration)
+                    } else {
+                        model.addToTimeline(item, range: trimRange)
+                    }
                 } label: {
-                    Text("添加到时间线")
-                        .frame(maxWidth: .infinity)
+                    Text("添加到时间线").frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(trimRange.upperBound <= trimRange.lowerBound)  // 等 trimRange 初始化完成
+                .disabled(item.kind == .video && trimRange.upperBound <= trimRange.lowerBound)
                 .padding()
             }
         }

@@ -3,7 +3,7 @@ import JangyCore
 import UniformTypeIdentifiers
 
 /// 素材库：类型 tab + 三列网格。首页进入 = 纯管理；剪辑页进入（attachedEditor 非 nil）
-/// = 视频格带 ＋ 快捷上轨。多选模式只有删除（引用保护）。
+/// = 视频/图片格带 ＋ 快捷上轨。多选模式只有删除（引用保护）。
 struct LibraryView: View {
     @State var model: LibraryModel
 
@@ -135,7 +135,8 @@ struct LibraryView: View {
                     AssetCell(item: item, resolver: model.resolver,
                               isSelecting: isSelecting, isSelected: selection.contains(item.id),
                               isNew: model.recentlyImported.contains(item.id),
-                              showQuickAdd: model.attachedEditor != nil && tab == .video && item.duration != nil,
+                              showQuickAdd: model.attachedEditor != nil
+                                  && ((tab == .video && item.duration != nil) || tab == .image),
                               onQuickAdd: { model.quickAdd(item) })
                         .onTapGesture {
                             if isSelecting {
