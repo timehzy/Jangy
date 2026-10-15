@@ -1,0 +1,30 @@
+Packages/JangyCore/Tests/JangyCoreTests/TimelineDurationTests.swift
+  s_9a70defc13b235::t_4bc782679e874a 62-66
+Packages/JangyCore/Sources/JangyCore/StillImagePreparer.swift
+  s_9a70defc13b235::t_781f6934f7835b 6
+Packages/JangyCore/Sources/JangyCore/EngineBridge.swift
+  s_9a70defc13b235::t_a6dd7bad42fb62 28-29
+Packages/JangyCore/Sources/JangyCore/ProjectStore.swift
+  s_9a70defc13b235::t_973eeabe007d12 134-135,137-138
+Packages/JangyCore/Sources/JangyCore/CaptionImageRenderer.swift
+  s_9a70defc13b235::t_f43653f438a646 5
+Packages/JangyCore/Tests/JangyCoreTests/ProjectStoreTests.swift
+  s_9a70defc13b235::t_45d9b7e8390d71 49,52-55
+  s_9a70defc13b235::t_48b82402fd7c2b 147-156
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "ddacf4608ccd2890028c571ab948e5201e40a97e",
+  "prompts": {},
+  "sessions": {
+    "s_9a70defc13b235": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8b9cd9a4-be2a-41b5-8f01-e1390b420087",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Michael <yiliforever@qq.com>"
+    }
+  }
+}
