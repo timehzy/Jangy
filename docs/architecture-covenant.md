@@ -43,9 +43,13 @@
 | 现有组件 | 层 | 备注 |
 |---|---|---|
 | `EditPlan` / `PlanClip` / `AssetItem` / `TimelineDuration` | L2 | |
+| `PlanTrack` / `PlanElement` / `ElementContent` / `TrackKind` / `TrackPlacement` / `TrackPayload` | L2 | 轨道模型（v4，见 §3.8） |
+| `TrackFeatureRegistry` / `Features/<Name>/<Name>Feature.swift`（Manifest 是唯一注册点） | L2 | 特性注册表：核心不认识具体轨类型（见 §3.8） |
+| `TrackOperations` | L2 | 两条主轨不变式的唯一维持点 |
 | `EditStore` / `UndoStack` / `EditPlanValidator` | L2 | apply 是全库唯一写入口 |
 | `AssetResolver` / `ProjectStore` / `AssetLibrary` / `PlanLoader` | L2 基础设施 | ProjectStore 多项目持久化；AssetLibrary 全局素材登记表 |
 | `EngineBridge` / `PreviewBridge` / `ExportRunner` / `PhotosBridge` / `AssetImporter` / `CaptionImageRenderer` / `StillImagePreparer` / `ImageDownsampler` / `CoverGenerator` | L3 | |
+| `Features/<Name>/<Name>Engine.swift`（`VideoEngine` / `CaptionEngine`） | L3 | 同一 kind 的引擎映射片（见 §3.8） |
 | App 壳全部 SwiftUI + `AppModel` | L0/L1 | AppModel 目前是 L1 雏形，正式版拆出 Interaction 层 |
 | `AgentToolSet` / `EditAgentSession` / `AgentRunContext`（`JangyAgent` target） | L1 headless 消费方 | 剪辑 Agent：工具层（原子编辑 → `EditStore.apply`，校验失败结构化回喂）+ 编排层（连续对话 session，agent loop + snapshot 视觉自检）；App 与 CLI 共用 |
 | `AssetSynthesizer` / `SamplePlan`（`JangyTestSupport` target） | 测试脚手架 | 不分层：仅测试与 CLI 依赖，App 不链接，不进正式产物 |
@@ -62,12 +66,30 @@
 ## 3. 数据建模公约
 
 1. **片段级属性内禀化**：变速、未来的滤镜/调色/音量等「跟着片段走」的属性，一律存为 `PlanClip` 的字段，**禁止**建成按时间区间生效的独立实体。分割/移动时随节点拷贝，联动零成本。（依据：OTIO effects-on-clip、GES GESClip 子元素、剪映同款建模；2026-10-13 拍板。）
-2. **素材引用走登记表**：`PlanClip.assetID` / `CaptionTrack.assetID` 必须指向 `plan.assets` 里的 `AssetItem`；禁止在 plan JSON 里写文件名直引（v2 起 `MediaRef` 已删除）。新增素材须先登记再引用，登记 + 追加片段放同一次 `EditStore.apply`（单撤销步）。
-3. **时间口径统一**：渲染时长只认 `EditPlan.renderedDuration`——dissolve 与相邻片段全额重叠（扣 duration），fade 不重叠（各占相邻片段内 duration/2，总长不变）；与 Kadr CompositionBuilder `overlap(during:)` 一致，实测锚点 9.5s ≠ `Video.duration` 求和值 10.5s。UI 展示、e2e 断言都锚它；禁止「修正」成求和值，禁止另写求和。
+2. **素材引用走登记表**：`PlanClip.assetID` 必须指向 `plan.assets` 里的 `AssetItem`；禁止在 plan JSON 里写文件名直引（v2 起 `MediaRef` 已删除）。新增素材须先登记再引用，登记 + 追加片段放同一次 `EditStore.apply`（单撤销步）。**字幕 cue 的文本直接进 plan**（`CaptionCuePayload`），不再引用素材；SRT 文件退化为**导入源**（导入即展开为 cue，展开后 plan 是唯一事实源，不回写文件），轨 `settings.sourceAssetID` 保留该引用仅为素材引用保护。
+3. **时间口径统一**：渲染时长只认 `EditPlan.renderedDuration`——dissolve 与相邻片段全额重叠（扣 duration），fade 不重叠（各占相邻片段内 duration/2，总长不变）；与 Kadr CompositionBuilder `overlap(during:)` 一致，实测锚点 9.5s ≠ `Video.duration` 求和值 10.5s。UI 展示、e2e 断言都锚它；禁止「修正」成求和值，禁止另写求和。两条不变式（由 `TrackOperations` 维持、`EditPlanValidator` 兜底）：**主轨从 0 起连续覆盖 `[0, renderedDuration]`**；**任何轨的元素不得超出主轨末端**（超出时主轨尾部自动补 gap）。
 4. **无源区间素材**：图片等静态素材的 clip 无 source range，只有 duration；模型层显式建模（如 `PlanClip.source` 枚举：`.video(range)` / `.still(duration)`），不用魔法值（如 range 置零）表达。
 5. **schema 版本守卫**：plan JSON 带 `version`，过新拒绝加载，不静默丢字段。
 6. **工程读写必经 `ProjectStore`**：`Projects/<uuid>/project.json`（plan 格式不变）+ `meta.json`，原子写入 + 完整性校验；禁止在 App 层手写 project.json；素材完整性问题经 `verify` 报告显式上报，不静默丢弃。素材实体归全局 `AssetLibrary`（`library.json` 登记表 + `Assets/`），项目只持有引用子集。
 7. **命名避让**：模型层用 `PlanClip` / `PlanTransition`——Kadr 有同名 `Clip` 协议与 `Transition` 枚举，同模块会歧义。新增模型类型命名前先查 Kadr 符号表。
+
+### 轨道模型（v4，2026-10-15）
+
+时间线 = `EditPlan.tracks`（多条 `PlanTrack`）+ `primaryTrackID`。一条轨由**类型**（`kind`）与**结构**（`placement`）两个正交维度描述：
+
+- **`kind: TrackKind` 是开放类型**——核心只当字符串带，不 `switch` 它。已知 `video` / `caption`；未来贴纸 / 音乐 / 特效轨只是新 `kind`。
+- **`placement: TrackPlacement` 是结构属性，核心认识**——`.chained`（位置由顺序推出，主轨）/ `.absolute`（每个元素自带 `at`）。
+- **`ElementContent`**：`.content(TrackPayload)`（时长由 payload 推出）或 `.gap(duration:)`（占位无内容，时长自带）。`placement` 与 `gap` 归核心，因为它们是**结构**不是**类型**。
+- **特性注册表按层切三片**：同一个 `kind` 在 L2（`<Name>Feature.swift`：payload 模型 + 编解码 + 校验）、L3（`<Name>Engine.swift`：引擎映射）、L0（`<Name>Lane.swift`：呈现器）各注册一片——因为 L2 禁 `import Kadr/AVFoundation`，一个跨层的「什么都知道」对象不合法。
+- **`Features/Manifest.swift` 是全仓库唯一注册点**：加一类轨 = Manifest 加一行 + 新增一个 `Features/<Name>/` 目录，**核心零条件分支改动**（可插拔性由测试锚定）。
+- **静态装配**：注册表在 JangyCore 内部装配，不依赖 App 启动——`jangy-cli agent` 是 headless 跑的。
+- **未知 `kind` / 未知 payload `type` 一律报错**（校验器 / 解码器），不静默丢弃。
+
+### 删除语义 = lift 而非 ripple
+
+**删除主轨的「内容」元素 = 内容消失、时长保留**（原地留等长 gap），其他轨一个字节不动；**删除 gap 元素 = 合上**（后续元素前移、成片变短）——要缩短必须先有 gap 再删它。这是桌面 NLE（Premiere / FCP / DaVinci / Avid）的默认行为，偏离手机端主流（剪映默认合上）——理由是**轨与轨解耦**：ripple 会让「删一段视频」变成会改变其他轨时间处境的操作。
+
+**归一化的副作用（有意取舍）**：`normalizePayloads` 在写入口**无条件**跑，因此任何结构变化后**悬空的转场一律被清掉**——包括「用户显式把挂转场的片段移到最后」（v3 是校验失败、v4 是清转场后成功）。转场不跟在内容元素后面就是悬空引用（同外键语义），清掉比让移动失败更合理，且可撤销。副作用是清转场会减少 dissolve 重叠、令 `renderedDuration` **变大**——故 `apply` 内必须先 `normalize` 再 `maintainInvariants`（顺序不可反，见 `EditStore.apply` 注释）。
 
 ## 4. 跨实体联动：原语事件 + reactor 注册表
 
@@ -75,10 +97,11 @@
 
 「变速段被分割后两段都带变速」这类需求**不是联动**——属性内禀化（§3.1）后由数据模型天然解决。真正需要联动机制的是**跨实体**场景，已知清单：
 
-- 分割点横跨字幕 → 字幕裂为两条
 - 分割/删除落在转场区域 → 转场取消或收缩
 - 变速改变 outputDuration → 全局时长、后续字幕对位
 - 删除中间段 → 后续段 ripple 前移（若启用 ripple 模式）
+
+字幕是独立绝对轨，**不随视频片段联动**（分割/删除视频片段不触碰字幕轨）——原「分割点横跨字幕 → 字幕裂为两条」条目已作废。
 
 ### 机制（2026-10-13 拍板）
 
@@ -118,7 +141,7 @@ v1 范围：**导入 + 剪辑 + 导出保元数据**；球形交互预览进 bac
 
 | 降级项 | 预览行为 | 导出行为 | 原因 |
 |---|---|---|---|
-| 字幕 | SwiftUI Text 叠加层按播放时间近似 | 烧录（AVVideoCompositionCoreAnimationTool） | Kadr overlay 仅导出时生效 |
+| 字幕 | SwiftUI Text 叠加层按播放时间近似 | 烧录（预渲染 `ImageOverlay`，非 `TextOverlay`） | Kadr overlay 仅导出时生效；macOS headless 下 CATextLayer 不绘制，故用图片 |
 | 转场直通规避 | renderSize +0.5pt 微扰（仅模拟器） | 无微扰 | iOS 26 模拟器像素格式直通怪癖 |
 | 拖动期间帧率 | trim/拖动手势期间允许降帧率 | 不受影响 | 交互流畅优先 |
 
