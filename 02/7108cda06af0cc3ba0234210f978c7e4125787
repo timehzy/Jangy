@@ -1,0 +1,84 @@
+Packages/JangyCore/Tests/JangyAgentTests/AgentToolsTests.swift
+  s_9a70defc13b235::t_bc46fc4ae53932 168
+  s_9a70defc13b235::t_72d89a898a2f32 127
+  s_9a70defc13b235::t_1d3baf136a5e3c 129
+  s_9a70defc13b235::t_a9fd2c8210c23f 158
+Packages/JangyCore/Tests/JangyCoreTests/EditPlanTests.swift
+  s_9a70defc13b235::t_01c0ed871cae11 20,24
+  s_9a70defc13b235::t_98f5a2a643d7b6 79
+  s_9a70defc13b235::t_6363687550a4d0 135-165
+  s_9a70defc13b235::t_5bfdba4b8a6736 43-44
+  s_9a70defc13b235::t_ef1693f53074e1 88
+Packages/JangyCore/Sources/JangyTestSupport/SamplePlan.swift
+  s_9a70defc13b235::t_f48635bd8540e3 29,33,37
+Packages/JangyCore/Tests/JangyCoreTests/EditStoreGroupingTests.swift
+  s_9a70defc13b235::t_f211f1b6095f73 12
+  s_9a70defc13b235::t_2e955be317641f 29
+  s_9a70defc13b235::t_27e05d8e1664e5 22
+Packages/JangyCore/Sources/JangyCore/EditPlan.swift
+  s_9a70defc13b235::t_4da6c5d4b97482 7-8
+  s_9a70defc13b235::t_a0e8458dba0041 44-90,97-98,102,106,112-117,120-121,126-135
+  s_9a70defc13b235::t_f1857aaaf74077 31
+  s_9a70defc13b235::t_f261f2c89d588e 16
+Packages/JangyCore/Tests/JangyCoreTests/TimelineDurationTests.swift
+  s_9a70defc13b235::t_af5a47b9269068 11
+Packages/JangyCore/Tests/JangyCoreTests/EditStoreTests.swift
+  s_9a70defc13b235::t_27bf1afb10c28f 37
+  s_9a70defc13b235::t_69f398ea287a3c 49
+  s_9a70defc13b235::t_74ca0a8274544b 10
+Jangy/TimelineView.swift
+  s_9a70defc13b235::t_5fb9f464f40758 91-96
+Packages/JangyCore/Tests/JangyCoreTests/PreviewPlaybackTests.swift
+  s_9a70defc13b235::t_854285afbfb5f4 44
+  s_9a70defc13b235::t_c0c1b995e5a428 122
+  s_9a70defc13b235::t_47112063ee1746 88
+  s_9a70defc13b235::t_52762a39cf9852 42,86,120
+Packages/JangyCore/Sources/JangyAgent/AgentTools.swift
+  s_9a70defc13b235::t_7d03cfbd21b1da 308-314
+  s_9a70defc13b235::t_dafecb3df53e81 189
+  s_9a70defc13b235::t_c7620f6dcf7c14 233-270
+  s_9a70defc13b235::t_4b3c3c93e10cb9 208
+  s_9a70defc13b235::t_ef5aabd140120b 279
+Packages/JangyCore/Sources/JangyCore/TimelineDuration.swift
+  s_9a70defc13b235::t_1b558073538b41 12,14
+Packages/JangyCore/Sources/JangyCore/EngineBridge.swift
+  s_9a70defc13b235::t_801e567d81f769 28-33,50-75
+Packages/JangyCore/Sources/JangyCore/EditPlanValidator.swift
+  s_9a70defc13b235::t_c1e43ebd8d2ce1 49,53-63,66-80
+Packages/JangyCore/Tests/JangyCoreTests/ProjectPackageTests.swift
+  s_9a70defc13b235::t_ee214c498a1bcc 49
+Packages/JangyCore/Tests/JangyCoreTests/EditPlanValidatorTests.swift
+  s_9a70defc13b235::t_30f5d72a31ec32 24
+Packages/JangyCore/Tests/JangyCoreTests/ExportEndToEndTests.swift
+  s_9a70defc13b235::t_3859fc02a84936 195
+Packages/JangyCore/Sources/JangyCore/ProjectPackage.swift
+  s_9a70defc13b235::t_599ac7925ab947 145
+Packages/JangyCore/Tests/JangyCoreTests/EngineBridgeTests.swift
+  s_9a70defc13b235::t_3b65182457f544 70
+Jangy/AppModel.swift
+  s_9a70defc13b235::t_8bc686541e8310 93-94,100-106,111,117,121-132
+Packages/JangyCore/Tests/JangyCoreTests/AssetImporterTests.swift
+  s_9a70defc13b235::t_031ff2f3fc6906 61
+Packages/JangyCore/Tests/JangyCoreTests/UndoStackTests.swift
+  s_9a70defc13b235::t_2b796115311924 10
+Packages/JangyCore/Tests/JangyCoreTests/Fixtures/SamplePlan.golden.json
+  s_9a70defc13b235::t_47c9f2872d02e5 56-62,75-81,90-96,104
+Packages/JangyCore/Sources/JangyCore/ProjectStore.swift
+  s_9a70defc13b235::t_75c5db357ab6a4 95
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "027108cda06af0cc3ba0234210f978c7e4125787",
+  "prompts": {},
+  "sessions": {
+    "s_9a70defc13b235": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8b9cd9a4-be2a-41b5-8f01-e1390b420087",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Michael <yiliforever@qq.com>"
+    }
+  }
+}
