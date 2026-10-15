@@ -1,0 +1,26 @@
+Jangy/LibraryModel.swift
+  s_9a70defc13b235::t_1ccedbce214dfc 169-173
+Jangy/LibraryView.swift
+  s_9a70defc13b235::t_3d9216f38fba55 6
+  s_9a70defc13b235::t_d2a8ab8900a494 138-139
+Jangy/AssetPreviewView.swift
+  s_9a70defc13b235::t_b1d82acc03b321 5-6
+  s_9a70defc13b235::t_100356a305f1f9 19-20,24-29
+  s_9a70defc13b235::t_b66fa7e55535b5 47-66,69-74,76,79
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "01270b30144eb62e77bc4c8d1cac9f11ce699fb5",
+  "prompts": {},
+  "sessions": {
+    "s_9a70defc13b235": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8b9cd9a4-be2a-41b5-8f01-e1390b420087",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Michael <yiliforever@qq.com>"
+    }
+  }
+}
