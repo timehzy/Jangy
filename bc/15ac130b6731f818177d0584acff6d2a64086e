@@ -1,0 +1,20 @@
+README.md
+  s_9a70defc13b235::t_677dcf6e54ed9f 70
+  s_9a70defc13b235::t_e9b40d12dadd7b 56
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "bc15ac130b6731f818177d0584acff6d2a64086e",
+  "prompts": {},
+  "sessions": {
+    "s_9a70defc13b235": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8b9cd9a4-be2a-41b5-8f01-e1390b420087",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Michael <yiliforever@qq.com>"
+    }
+  }
+}
