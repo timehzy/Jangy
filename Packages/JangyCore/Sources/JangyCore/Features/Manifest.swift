@@ -10,6 +10,7 @@ public enum TrackFeatureRegistry {
     public static var features: [any TrackFeature.Type] {
         [
             VideoFeature.self,
+            CaptionFeature.self,
         ]
     }
 
