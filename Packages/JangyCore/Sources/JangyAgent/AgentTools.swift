@@ -358,7 +358,7 @@ struct SplitClipTool: DefensiveAgentTool {
                     second.source = .video(args.at...range.upperBound)
                     let firstElement = PlanElement(id: originalID, at: originalAt,
                                                    content: .content(TrackPayload(first)))
-                    let secondElement = PlanElement(at: originalAt.map { $0 + firstElement.duration },
+                    let secondElement = PlanElement(id: secondID, at: originalAt.map { $0 + firstElement.duration },
                                                     content: .content(TrackPayload(second)))
                     plan.tracks[location.trackIndex].elements.replaceSubrange(
                         location.elementIndex...location.elementIndex,
@@ -385,7 +385,7 @@ struct SplitClipTool: DefensiveAgentTool {
                     second.source = .still(duration: duration - args.at)
                     let firstElement = PlanElement(id: originalID, at: originalAt,
                                                    content: .content(TrackPayload(first)))
-                    let secondElement = PlanElement(at: originalAt.map { $0 + firstElement.duration },
+                    let secondElement = PlanElement(id: secondID, at: originalAt.map { $0 + firstElement.duration },
                                                     content: .content(TrackPayload(second)))
                     plan.tracks[location.trackIndex].elements.replaceSubrange(
                         location.elementIndex...location.elementIndex,
@@ -497,6 +497,10 @@ struct MoveElementTool: DefensiveAgentTool {
                 }
                 guard store.plan.tracks.contains(where: { $0.elements.contains { $0.id == uuid } }) else {
                     return ToolEnvelope.error("找不到元素 \(raw)，请先用 get_plan 获取当前元素 ID")
+                }
+                // 锚点不能是自己：移除后锚点就没了，会静默退化成「追加到末尾」。
+                guard uuid != movedID else {
+                    return ToolEnvelope.error("锚点不能是要移动的元素自身")
                 }
                 beforeID = uuid
             }

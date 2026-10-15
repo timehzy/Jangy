@@ -242,4 +242,92 @@ final class AgentTrackToolsTests: XCTestCase {
         XCTAssertTrue(result.contains("\"status\":\"error\""))
         XCTAssertTrue(result.contains(clipID.uuidString), "issues 应带出出错的元素 ID")
     }
+
+    // MARK: - split
+
+    private struct SplitEnvelope: Decodable {
+        struct Payload: Decodable {
+            let firstElementID: String
+            let secondElementID: String
+        }
+        let payload: Payload
+    }
+
+    func testSplitReturnsRealSecondElementID() async throws {
+        let context = try makeContext()
+        let clip = await context.plan.primaryTrack!.elements[0].id
+        let result = try await SplitClipTool(context: context).call(parsed: .init(
+            elementID: clip.uuidString, at: 1.5))
+        let envelope = try JSONDecoder().decode(SplitEnvelope.self, from: Data(result.utf8))
+
+        // 两个返回的 ID 都必须指向 plan 里真实存在的元素（第二段曾因漏传 id 变成悬空 UUID）
+        let ids = Set((await context.plan).primaryTrack!.elements.map { $0.id.uuidString })
+        XCTAssertTrue(ids.contains(envelope.payload.firstElementID), "firstElementID 应指向真实元素")
+        XCTAssertTrue(ids.contains(envelope.payload.secondElementID), "secondElementID 应指向真实元素")
+        XCTAssertNotEqual(envelope.payload.firstElementID, envelope.payload.secondElementID)
+    }
+
+    func testSplitStillClipSplitsBaseDuration() async throws {
+        let context = try makeContext()
+        _ = try await AddClipTool(context: context).call(parsed: .init(
+            fileName: "still.png", rangeStart: nil, rangeEnd: nil, speed: nil, duration: 4.0,
+            trackID: nil, at: nil))
+        let stillID = await context.plan.primaryTrack!.elements.last!.id
+
+        let result = try await SplitClipTool(context: context).call(parsed: .init(
+            elementID: stillID.uuidString, at: 1.0))
+        XCTAssertTrue(result.contains("\"status\":\"ok\""))
+
+        let halves = (await context.plan).primaryTrack!.elements.suffix(2).compactMap { element -> PlanClip? in
+            guard case .content(let p) = element.content else { return nil }
+            return p.value as? PlanClip
+        }
+        XCTAssertEqual(halves.count, 2)
+        XCTAssertEqual(halves[0].source, .still(duration: 1.0))
+        XCTAssertEqual(halves[1].source, .still(duration: 3.0))
+    }
+
+    // MARK: - move_element 守卫
+
+    func testMoveElementAnchorNotOnDestinationTrackFails() async throws {
+        let context = try makeContext()
+        _ = try await AddTrackTool(context: context).call(parsed: .init(
+            kind: "video", placement: "absolute", name: nil))
+        var plan = await context.plan
+        let overlayID = plan.tracks.filter { $0.kind == .video }[1].id
+        let clip = plan.primaryTrack!.elements[0].id
+        // 锚点取字幕 cue：它不在叠加轨内 → 必须报错，而不是静默追加到末尾
+        let captionCue = plan.tracks.first { $0.kind == .caption }!.elements[0].id
+
+        let result = try await MoveElementTool(context: context).call(parsed: .init(
+            elementID: clip.uuidString, toTrackID: overlayID.uuidString,
+            beforeElementID: captionCue.uuidString, at: 1.0))
+        XCTAssertTrue(result.contains("\"status\":\"error\""), "跨轨锚点应报错")
+        XCTAssertTrue(result.contains("不在目标轨内"))
+
+        plan = await context.plan
+        XCTAssertEqual(plan.tracks.first { $0.id == overlayID }!.elements.count, 0, "失败不留痕")
+    }
+
+    func testMoveElementSelfAnchorIsRejected() async throws {
+        let context = try makeContext()
+        let clip = await context.plan.primaryTrack!.elements[0].id
+        let result = try await MoveElementTool(context: context).call(parsed: .init(
+            elementID: clip.uuidString, toTrackID: nil,
+            beforeElementID: clip.uuidString, at: nil))
+        XCTAssertTrue(result.contains("\"status\":\"error\""))
+    }
+
+    func testMoveElementAcrossTrackKindsIsRejected() async throws {
+        let context = try makeContext()
+        let plan = await context.plan
+        let clip = plan.primaryTrack!.elements[0].id
+        let captionID = plan.tracks.first { $0.kind == .caption }!.id
+
+        // 把视频片段挪进字幕轨 → 校验器按「payload 类型不属于该轨类型」拦下
+        let result = try await MoveElementTool(context: context).call(parsed: .init(
+            elementID: clip.uuidString, toTrackID: captionID.uuidString,
+            beforeElementID: nil, at: 1.0))
+        XCTAssertTrue(result.contains("\"status\":\"error\""), "跨类型挪动应被校验拦下")
+    }
 }

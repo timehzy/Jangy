@@ -3,7 +3,8 @@ import XCTest
 
 /// 第四类轨（贴纸轨空壳）。它只存在于本测试文件里——payload + 特性片 + 一次注入，
 /// 核心的编解码、校验分派、不变式就全部正确工作。
-/// 这就是注册表的验收标准：**加一类轨不需要改核心的任何 switch / if 分支**。
+/// 验收标准：**加一类轨，L2 核心（模型 / 编解码 / 校验 / 不变式）零条件分支改动**
+/// （L3 引擎映射片仍需在 `EngineBridge` 挂一条调用，引擎构造本就逐类型；见公约「轨道模型」节）。
 struct StickerPayload: Codable, Equatable, Sendable, TrackElementPayload {
     static let payloadType = "sticker"
     var imageName: String
@@ -93,8 +94,10 @@ final class TrackFeaturePluggabilityTests: XCTestCase {
     }
 
     func testUnregisteredPayloadTypeIsRejectedByDecoder() {
-        // 未注册的 payload 在解码期就报错（不静默丢弃）
-        let json = #"{"type":"sticker","imageName":"a.png","duration":1}"#.data(using: .utf8)!
+        // 未注册的 payload 在解码期就报错（不静默丢弃）。
+        // 用一个**从不注册**的类型名——用 "sticker" 会依赖 testOnlyFeatures 的 tearDown 复位，
+        // 与同文件其它用例共享全局态，脆弱。
+        let json = #"{"type":"no-such-payload","imageName":"a.png","duration":1}"#.data(using: .utf8)!
         XCTAssertThrowsError(try JSONDecoder().decode(TrackPayload.self, from: json))
     }
 }

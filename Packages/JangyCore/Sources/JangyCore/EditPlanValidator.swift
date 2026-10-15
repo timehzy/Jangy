@@ -81,6 +81,21 @@ public struct EditPlanValidator: Sendable {
             }
         }
 
+        // 核心不变式兜底：元素的 payload 类型必须属于其轨类型注册的 payload 集合。
+        // 否则是跨类型误放（如把视频片段挪进字幕轨），核心放行、到引擎层才炸。
+        for (i, track) in plan.tracks.enumerated() {
+            guard let feature = TrackFeatureRegistry.feature(for: track.kind) else { continue }
+            let accepted = Set(feature.payloadTypes.map { $0.payloadType })
+            for (j, element) in track.elements.enumerated() {
+                guard case .content(let payload) = element.content,
+                      !accepted.contains(payload.payloadType) else { continue }
+                issues.append(ValidationIssue(
+                    path: "tracks[\(i)].elements[\(j)].content",
+                    elementID: element.id,
+                    message: "元素 payload 类型 '\(payload.payloadType)' 不属于轨道类型 '\(track.kind.rawValue)'"))
+            }
+        }
+
         // 核心不变式兜底：任何轨的元素不得超出主轨末端。
         // 用 renderedDuration 而非 primary.span——链式轨的 span 不含转场重叠。
         let mainEnd = plan.renderedDuration
