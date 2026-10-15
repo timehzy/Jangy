@@ -15,6 +15,7 @@ public struct CaptionCue: Equatable, Sendable {
 /// 预览包：AVPlayerItem + 字幕 cue 列表。
 /// 注意：Kadr 的 overlay（烧录字幕）不进入预览（AVFoundation 限制，export-only），
 /// 表现层需用 SwiftUI 原生叠加层按播放器时间显示 cues。
+/// cues 来自 plan 的字幕轨元素（`CaptionEngine.makeCues`），**不再来自 SRT 文件解析**。
 public struct PreviewPackage {
     public let playerItem: AVPlayerItem
     public let cues: [CaptionCue]
