@@ -113,4 +113,44 @@ final class MultiTrackExportEndToEndTests: XCTestCase {
         let after = try meanColor(asset, at: 2.8, in: CGRect(x: 0.3, y: 0.3, width: 0.4, height: 0.4))
         XCTAssertGreaterThan(after.red, after.green, "叠加结束后应回到主轨的红，末帧不得被保持")
     }
+
+    /// 叠加轨多元素**绝对定位**：每个元素落在自己的 `at` 上，而不是顺次从轨道起点排。
+    /// `Kadr.Track { }` 内部元素的 `.at(time:)` 被忽略（Track 内是 track-relative 隐式链），
+    /// 所以叠加轨必须「每个元素一个 Track(at:)」。上面那条 e2e 只有一个叠加元素、且 at 恰为 0.5，
+    /// 顺次排布（落在 0–2s）与绝对定位（落在 0.5–2.5s）在它那两个采样点上不可区分，故没能暴露本问题。
+    func testMultiElementOverlayTrackPositionsElementsAbsolutely() async throws {
+        let a = videoAsset("clip1.mp4")   // 红
+        let b = videoAsset("clip2.mp4")   // 绿
+        let c = videoAsset("clip3.mp4")   // 蓝
+        let primary = PlanTrack(kind: .video, placement: .chained, elements: [
+            PlanElement(content: .content(TrackPayload(PlanClip(assetID: a.id, source: .video(0...4))))),
+        ])
+        // 两个叠加元素，分别锚在 0.5s（绿，0.5–1.5）与 2.0s（蓝，2.0–3.0），中间 1.5–2.0 空着。
+        let overlay = PlanTrack(kind: .video, placement: .absolute, elements: [
+            PlanElement(at: 0.5, content: .content(TrackPayload(
+                PlanClip(assetID: b.id, source: .video(0...1))))),
+            PlanElement(at: 2.0, content: .content(TrackPayload(
+                PlanClip(assetID: c.id, source: .video(0...1))))),
+        ])
+        let plan = EditPlan(assets: [a, b, c], tracks: [primary, overlay], primaryTrackID: primary.id)
+
+        let out = try await export(plan, to: "overlay-multi.mp4")
+        let asset = AVURLAsset(url: out)
+        let rect = CGRect(x: 0.3, y: 0.3, width: 0.4, height: 0.4)
+
+        // 元素 A 的绝对窗口内（1.0s）见绿——若顺次排布，这里会是 B 的蓝
+        let atA = try meanColor(asset, at: 1.0, in: rect)
+        XCTAssertGreaterThan(atA.green, atA.red, "t=1.0 应见叠加元素 A 的绿")
+        XCTAssertGreaterThan(atA.green, atA.blue, "t=1.0 应见叠加元素 A 的绿（不是 B 的蓝）")
+
+        // 两元素之间的空档（1.75s）见主轨红——顺次排布会让 B 落在这里
+        let between = try meanColor(asset, at: 1.75, in: rect)
+        XCTAssertGreaterThan(between.red, between.green, "t=1.75 两叠加元素之间应见主轨红")
+        XCTAssertGreaterThan(between.red, between.blue, "t=1.75 两叠加元素之间应见主轨红")
+
+        // 元素 B 的绝对窗口内（2.5s）见蓝
+        let atB = try meanColor(asset, at: 2.5, in: rect)
+        XCTAssertGreaterThan(atB.blue, atB.red, "t=2.5 应见叠加元素 B 的蓝")
+        XCTAssertGreaterThan(atB.blue, atB.green, "t=2.5 应见叠加元素 B 的蓝")
+    }
 }

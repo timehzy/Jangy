@@ -98,11 +98,12 @@ public enum EngineBridge {
             }
         }
 
-        // 叠加视频轨 → Kadr.Track。Track 本身是 Clip，直接进 builder 数组
-        // （Kadr.Video 没有 track(_:) modifier）。声明顺序 = 绘制顺序，后面的盖前面的。
+        // 叠加视频轨 → Kadr.Track（每个元素一个，锚在 element.at）。Track 本身是 Clip，
+        // 直接进 builder 数组（Kadr.Video 没有 track(_:) modifier）。
+        // 声明顺序 = 绘制顺序，后面的盖前面的。
         for track in plan.tracks where track.id != primary.id && track.kind == .video {
-            elements.append(try await VideoEngine.makeParallelTrack(track: track, plan: plan,
-                                                                    resolver: resolver, preset: preset))
+            elements.append(contentsOf: try await VideoEngine.makeParallelTracks(track: track, plan: plan,
+                                                                                resolver: resolver, preset: preset))
         }
 
         // Kadr 1.x 校准：VideoBuilder 的 buildExpression 只接受单个 Clip，
