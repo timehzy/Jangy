@@ -8,7 +8,8 @@ import Foundation
 public enum TrackOperations {
 
     /// 移除元素。
-    /// - 链式轨的中间元素 → 原地换成等长 gap（内容消失、时长保留）
+    /// - 链式轨的中间**内容**元素 → 原地换成等长 gap（lift：内容消失、时长保留）
+    /// - **gap** 元素 → 真正移除，后续元素前移（这才是「合上」；删内容不缩短，删 gap 才缩短）
     /// - 链式轨的末尾元素 → 真正移除；若其他轨更靠后，随后由 maintainInvariants 补尾部 gap
     /// - 绝对轨元素 → 直接移除（主轨长度不受影响）
     ///
@@ -17,7 +18,8 @@ public enum TrackOperations {
         for (ti, track) in plan.tracks.enumerated() {
             guard let ei = track.elements.firstIndex(where: { $0.id == elementID }) else { continue }
             let element = track.elements[ei]
-            if track.placement == .chained, ei < track.elements.count - 1 {
+            let isContent: Bool = { if case .content = element.content { return true } else { return false } }()
+            if track.placement == .chained, isContent, ei < track.elements.count - 1 {
                 plan.tracks[ti].elements[ei] = PlanElement(id: element.id,
                                                            content: .gap(duration: element.duration))
             } else {

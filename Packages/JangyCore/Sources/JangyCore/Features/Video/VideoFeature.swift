@@ -34,12 +34,19 @@ public enum VideoFeature: TrackFeature {
     public static func validate(track: PlanTrack, context: TrackValidationContext) -> [ValidationIssue] {
         var issues: [ValidationIssue] = []
 
-        if track.placement != .chained {
-            issues.append(ValidationIssue(path: "\(context.pathPrefix(for: track)).placement",
-                                          message: "视频轨必须是链式（.chained）"))
+        // 视频轨的 placement 两种都合法：.chained = 主轨，.absolute = 叠加轨。
+        // （「主轨必须 .chained」由 EditPlanValidator 单独校验——只有它知道 primaryTrackID。）
+        let prefix = context.pathPrefix(for: track)
+
+        // 绝对定位轨的元素必须带 at（位置唯一事实源）。缺 at 会让引擎按 `at ?? 0` 静默落在 0，
+        // 是「移动/新增到叠加轨却忘了给 at」的兜底网（与 CaptionFeature 同款检查）。
+        if track.placement == .absolute {
+            for (i, element) in track.elements.enumerated() where element.at == nil {
+                issues.append(ValidationIssue(path: "\(prefix).elements[\(i)].at", elementID: element.id,
+                                              message: "绝对定位轨的元素必须带 at"))
+            }
         }
 
-        let prefix = context.pathPrefix(for: track)
         for (i, element) in track.elements.enumerated() {
             let path = "\(prefix).elements[\(i)]"
             // gap 在链式轨上合法（删除留下的空档），不校验内容；

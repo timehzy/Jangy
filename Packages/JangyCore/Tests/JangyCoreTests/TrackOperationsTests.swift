@@ -47,6 +47,17 @@ final class TrackOperationsTests: XCTestCase {
         XCTAssertEqual(plan.renderedDuration, 9, accuracy: 0.001)
     }
 
+    func testRemovingMiddleGapRipplesFollowingElementsForward() {
+        // 删 gap = 「合上」：后续元素前移、成片变短（与「删内容留 gap」相反）。
+        // 之前 removeElement 对 gap 也「原地换成等长 gap」——是 no-op，工具层回假成功。
+        var plan = makePlan(mainSeconds: [3, 2, 4])
+
+        TrackOperations.removeElement(plan.primaryTrack!.elements[1].id, in: &plan)
+
+        XCTAssertEqual(plan.primaryTrack!.elements.count, 2, "gap 被真正移除（不是换成 gap）")
+        XCTAssertEqual(plan.renderedDuration, 7, accuracy: 0.001, "后续元素前移，成片变短")
+    }
+
     func testRemovingLastElementJustRemovesItWithoutPadding() {
         // 只移除，**不补 gap** —— 补 gap 是 maintainInvariants 的职责，不是 removeElement 的
         var plan = makePlan(mainSeconds: [3, 3], captionEnds: [5])
