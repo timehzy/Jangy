@@ -12,7 +12,7 @@
 
 **范围边界：** 本计划只做阶段①（模型 + 引擎）。时间线 UI、L1 Interaction 层、L0 lane 呈现器属阶段②——本计划对 `Jangy/TimelineView.swift` 只做「让它编译通过、行为不变」的最小适配。
 
-**执行顺序约束：** Task 1–4 每步独立可编译可测。**Task 5 起代码库进入红色区间，Task 5 + 6 + 7 必须作为一个工作单元连续完成**，中途不要提交。Task 11（迁移）的实现要在 Task 5 之前写好（Task 5 的 `PlanLoader` 要接线）——执行时把 Task 11 提到 Task 5 之前，或先按 Task 5 Step 5 的说明放最小占位再补。
+**执行顺序约束：** Task 1–5 每步独立可编译可测、可单独提交（**都不破坏现有代码**）。**红色区间从 Task 6 开始**：`EditPlan` 换形状 + `PlanClip` 去 `id` 会让所有消费者同时失效，因此 **Task 6 + 7 + 8 必须作为一个工作单元连续完成、中途不要提交**，直到 `swift build` + `swift test` + `xcodebuild` 三者全绿再一次性提交。
 
 **`type` 判别字段归 `TrackPayload` box 所有（Task 1 执行时确认）**：box 在 `encode` 里注入 `type`、在 `init(from:)` 里用 `TypeProbe` 读它；**具体 payload 一律不得在自己的 `encode` 里写 `type`**（会写两次）。这样 payload 忘了写判别字段这件事在结构上不可能发生。Task 2 / Task 3 的 payload 代码已按此修正。
 
@@ -55,7 +55,7 @@
 - Create: `Packages/JangyCore/Sources/JangyCore/Features/Manifest.swift`
 - Test: `Packages/JangyCore/Tests/JangyCoreTests/PlanTrackTests.swift`
 
-**设计要点：** 特性模块的校验接口吃一个**窄上下文**（`TrackValidationContext`），不吃整个 `EditPlan`。这样核心类型与特性协议不必等 v4 的 `EditPlan` 存在即可落地（Task 5 才换 `EditPlan`），同时窄接口本身也是更好的边界。
+**设计要点：** 特性模块的校验接口吃一个**窄上下文**（`TrackValidationContext`），不吃整个 `EditPlan`。这样核心类型与特性协议不必等 v4 的 `EditPlan` 存在即可落地（Task 6 才换 `EditPlan`），同时窄接口本身也是更好的边界。
 
 - [ ] **Step 1: 写失败的测试**
 
@@ -505,11 +505,13 @@ git commit -m "Core: 多轨核心类型 + TrackPayload + 特性注册表（静�
 
 **Files:**
 - Create: `Packages/JangyCore/Sources/JangyCore/Features/Video/VideoFeature.swift`
-- Modify: `Packages/JangyCore/Sources/JangyCore/EditPlan.swift`（`PlanClip` 去 `id`，加 `TrackElementPayload` 一致性）
-- Modify: `Packages/JangyCore/Sources/JangyCore/TimelineDuration.swift`
+- Modify: `Packages/JangyCore/Sources/JangyCore/EditPlan.swift`（`PlanClip` 加 `TrackElementPayload` 一致性 + `duration`；**`id` 本步保留**）
+- Modify: `Packages/JangyCore/Sources/JangyCore/TimelineDuration.swift`（`outputDuration` 改为转发 `duration`）
 - Modify: `Packages/JangyCore/Sources/JangyCore/EditPlanValidator.swift`（`ValidationIssue` 加 `elementID`）
 - Modify: `Packages/JangyCore/Sources/JangyCore/Features/Manifest.swift`（注册 VideoFeature）
 - Test: `Packages/JangyCore/Tests/JangyCoreTests/VideoFeatureTests.swift`
+
+**本步必须保持代码库绿色。** `PlanClip` 本步只加协议一致性、**不动 `id`**，所以 `EditPlanValidator` / `EngineBridge` / Agent / App / 全部测试照旧编译。SwiftPM 编译整个 target，若本步顺手把 `id` 去掉，连 `swift test --filter VideoFeatureTests` 都跑不起来。**`PlanClip.id` 的移除与 `plan.clips` → `plan.tracks` 的切换一起在 Task 6 做。**
 
 - [ ] **Step 1: 写失败的测试**
 
@@ -539,12 +541,6 @@ final class VideoFeatureTests: XCTestCase {
         let data = try JSONEncoder().encode(TrackPayload(PlanClip(assetID: assetID, source: .video(0...3))))
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
         XCTAssertEqual(json?["type"] as? String, "clip")
-    }
-
-    func testClipJSONHasNoIDField() throws {
-        let data = try JSONEncoder().encode(TrackPayload(PlanClip(assetID: assetID, source: .video(0...3))))
-        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-        XCTAssertNil(json?["id"], "id 归 PlanElement，payload 里不应再有一份")
     }
 
     func testValidateRejectsVideoClipReferencingImageAsset() {
@@ -595,14 +591,15 @@ Expected: 编译失败 —— `PlanClip` 不符合 `TrackElementPayload`
 
 - [ ] **Step 3: 改 PlanClip**
 
-`EditPlan.swift` 中 `PlanClip` 的改动——**删掉 `id` 字段与它的编解码**，加协议一致性：
+`EditPlan.swift` 中 `PlanClip` 的改动——**加协议一致性 + `duration`，本步保留 `id`**：
 
 ```swift
-/// 视频轨的元素 payload。id 不在这里——它归 PlanElement（唯一寻址单元）。
-/// `type` 判别字段也不在这里——它由 TrackPayload box 注入。
+/// 视频轨的元素 payload。`type` 判别字段由 TrackPayload box 注入，这里不写。
+/// **`id` 本步仍在这里**——它要到 Task 6 才挪去 PlanElement（届时删掉字段与它的编解码）。
 public struct PlanClip: Codable, Equatable, Sendable, TrackElementPayload {
     public static let payloadType = "clip"
 
+    public var id: UUID
     /// 素材引用：指向 EditPlan.assets 中的条目。
     public var assetID: UUID
     /// 片段来源：视频源区间 / 静态素材时长。
@@ -610,8 +607,9 @@ public struct PlanClip: Codable, Equatable, Sendable, TrackElementPayload {
     public var speed: SpeedPlan
     public var transitionAfter: PlanTransition?
 
-    public init(assetID: UUID, source: PlanClipSource,
+    public init(id: UUID = UUID(), assetID: UUID, source: PlanClipSource,
                 speed: SpeedPlan = .flat(1.0), transitionAfter: PlanTransition? = nil) {
+        self.id = id
         self.assetID = assetID
         self.source = source
         self.speed = speed
@@ -622,12 +620,13 @@ public struct PlanClip: Codable, Equatable, Sendable, TrackElementPayload {
     public var duration: TimeInterval { source.length / speed.rate }
 
     private enum CodingKeys: String, CodingKey {
-        case assetID, source, speed, transitionAfter
+        case id, assetID, source, speed, transitionAfter
     }
     private enum LegacyKeys: String, CodingKey { case range }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
         assetID = try container.decode(UUID.self, forKey: .assetID)
         if let source = try container.decodeIfPresent(PlanClipSource.self, forKey: .source) {
             self.source = source
@@ -643,14 +642,8 @@ public struct PlanClip: Codable, Equatable, Sendable, TrackElementPayload {
         transitionAfter = try container.decodeIfPresent(PlanTransition.self, forKey: .transitionAfter)
     }
 
-    /// `type` 由 TrackPayload box 注入，这里只写自己的字段。
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(assetID, forKey: .assetID)
-        try container.encode(source, forKey: .source)
-        try container.encode(speed, forKey: .speed)
-        try container.encodeIfPresent(transitionAfter, forKey: .transitionAfter)
-    }
+    // encode 走合成实现（按 CodingKeys 写 id/assetID/source/speed/transitionAfter）。
+    // 不写 `type`——那是 box 的事。
 }
 ```
 
@@ -799,19 +792,24 @@ public enum VideoFeature: TrackFeature {
 - [ ] **Step 7: 运行确认通过**
 
 Run: `cd Packages/JangyCore && swift test --filter VideoFeatureTests`
-Expected: PASS（7 个用例）
+Expected: PASS（6 个用例）
 
-> **注意：本步之后代码库不编译**（`EditPlanValidator` / `EngineBridge` / Agent / App 仍在用 `clip.id` 与 `plan.clips`）。这是预期的——Task 5 统一修复。因此 **Task 2 与 Task 5 之间不要提交**；把 Task 2 的改动攒到 Task 5 的提交里（或先只提交 Task 2 的新文件与测试）。
+- [ ] **Step 8: 全量回归**
 
-- [ ] **Step 8: 提交（只提交新增文件，避开红色区间）**
+Run: `cd Packages/JangyCore && swift test`
+Expected: 190 个既有用例 + 本任务 6 个新用例，全部通过。**本步不破坏任何现有代码**（`PlanClip` 只加协议一致性、没动 `id`），所以这是一次干净的绿色提交。
+
+- [ ] **Step 9: 提交**
 
 ```bash
 git add Packages/JangyCore/Sources/JangyCore/Features/Video \
+        Packages/JangyCore/Sources/JangyCore/EditPlan.swift \
+        Packages/JangyCore/Sources/JangyCore/TimelineDuration.swift \
+        Packages/JangyCore/Sources/JangyCore/EditPlanValidator.swift \
+        Packages/JangyCore/Sources/JangyCore/Features/Manifest.swift \
         Packages/JangyCore/Tests/JangyCoreTests/VideoFeatureTests.swift
-git commit -m "Core: Video 特性片（PlanClip 降级为元素 payload，id 归 PlanElement）"
+git commit -m "Core: Video 特性片（PlanClip 加 TrackElementPayload 一致性，id 归 PlanElement 待 Task 6）"
 ```
-
-> `PlanClip` 去 id、`TimelineDuration` 转发、`ValidationIssue.elementID` 三处改动随 Task 5 一起提交。
 
 ---
 
