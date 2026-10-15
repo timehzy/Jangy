@@ -59,6 +59,25 @@ final class TimelineThumbnailerTests: XCTestCase {
         XCTAssertNotNil(image)
     }
 
+    func testImageThumbnailReturnsImage() async throws {
+        let thumbnailer = TimelineThumbnailer(resolver: resolver)
+        let asset = AssetItem(kind: .image, fileName: AssetSynthesizer.imageFileName)
+        let image = await thumbnailer.thumbnail(for: asset, maxPixel: 240)
+        XCTAssertNotNil(image)
+    }
+
+    func testDistinctLevelsUseDistinctCacheEntries() async throws {
+        // 档位应进缓存键：同素材同偏移、不同档位 → 不得命中同一条目
+        let thumbnailer = TimelineThumbnailer(resolver: resolver)
+        let asset = videoAsset("clip1.mp4")
+        let clip = PlanClip(assetID: asset.id, source: .video(0...4))
+        let small = await thumbnailer.frames(asset: asset, clip: clip, level: .small, outputOffsets: [1])
+        let medium = await thumbnailer.frames(asset: asset, clip: clip, level: .medium, outputOffsets: [1])
+        XCTAssertNotNil(small[0])
+        XCTAssertNotNil(medium[0])
+        XCTAssertFalse(small[0] === medium[0], "不同档位不得命中同一条缓存")
+    }
+
     func testCacheReturnsSameInstanceForRepeatedRequest() async throws {
         let thumbnailer = TimelineThumbnailer(resolver: resolver)
         let asset = videoAsset("clip1.mp4")
