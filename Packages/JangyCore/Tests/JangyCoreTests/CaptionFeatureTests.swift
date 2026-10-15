@@ -74,4 +74,54 @@ final class CaptionFeatureTests: XCTestCase {
         XCTAssertTrue(TrackFeatureRegistry.payloadCodecs.keys.contains("caption-cue"))
         XCTAssertTrue(TrackFeatureRegistry.payloadCodecs.keys.contains("caption-settings"))
     }
+
+    func testValidateRejectsNonAbsolutePlacement() {
+        // 字幕轨必须是绝对定位；链式轨会让「元素自带 at」的整套语义失效
+        let track = PlanTrack(kind: .caption, placement: .chained, elements: [])
+        let context = TrackValidationContext(assets: [], mainTrackEnd: 10, tracks: [track])
+        XCTAssertTrue(CaptionFeature.validate(track: track, context: context)
+            .contains { $0.message.contains("必须是绝对定位") })
+    }
+
+    func testValidateRejectsNegativeAt() {
+        let track = PlanTrack(kind: .caption, placement: .absolute, elements: [
+            PlanElement(at: -1, content: .content(TrackPayload(
+                CaptionCuePayload(text: "负起点", duration: 1)))),
+        ])
+        let context = TrackValidationContext(assets: [], mainTrackEnd: 10, tracks: [track])
+        XCTAssertTrue(CaptionFeature.validate(track: track, context: context)
+            .contains { $0.message.contains("字幕起点不能为负") })
+    }
+
+    func testValidateRejectsNonPositiveDuration() {
+        let track = PlanTrack(kind: .caption, placement: .absolute, elements: [
+            PlanElement(at: 1, content: .content(TrackPayload(
+                CaptionCuePayload(text: "零时长", duration: 0)))),
+        ])
+        let context = TrackValidationContext(assets: [], mainTrackEnd: 10, tracks: [track])
+        XCTAssertTrue(CaptionFeature.validate(track: track, context: context)
+            .contains { $0.message.contains("字幕时长必须为正") })
+    }
+
+    func testValidateRejectsSourceAssetOfWrongKind() {
+        // 这条的旧实现（EditPlanValidator 的 captions 分支）连同它的测试会被 Task 6 删掉，
+        // 届时这里是唯一实现——必须现在钉住
+        let videoAssetID = UUID()
+        let track = PlanTrack(kind: .caption, placement: .absolute,
+                              settings: TrackPayload(CaptionTrackSettings(sourceAssetID: videoAssetID)))
+        let context = TrackValidationContext(
+            assets: [AssetItem(id: videoAssetID, kind: .video, fileName: "v.mp4")],
+            mainTrackEnd: 10, tracks: [track])
+        XCTAssertTrue(CaptionFeature.validate(track: track, context: context)
+            .contains { $0.message.contains("字幕来源必须是字幕素材") })
+    }
+
+    func testValidateRejectsWrongTypedSettingsPayload() {
+        // settings 类型不对会让来源素材检查被静默跳过，必须显式上报
+        let track = PlanTrack(kind: .caption, placement: .absolute,
+                              settings: TrackPayload(CaptionCuePayload(text: "放错地方了", duration: 1)))
+        let context = TrackValidationContext(assets: [], mainTrackEnd: 10, tracks: [track])
+        XCTAssertTrue(CaptionFeature.validate(track: track, context: context)
+            .contains { $0.message.contains("settings payload 类型不对") })
+    }
 }

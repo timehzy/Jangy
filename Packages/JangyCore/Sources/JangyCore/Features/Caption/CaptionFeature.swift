@@ -115,6 +115,14 @@ public enum CaptionFeature: TrackFeature {
             }
         }
 
+        // settings 存在但类型不对时，settings(of:) 会静默回落默认值——
+        // 那会让下面的来源素材检查被整个跳过。这里显式报出来（引擎层没有对应兜底）。
+        if let settings = track.settings, !(settings.value is CaptionTrackSettings) {
+            issues.append(ValidationIssue(
+                path: "\(prefix).settings",
+                message: "字幕轨的 settings payload 类型不对（期望 caption-settings，实际 \(settings.payloadType)）"))
+        }
+
         if let sourceID = settings(of: track).sourceAssetID {
             switch context.asset(withID: sourceID) {
             case nil:
