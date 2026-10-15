@@ -13,7 +13,7 @@ let package = Package(
     dependencies: [
         // Kadr 依赖走内部镜像（fork 自 SteliyanH/*），防上游单作者仓库变动；版本约束保持不变。
         // v1.2.0 起含 fork 自加的 `Video.renderedFrame(at:)`（导出保真单帧渲染，FrameSnapshotter 依赖）
-        .package(url: "https://github.com/timehzy/kadr.git", from: "1.2.0"),
+        .package(url: "https://github.com/timehzy/kadr.git", from: "1.2.2"),
         .package(url: "https://github.com/timehzy/kadr-captions.git", .upToNextMinor(from: "0.12.0")),
         // kadr-photos 0.11 起 kadr 约束放开为整个 1.x；其 Package.swift 仍指向上游 kadr，
         // SwiftPM 按包身份去重，根包声明的 timehzy 镜像 URL 生效（与 kadr-captions 同款处理）

@@ -85,15 +85,32 @@ final class MultiTrackExportEndToEndTests: XCTestCase {
     }
 
     func testOverlayTrackRendersOverMainTrack() async throws {
-        // 阻塞项（2026-10-15 实测）：叠加视频轨在导出里被主轨完全遮挡。
-        // 成因两层，都在 Kadr 侧：
-        //   ① 层序：AVFoundation 的 layerInstructions[0] 是**最上层**（Apple 文档 + 裸 AVF 探针双重确认），
-        //      而 Kadr buildMultiTrack 强制把隐式主链放进 videoTracks[0] → 主轨恒在最上。
-        //      Kadr 源码里两处「later = on top」的注释写反了。
-        //   ② 末帧保持：任何早于合成末端结束的轨道，其末帧会被 AVFoundation 保持并盖住后续帧
-        //      （默认路径与自定义 compositor 路径都有）。光修层序会变成「叠加结束后画面被冻结」。
-        // 解除条件：Kadr fork 修好层序 + 末帧保持后，去掉本 skip。
+        // 阻塞项已由 Kadr fork 修复（分支 fix/multitrack-layer-order-and-frame-hold）：
+        //   ① 层序：AVFoundation 的 layerInstructions[0] 是**最上层**，Kadr buildMultiTrack
+        //      原先按 videoTracks 顺序构造数组，主轨恒在最上；现反转为并行轨在上。
+        //   ② 末帧保持：早于合成末端结束的轨道其末帧会被保持并盖住后续帧；现给每条轨在
+        //      内容结束点补 setOpacity(0, at:)，使其透明。
         // 详见 docs/superpowers/specs/2026-10-15-timeline-tracks-design.md 的「待验证 / 未决」。
-        throw XCTSkip("叠加轨层序/末帧保持是 Kadr 侧阻塞项，待 fork 修复后解除")
+        let a = videoAsset("clip1.mp4")   // 红
+        let b = videoAsset("clip2.mp4")   // 绿
+        let primary = PlanTrack(kind: .video, placement: .chained, elements: [
+            PlanElement(content: .content(TrackPayload(PlanClip(assetID: a.id, source: .video(0...3))))),
+        ])
+        let overlay = PlanTrack(kind: .video, placement: .absolute, elements: [
+            PlanElement(at: 0.5, content: .content(TrackPayload(
+                PlanClip(assetID: b.id, source: .video(0...2))))),
+        ])
+        let plan = EditPlan(assets: [a, b], tracks: [primary, overlay], primaryTrackID: primary.id)
+
+        let out = try await export(plan, to: "overlay.mp4")
+        let asset = AVURLAsset(url: out)
+
+        // 叠加时段内（0.5–2.5s）应看到叠加轨的绿
+        let during = try meanColor(asset, at: 1.0, in: CGRect(x: 0.3, y: 0.3, width: 0.4, height: 0.4))
+        XCTAssertGreaterThan(during.green, during.red, "叠加时段内应看到叠加轨的绿")
+
+        // 叠加结束后（2.5s 之后）应回到主轨的红——**这条同时钉住「末帧不被保持」**
+        let after = try meanColor(asset, at: 2.8, in: CGRect(x: 0.3, y: 0.3, width: 0.4, height: 0.4))
+        XCTAssertGreaterThan(after.red, after.green, "叠加结束后应回到主轨的红，末帧不得被保持")
     }
 }

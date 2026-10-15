@@ -1,5 +1,5 @@
 {
-  "originHash" : "ba5f8893ed3b082a4d28334407e75283e06f9516b1bc886dce584078eb4d5f8a",
+  "originHash" : "4b32684d259698662736ebf6381d96af2fbcb578b19fc579596ea7b44c575c0f",
   "pins" : [
     {
       "identity" : "anylanguagemodel",
@@ -33,8 +33,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/timehzy/kadr.git",
       "state" : {
-        "revision" : "5ebaf69a9f22a495146ca3ff1f9b2c262ee3a163",
-        "version" : "1.2.1"
+        "revision" : "eb6758e68123225899d5944e2c855b90730ae516",
+        "version" : "1.2.2"
       }
     },
     {
