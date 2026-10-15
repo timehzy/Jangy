@@ -1237,6 +1237,21 @@ final class SRTParserTests: XCTestCase {
         XCTAssertEqual(cues[0].text, "有效")
     }
 
+    func testKeepsMarkupTagsVerbatim() {
+        // 旧路径的 parseSRT 逐行原样收集文本、不剥 markup，这里保持一致（迁移保真）
+        let srt = "1\n00:00:01,000 --> 00:00:02,000\n<i>斜体</i>{\\an8}上标\n\n"
+        XCTAssertEqual(SRTParser.parse(srt).cues.first?.text, "<i>斜体</i>{\\an8}上标")
+    }
+
+    func testStripsUTF8BOM() {
+        // 旧路径会剥 BOM；不剥的话「BOM + 无编号行」的 SRT 首条 cue 会整条丢失
+        let srt = "\u{FEFF}00:00:01,000 --> 00:00:02,000\n带 BOM 的cue\n\n"
+        let cues = SRTParser.parse(srt).cues
+        XCTAssertEqual(cues.count, 1)
+        XCTAssertEqual(cues[0].start, 1.0, accuracy: 0.001)
+        XCTAssertEqual(cues[0].text, "带 BOM 的cue")
+    }
+
     func testEmptyInputGivesNoCues() {
         let result = SRTParser.parse("")
         XCTAssertTrue(result.cues.isEmpty)
@@ -1260,6 +1275,10 @@ import Foundation
 /// 极简 SRT 解析（纯 Swift，不依赖 KadrCaptions）。
 /// 用途单一：v3 → v4 迁移时把整片 SRT 展开成 cue 元素。
 /// 宽容策略——坏块跳过而不是抛错，保证迁移不会因一行脏数据整体失败。
+///
+/// 与旧路径（KadrCaptions 的 SRT 加载器）的两处一致性：
+/// - **UTF-8 BOM 会被剥离**（旧路径也剥；不剥的话「BOM + 无编号行」的 SRT 首条 cue 会整条丢失）
+/// - **标记标签原样保留**（`<i>` / `{\an8}` 不做 markup 处理——旧路径的 `parseSRT` 也是逐行原样收集文本）
 public enum SRTParser {
 
     public struct Cue: Equatable, Sendable {
@@ -1277,10 +1296,13 @@ public enum SRTParser {
     }
 
     public static func parse(_ content: String) -> ParseResult {
-        let blocks = content
+        // 旧路径（KadrCaptions 的 SRT 加载器）会剥 UTF-8 BOM，这里保持一致：
+        // 不剥的话，「BOM + 无编号行」的 SRT 会让首条 cue 的时间戳解析失败而整条丢失。
+        let normalized = content
+            .replacingOccurrences(of: "\u{FEFF}", with: "")
             .replacingOccurrences(of: "\r\n", with: "\n")
             .replacingOccurrences(of: "\r", with: "\n")
-            .components(separatedBy: "\n\n")
+        let blocks = normalized.components(separatedBy: "\n\n")
 
         let cues = blocks.compactMap(parseBlock)
         let nonEmptyBlocks = blocks.filter {
@@ -1333,12 +1355,12 @@ public enum SRTParser {
 - [ ] **Step 4: 运行确认通过**
 
 Run: `cd Packages/JangyCore && swift test --filter SRTParserTests`
-Expected: PASS（7 个用例）
+Expected: PASS（10 个用例）
 
 - [ ] **Step 5: 全量回归**
 
 Run: `cd Packages/JangyCore && swift test`
-Expected: 216 个既有用例 + 本任务 7 个新用例 = 223，全部通过。
+Expected: 216 个既有用例 + 本任务 10 个新用例 = 226，全部通过。
 
 - [ ] **Step 6: 提交**
 
