@@ -8,7 +8,7 @@
 ├── Jangy.xcodeproj        # iOS App 工程（iOS 17+）
 ├── Jangy/                 # App 壳源码（SwiftUI 表现层：预览/时间线/操作条/导出/Agent 对话）
 ├── Packages/
-│   └── JangyCore/         # SwiftPM 包：JangyCore 库 + JangyAgent 库 + jangy-cli 可执行 + 290 个测试
+│   └── JangyCore/         # SwiftPM 包：JangyCore 库 + JangyAgent 库 + jangy-cli 可执行 + 295 个测试
 │       ├── Sources/JangyCore/  # 编辑状态层（纯 Swift）+ 引擎适配层（唯一 import Kadr 的地方）
 │       ├── Sources/JangyAgent/ # 剪辑 Agent：工具层（原子编辑工具）+ 编排层（连续对话 session），App 与 CLI 共用
 │       ├── Sources/JangyTestSupport/  # 测试脚手架（样例工程/素材合成器），不进 App 产物
@@ -26,7 +26,7 @@ Swift 6.3 · Xcode 26.4 · SwiftPM · SwiftUI（iOS 17+）· [Kadr 1.2.2](https:
 
 ## 快速开始
 
-### 跑测试（290 个，含导出端到端）
+### 跑测试（295 个，含导出端到端）
 
 ```bash
 cd Packages/JangyCore && swift test
@@ -68,7 +68,7 @@ CLI 约定：stdout 只走结构化 JSON/JSONL，日志与错误走 stderr；exi
 - [x] 剪辑 Agent App 接入（2026-10-13/14，[spec](docs/superpowers/specs/2026-10-13-agent-app-integration-design.md)）：EditStore 合一（共享 store + 整任务一步撤销）、连续对话 session、半屏 sheet IM 对话 UI、运行中编辑锁定；真机验证通过
 - [x] 多项目 + 素材库管理 UI（2026-10-14，[plan](docs/superpowers/plans/2026-10-14-multi-project-asset-library.md)）：项目列表页（工程包导入导出）+ 素材库页（三类素材入库/删除保护）+ 素材预览页（trim 上轨）+ 旧布局自动迁移；152 测试全绿
 - [x] 图片上轨（2026-10-15，[spec](docs/superpowers/specs/2026-10-15-image-on-timeline-design.md)）：`PlanClip.source` 枚举（.video(range)/.still(duration)，schema v3）+ Kadr 原生 ImageClip（不物化）+ Core letterbox 预合成消除拉伸 + 图片变速存倍率 + Agent/App 图片入口；176 测试全绿
-- [x] 时间线多轨 · 阶段①（模型 + 引擎）（2026-10-15，[spec](docs/superpowers/specs/2026-10-15-timeline-tracks-design.md)）：EditPlan v4（tracks + primaryTrackID）+ 特性注册表（核心不认识具体轨类型）+ gap 语义与主轨两条不变式 + 引擎多轨映射（叠加轨 → Kadr.Track）+ 字幕逐句化（cue 进 plan）+ Agent 工具 ID 寻址改造 + v3 → v4 迁移；290 测试全绿
+- [x] 时间线多轨 · 阶段①（模型 + 引擎）（2026-10-15，[spec](docs/superpowers/specs/2026-10-15-timeline-tracks-design.md)）：EditPlan v4（tracks + primaryTrackID）+ 特性注册表（核心不认识具体轨类型）+ gap 语义与主轨两条不变式 + 引擎多轨映射（叠加轨 → Kadr.Track）+ 字幕逐句化（cue 进 plan）+ Agent 工具 ID 寻址改造 + v3 → v4 迁移；295 测试全绿
 
 已知取舍：
 

@@ -32,7 +32,7 @@
 - [x] **时间线多轨 · 阶段①（模型 + 引擎）**（✅ 2026-10-15；spec：[timeline-tracks-design](superpowers/specs/2026-10-15-timeline-tracks-design.md)，plan：[timeline-tracks-model-engine](superpowers/plans/2026-10-15-timeline-tracks-model-engine.md)）
   - 要点：EditPlan v4（tracks + primaryTrackID）、特性注册表（核心不认识具体轨类型，可插拔性有测试锚定）、gap 语义与主轨两条不变式（成片时长恒等于主轨链长）、引擎多轨映射（叠加轨 → Kadr.Track、gap → 黑 ImageClip）、字幕逐句化（cue 进 plan，SRT 退化为导入源）、Agent 工具 ID 寻址改造、v3 → v4 迁移
   - 挖出并修复上游 Kadr 两个 bug（多轨层序反了、早结束轨末帧被保持）→ fork v1.2.2；已提上游 issue [#205](https://github.com/SteliyanH/kadr/issues/205) / [#206](https://github.com/SteliyanH/kadr/issues/206)
-  - 验收：290 测试全绿 + 多轨 e2e（画中画 / gap 黑段 / 多元素叠加绝对定位）+ App 构建通过 + CLI 冒烟
+  - 验收：295 测试全绿 + 多轨 e2e（画中画 / gap 黑段 / 多元素叠加绝对定位）+ App 构建通过 + CLI 冒烟
 - [x] **图片上轨**（✅ 2026-10-15；spec：[image-on-timeline-design](superpowers/specs/2026-10-15-image-on-timeline-design.md)，plan：[image-on-timeline](superpowers/plans/2026-10-15-image-on-timeline.md)）
   - 要点：`PlanClip.source` 枚举（.video(range)/.still(duration)，schema v3）+ Kadr 原生 ImageClip 路线（不物化）+ Core letterbox 预合成消除拉伸 + 图片变速存倍率 + Agent add_clip/split/trim 图片分支 + App 预览页时长选择器/素材库图片 ＋
   - 验收：176 测试全绿 + 图片 e2e（纯图片/混排/letterbox 无变形/快照）+ App 构建通过

@@ -43,13 +43,13 @@
 | 现有组件 | 层 | 备注 |
 |---|---|---|
 | `EditPlan` / `PlanClip` / `AssetItem` / `TimelineDuration` | L2 | |
-| `PlanTrack` / `PlanElement` / `ElementContent` / `TrackKind` / `TrackPlacement` / `TrackPayload` | L2 | 轨道模型（v4，见 §3.8） |
-| `TrackFeatureRegistry` / `Features/<Name>/<Name>Feature.swift`（Manifest 是唯一注册点） | L2 | 特性注册表：核心不认识具体轨类型（见 §3.8） |
+| `PlanTrack` / `PlanElement` / `ElementContent` / `TrackKind` / `TrackPlacement` / `TrackPayload` | L2 | 轨道模型（v4，见「轨道模型」节） |
+| `TrackFeatureRegistry` / `Features/<Name>/<Name>Feature.swift`（Manifest 是唯一注册点） | L2 | 特性注册表：核心不认识具体轨类型（见「轨道模型」节） |
 | `TrackOperations` | L2 | 两条主轨不变式的唯一维持点 |
 | `EditStore` / `UndoStack` / `EditPlanValidator` | L2 | apply 是全库唯一写入口 |
 | `AssetResolver` / `ProjectStore` / `AssetLibrary` / `PlanLoader` | L2 基础设施 | ProjectStore 多项目持久化；AssetLibrary 全局素材登记表 |
 | `EngineBridge` / `PreviewBridge` / `ExportRunner` / `PhotosBridge` / `AssetImporter` / `CaptionImageRenderer` / `StillImagePreparer` / `ImageDownsampler` / `CoverGenerator` | L3 | |
-| `Features/<Name>/<Name>Engine.swift`（`VideoEngine` / `CaptionEngine`） | L3 | 同一 kind 的引擎映射片（见 §3.8） |
+| `Features/<Name>/<Name>Engine.swift`（`VideoEngine` / `CaptionEngine`） | L3 | 同一 kind 的引擎映射片（见「轨道模型」节） |
 | App 壳全部 SwiftUI + `AppModel` | L0/L1 | AppModel 目前是 L1 雏形，正式版拆出 Interaction 层 |
 | `AgentToolSet` / `EditAgentSession` / `AgentRunContext`（`JangyAgent` target） | L1 headless 消费方 | 剪辑 Agent：工具层（原子编辑 → `EditStore.apply`，校验失败结构化回喂）+ 编排层（连续对话 session，agent loop + snapshot 视觉自检）；App 与 CLI 共用 |
 | `AssetSynthesizer` / `SamplePlan`（`JangyTestSupport` target） | 测试脚手架 | 不分层：仅测试与 CLI 依赖，App 不链接，不进正式产物 |
@@ -80,14 +80,14 @@
 - **`kind: TrackKind` 是开放类型**——核心只当字符串带，不 `switch` 它。已知 `video` / `caption`；未来贴纸 / 音乐 / 特效轨只是新 `kind`。
 - **`placement: TrackPlacement` 是结构属性，核心认识**——`.chained`（位置由顺序推出，主轨）/ `.absolute`（每个元素自带 `at`）。
 - **`ElementContent`**：`.content(TrackPayload)`（时长由 payload 推出）或 `.gap(duration:)`（占位无内容，时长自带）。`placement` 与 `gap` 归核心，因为它们是**结构**不是**类型**。
-- **特性注册表按层切三片**：同一个 `kind` 在 L2（`<Name>Feature.swift`：payload 模型 + 编解码 + 校验）、L3（`<Name>Engine.swift`：引擎映射）、L0（`<Name>Lane.swift`：呈现器）各注册一片——因为 L2 禁 `import Kadr/AVFoundation`，一个跨层的「什么都知道」对象不合法。
-- **`Features/Manifest.swift` 是全仓库唯一注册点**：加一类轨 = Manifest 加一行 + 新增一个 `Features/<Name>/` 目录，**核心零条件分支改动**（可插拔性由测试锚定）。
+- **特性注册表**：`TrackFeatureRegistry` 只装 L2 片（`<Name>Feature.swift`：payload 模型 + 编解码 + 校验）；L3 的引擎映射片（`<Name>Engine.swift`）由 `EngineBridge` 按 `kind` 直接调用，L0 的呈现片（`<Name>Lane.swift`）属阶段②、尚未建。切三片而非一个跨层对象的原因：L2 禁 `import Kadr/AVFoundation`。
+- **`Features/Manifest.swift` 是 L2 的唯一注册点**：加一类轨 = Manifest 加一行 + 新增一个 `Features/<Name>/` 目录，**核心的模型 / 编解码 / 校验 / 不变式零条件分支改动**（可插拔性由测试锚定）；可渲染的轨类型另需在 `EngineBridge` 挂一条引擎映射（引擎构造本就逐类型）。
 - **静态装配**：注册表在 JangyCore 内部装配，不依赖 App 启动——`jangy-cli agent` 是 headless 跑的。
 - **未知 `kind` / 未知 payload `type` 一律报错**（校验器 / 解码器），不静默丢弃。
 
 ### 删除语义 = lift 而非 ripple
 
-**删除主轨的「内容」元素 = 内容消失、时长保留**（原地留等长 gap），其他轨一个字节不动；**删除 gap 元素 = 合上**（后续元素前移、成片变短）——要缩短必须先有 gap 再删它。这是桌面 NLE（Premiere / FCP / DaVinci / Avid）的默认行为，偏离手机端主流（剪映默认合上）——理由是**轨与轨解耦**：ripple 会让「删一段视频」变成会改变其他轨时间处境的操作。
+**删除主轨的「内容」元素 = 内容消失、时长保留**——中间位原地留等长 gap；末尾位直接移除（主轨变短，若其他轨更靠后由 `maintainInvariants` 补尾部 gap）。其他轨一个字节不动。**删除 gap 元素 = 合上**（后续元素前移、成片变短）——要缩短必须先有 gap 再删它。这是桌面 NLE（Premiere / FCP / DaVinci / Avid）的默认行为，偏离手机端主流（剪映默认合上）——理由是**轨与轨解耦**：ripple 会让「删一段视频」变成会改变其他轨时间处境的操作。
 
 **归一化的副作用（有意取舍）**：`normalizePayloads` 在写入口**无条件**跑，因此任何结构变化后**悬空的转场一律被清掉**——包括「用户显式把挂转场的片段移到最后」（v3 是校验失败、v4 是清转场后成功）。转场不跟在内容元素后面就是悬空引用（同外键语义），清掉比让移动失败更合理，且可撤销。副作用是清转场会减少 dissolve 重叠、令 `renderedDuration` **变大**——故 `apply` 内必须先 `normalize` 再 `maintainInvariants`（顺序不可反，见 `EditStore.apply` 注释）。
 
