@@ -61,7 +61,7 @@ final class AgentToolsTests: XCTestCase {
     func testAddClipReusesRegisteredAsset() async throws {
         let context = makeContext()
         let result = try await AddClipTool(context: context)
-            .call(parsed: .init(fileName: "clip1.mp4", rangeStart: 0, rangeEnd: 1, speed: nil))
+            .call(parsed: .init(fileName: "clip1.mp4", rangeStart: 0, rangeEnd: 1, speed: nil, duration: nil))
         XCTAssertEqual(try decodeEnvelope(result).status, "ok")
         let plan = await context.plan
         XCTAssertEqual(plan.clips.count, 4)
@@ -73,7 +73,7 @@ final class AgentToolsTests: XCTestCase {
     func testAddClipMissingFileReturnsError() async throws {
         let context = makeContext()
         let result = try await AddClipTool(context: context)
-            .call(parsed: .init(fileName: "nope.mp4", rangeStart: 0, rangeEnd: 1, speed: nil))
+            .call(parsed: .init(fileName: "nope.mp4", rangeStart: 0, rangeEnd: 1, speed: nil, duration: nil))
         let envelope = try decodeEnvelope(result)
         XCTAssertEqual(envelope.status, "error")
         XCTAssertTrue(envelope.message?.contains("素材文件不存在") == true)
@@ -92,7 +92,7 @@ final class AgentToolsTests: XCTestCase {
         // 换个登记表里没有的文件名引用同一份素材文件不行——用绝对路径直引（AssetItem 支持 "/" 前缀）
         let absolutePath = resolver.directory.appendingPathComponent("clip1.mp4").path
         let result = try await AddClipTool(context: context)
-            .call(parsed: .init(fileName: absolutePath, rangeStart: 0, rangeEnd: 2, speed: 1.5))
+            .call(parsed: .init(fileName: absolutePath, rangeStart: 0, rangeEnd: 2, speed: 1.5, duration: nil))
         XCTAssertEqual(try decodeEnvelope(result).status, "ok")
         let plan = await context.plan
         XCTAssertEqual(plan.assets.count, 5, "未登记素材在同一次编辑内登记")
@@ -104,12 +104,63 @@ final class AgentToolsTests: XCTestCase {
         let context = makeContext()
         // clip1 素材时长 4s，range 越界
         let result = try await AddClipTool(context: context)
-            .call(parsed: .init(fileName: "clip1.mp4", rangeStart: 0, rangeEnd: 99, speed: nil))
+            .call(parsed: .init(fileName: "clip1.mp4", rangeStart: 0, rangeEnd: 99, speed: nil, duration: nil))
         let envelope = try decodeEnvelope(result)
         XCTAssertEqual(envelope.status, "error")
         XCTAssertTrue(envelope.issues?.contains { $0.path == "clips[3].source.range" } == true)
         let plan = await context.plan
         XCTAssertEqual(plan.clips.count, 3, "校验失败不落 plan")
+    }
+
+    func testAddImageClipRegistersAndProbesRealFile() async throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("jangy-agent-img-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        // 造一张 PNG
+        let pngURL = dir.appendingPathComponent("photo.png")
+        try Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==")!
+            .write(to: pngURL)
+
+        let context = AgentRunContext(plan: SamplePlan.make(),
+                                      resolver: AssetResolver(directory: dir),
+                                      framesDirectory: dir, maxToolCalls: 30)
+        let result = try await AddClipTool(context: context)
+            .call(parsed: .init(fileName: "photo.png", rangeStart: nil, rangeEnd: nil, speed: nil, duration: 4.0))
+        XCTAssertEqual(try decodeEnvelope(result).status, "ok")
+        let plan = await context.plan
+        XCTAssertEqual(plan.clips.count, 4)
+        XCTAssertEqual(plan.clips.last?.source, .still(duration: 4.0))
+        let registered = plan.assets.first { $0.fileName == "photo.png" }
+        XCTAssertEqual(registered?.kind, .image)
+        XCTAssertEqual(registered?.pixelWidth, 1)
+    }
+
+    func testAddImageClipDefaultsToThreeSeconds() async throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("jangy-agent-img-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==")!
+            .write(to: dir.appendingPathComponent("photo.png"))
+
+        let context = AgentRunContext(plan: SamplePlan.make(),
+                                      resolver: AssetResolver(directory: dir),
+                                      framesDirectory: dir, maxToolCalls: 30)
+        let result = try await AddClipTool(context: context)
+            .call(parsed: .init(fileName: "photo.png", rangeStart: nil, rangeEnd: nil, speed: nil, duration: nil))
+        XCTAssertEqual(try decodeEnvelope(result).status, "ok")
+        let plan = await context.plan
+        XCTAssertEqual(plan.clips.last?.source, .still(duration: 3.0))
+    }
+
+    func testAddVideoClipStillRequiresRange() async throws {
+        let context = makeContext()
+        let result = try await AddClipTool(context: context)
+            .call(parsed: .init(fileName: "clip1.mp4", rangeStart: nil, rangeEnd: nil, speed: nil, duration: nil))
+        let envelope = try decodeEnvelope(result)
+        XCTAssertEqual(envelope.status, "error")
+        XCTAssertTrue(envelope.message?.contains("rangeStart") == true)
     }
 
     // MARK: - split_clip

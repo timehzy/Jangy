@@ -130,18 +130,20 @@ struct ListAssetsTool: DefensiveAgentTool {
 struct AddClipTool: DefensiveAgentTool {
     let context: AgentRunContext
     let name = "add_clip"
-    let description = "把素材追加为时间线末尾的片段。fileName 未登记时会在同一次编辑里自动登记（先探测素材元数据）。"
+    let description = "把素材追加为时间线末尾的片段。视频：提供 rangeStart/rangeEnd（源区间）；图片：提供可选 duration（秒，缺省 3），忽略 range。fileName 未登记时会在同一次编辑里自动登记（先探测素材元数据）。"
 
     @Generable
     struct Args {
-        @Guide(description: "素材文件名（相对素材目录），如 clip1.mp4")
+        @Guide(description: "素材文件名（相对素材目录），如 clip1.mp4 或 photo.png")
         let fileName: String
-        @Guide(description: "源区间起点（秒，相对素材自身时间轴）")
-        let rangeStart: Double
-        @Guide(description: "源区间终点（秒）")
-        let rangeEnd: Double
+        @Guide(description: "视频源区间起点（秒）。图片忽略。")
+        let rangeStart: Double?
+        @Guide(description: "视频源区间终点（秒）。图片忽略。")
+        let rangeEnd: Double?
         @Guide(description: "变速倍率，0.25–4.0，缺省 1.0")
         let speed: Double?
+        @Guide(description: "图片显示时长（秒），缺省 3.0。视频忽略。")
+        let duration: Double?
     }
 
     struct Payload: Encodable {
@@ -151,29 +153,50 @@ struct AddClipTool: DefensiveAgentTool {
         let renderedDuration: TimeInterval
     }
 
+    /// 按扩展名判图片（登记表未命中、需先探测时用）。
+    private static let imageExtensions: Set<String> = ["jpg", "jpeg", "png", "heic", "heif", "tiff", "tif", "webp", "gif", "bmp"]
+
     func call(parsed args: Args) async throws -> String {
         if let limit = AgentToolCommon.stepLimitIfExceeded(context) { return limit }
-        // ClosedRange 构造下界>上界会运行时 trap，必须先拦（校验器的「区间不能为空」只挡合法 Range）
-        guard args.rangeStart < args.rangeEnd else {
-            return ToolEnvelope.error("区间不能为空：rangeStart（\(args.rangeStart)）须小于 rangeEnd（\(args.rangeEnd)）")
-        }
-
-        // 登记素材：已登记则复用；未登记先探测元数据（文件不存在直接报错，免得到引擎期才炸）
         let currentPlan = await context.plan
         let existingFileNames = Set(currentPlan.assets.map(\.fileName))
+
+        // 已登记则复用其 kind；否则按扩展名判类型
+        let knownKind = currentPlan.assets.first { $0.fileName == args.fileName }?.kind
+        let ext = (args.fileName as NSString).pathExtension.lowercased()
+        let isImage = (knownKind == .image) || (knownKind == nil && Self.imageExtensions.contains(ext))
+
+        // 登记素材：未登记先探测元数据（文件不存在直接报错，免得到引擎期才炸）
         var asset = currentPlan.assets.first { $0.fileName == args.fileName }
         if asset == nil {
-            guard context.resolver.exists(AssetItem(kind: .video, fileName: args.fileName)) else {
-                return ToolEnvelope.error("素材文件不存在: \(args.fileName)。请用 list_assets 查看可用素材")
+            if isImage {
+                guard context.resolver.exists(AssetItem(kind: .image, fileName: args.fileName)) else {
+                    return ToolEnvelope.error("素材文件不存在: \(args.fileName)。请用 list_assets 查看可用素材")
+                }
+                let metadata = AssetImporter.probeImageMetadata(of: context.resolver.resolve(fileName: args.fileName))
+                asset = AssetItem(kind: .image, fileName: args.fileName, origin: .files,
+                                  pixelWidth: metadata.pixelWidth, pixelHeight: metadata.pixelHeight,
+                                  importedAt: Date())
+            } else {
+                guard context.resolver.exists(AssetItem(kind: .video, fileName: args.fileName)) else {
+                    return ToolEnvelope.error("素材文件不存在: \(args.fileName)。请用 list_assets 查看可用素材")
+                }
+                let metadata = await AssetImporter.probeMetadata(of: context.resolver.resolve(fileName: args.fileName))
+                asset = AssetItem(kind: .video, fileName: args.fileName, origin: .files,
+                                  duration: metadata.duration, pixelWidth: metadata.pixelWidth,
+                                  pixelHeight: metadata.pixelHeight, hasAudio: metadata.hasAudio,
+                                  importedAt: Date())
             }
-            let metadata = await AssetImporter.probeMetadata(of: context.resolver.resolve(fileName: args.fileName))
-            asset = AssetItem(kind: .video, fileName: args.fileName, origin: .files,
-                              duration: metadata.duration, pixelWidth: metadata.pixelWidth,
-                              pixelHeight: metadata.pixelHeight, hasAudio: metadata.hasAudio,
-                              importedAt: Date())
         }
         guard let asset else { return ToolEnvelope.error("素材登记失败") }
         let rate = args.speed ?? 1.0
+
+        // 视频需 range（ClosedRange 构造下界>上界会运行时 trap，必须先拦）
+        if asset.kind == .video {
+            guard let start = args.rangeStart, let end = args.rangeEnd, start < end else {
+                return ToolEnvelope.error("视频片段必须提供非空源区间：rangeStart 须小于 rangeEnd")
+            }
+        }
 
         // 登记 + 追加必须在同一次 apply（公约：单事务、单撤销步）
         return await context.withStore { store in
@@ -185,13 +208,18 @@ struct AddClipTool: DefensiveAgentTool {
                     plan.assets.append(asset)
                     assetID = asset.id
                 }
-                let clip = PlanClip(assetID: assetID,
-                                    source: .video(args.rangeStart...args.rangeEnd),
+                let clip: PlanClip
+                switch asset.kind {
+                case .image:
+                    clip = PlanClip(assetID: assetID, source: .still(duration: args.duration ?? 3.0), speed: .flat(rate))
+                default:
+                    clip = PlanClip(assetID: assetID,
+                                    source: .video(args.rangeStart!...args.rangeEnd!),
                                     speed: .flat(rate))
+                }
                 plan.clips.append(clip)
             }
             return ToolEnvelope.applied(result) { plan in
-                // 从结果 plan 反查刚追加的 clip（末尾）与素材登记状态，避免 @Sendable 闭包捕获可变变量
                 let clip = plan.clips.last!
                 let registered = plan.assets.first { $0.fileName == asset.fileName }!
                 return Payload(clipID: clip.id.uuidString, assetID: registered.id.uuidString,
