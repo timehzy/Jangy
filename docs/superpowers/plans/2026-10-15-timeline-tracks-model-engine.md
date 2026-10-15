@@ -3490,6 +3490,8 @@ struct MoveElementTool: DefensiveAgentTool {
 
 > **工具里一律不要自己调 `TrackOperations.maintainInvariants` / `normalizePayloads`**——它们在 `EditStore.apply` 里已经单点跑过了，工具只负责「改 plan」，不变式与归一化由写入口兜。`AddClipTool` 里那处显式调用（Task 6 Step 9 写的）也应删掉。
 
+> **已拍板的行为（归一化的副作用，写进 Task 14 的公约条目）**：`normalize` 在写入口**无条件**跑，所以任何结构变化后**悬空的转场一律被清掉**——包括「用户显式把挂转场的片段移到最后」这条路径（v3 是校验失败、v4 是清转场后成功）。理由是转场不跟在内容元素后面就是悬空引用（同外键语义），清掉比让移动失败更合理，且可撤销。**这是有意的取舍，不是 bug。**
+
 `SplitClipTool` 的改法是唯一需要多想一步的——它要在链式轨里把元素一分为二，且两段都要保留原 payload 的属性：
 
 ```swift
