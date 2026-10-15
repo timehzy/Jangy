@@ -131,4 +131,18 @@ final class VideoFeatureTests: XCTestCase {
         let issues = VideoFeature.validate(track: track, context: context(assets: []))
         XCTAssertTrue(issues.contains { $0.message.contains("引用了未登记的素材") })
     }
+
+    /// path 是给人/Agent 读的 JSON 字段路径，轨道段用下标（机器定位走 elementID）。
+    /// 这里让 context 带上轨道本身，钉住 pathPrefix 的索引查找（而非回落 "?"）。
+    func testIssuePathUsesTrackIndex() {
+        let element = PlanElement(content: .content(TrackPayload(
+            PlanClip(assetID: UUID(), source: .video(0...3)))))   // 未登记素材 → 必报一条
+        let track = PlanTrack(kind: .video, placement: .chained, elements: [element])
+        let ctx = TrackValidationContext(assets: [], mainTrackEnd: 10, tracks: [track])
+
+        let issues = VideoFeature.validate(track: track, context: ctx)
+        let issue = issues.first { $0.elementID == element.id }
+        XCTAssertEqual(issue?.path, "tracks[0].elements[0].assetID",
+                       "轨道段与元素段都应是下标，且下标正确解析（不是回落 ?）")
+    }
 }
