@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import JangyCore
 import UniformTypeIdentifiers
 
@@ -132,7 +133,7 @@ struct LibraryView: View {
         ScrollView {
             LazyVGrid(columns: columns, spacing: 4) {
                 ForEach(filtered) { item in
-                    AssetCell(item: item, resolver: model.resolver,
+                    AssetCell(item: item, thumbnailer: model.thumbnailer,
                               isSelecting: isSelecting, isSelected: selection.contains(item.id),
                               isNew: model.recentlyImported.contains(item.id),
                               showQuickAdd: model.attachedEditor != nil
@@ -188,21 +189,21 @@ struct LibraryView: View {
 /// isNew = 本次导入的新素材，accent 色描边高亮。
 private struct AssetCell: View {
     let item: AssetItem
-    let resolver: AssetResolver
+    let thumbnailer: TimelineThumbnailer
     let isSelecting: Bool
     let isSelected: Bool
     let isNew: Bool
     let showQuickAdd: Bool
     let onQuickAdd: () -> Void
 
-    @State private var thumbnail: UIImage?
+    @State private var thumbnail: Image?
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
             ZStack {
                 Rectangle().fill(Color(.secondarySystemFill))
                 if let thumbnail {
-                    Image(uiImage: thumbnail).resizable().aspectRatio(contentMode: .fill)
+                    thumbnail.resizable().aspectRatio(contentMode: .fill)
                 } else if item.kind == .audio {
                     Image(systemName: "waveform").font(.title2).foregroundStyle(.secondary)
                 }
@@ -243,7 +244,8 @@ private struct AssetCell: View {
                 RoundedRectangle(cornerRadius: 8).strokeBorder(Color.accentColor, lineWidth: 2)
             }
         }
-        .task { thumbnail = await ThumbnailLoader.load(item: item, resolver: resolver) }
+        .task { thumbnail = await thumbnailer.thumbnail(for: item, maxPixel: 240)
+            .map { Image(decorative: $0, scale: UIScreen.main.scale) } }
         .accessibilityLabel(item.displayName)
     }
 }

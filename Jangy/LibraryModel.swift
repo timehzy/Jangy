@@ -20,6 +20,9 @@ final class LibraryModel {
     private let library: AssetLibrary
     let resolver: AssetResolver
     private let projectStore: ProjectStore
+    /// 缩略图生成器：全库共享一个实例，让按 assetID+档位+时间桶 的缓存真正命中
+    /// （每个 cell 各建一个会令缓存失效）。
+    let thumbnailer: TimelineThumbnailer
 
     /// 剪辑页语境：进入剪辑页时设置，回项目列表时清空
     var attachedEditor: AppModel?
@@ -40,6 +43,7 @@ final class LibraryModel {
         self.library = library
         self.resolver = resolver
         self.projectStore = projectStore
+        self.thumbnailer = TimelineThumbnailer(resolver: resolver)
     }
 
     /// 重载登记表 + 一致性校验。登记表读不出来显式报告，不静默当作空库。
