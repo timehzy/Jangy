@@ -99,20 +99,24 @@ public struct PlanClip: Codable, Equatable, Sendable, TrackElementPayload {
     public var source: PlanClipSource
     public var speed: SpeedPlan
     public var transitionAfter: PlanTransition?
+    /// 元素在成片画布上的布局变换；`nil` = 全屏（恒等）。见 ClipTransform。
+    public var transform: ClipTransform?
 
     public init(assetID: UUID, source: PlanClipSource,
-                speed: SpeedPlan = .flat(1.0), transitionAfter: PlanTransition? = nil) {
+                speed: SpeedPlan = .flat(1.0), transitionAfter: PlanTransition? = nil,
+                transform: ClipTransform? = nil) {
         self.assetID = assetID
         self.source = source
         self.speed = speed
         self.transitionAfter = transitionAfter
+        self.transform = transform
     }
 
     /// payload 时长 = 输出时长（源区间长 / 倍速）。
     public var duration: TimeInterval { source.length / speed.rate }
 
     private enum CodingKeys: String, CodingKey {
-        case assetID, source, speed, transitionAfter
+        case assetID, source, speed, transitionAfter, transform
     }
 
     /// v2 旧字段：向后兼容解码（无 source 时回落到 .video(range)）。
@@ -137,6 +141,7 @@ public struct PlanClip: Codable, Equatable, Sendable, TrackElementPayload {
         }
         speed = try container.decodeIfPresent(SpeedPlan.self, forKey: .speed) ?? .flat(1.0)
         transitionAfter = try container.decodeIfPresent(PlanTransition.self, forKey: .transitionAfter)
+        transform = try container.decodeIfPresent(ClipTransform.self, forKey: .transform)
     }
 }
 

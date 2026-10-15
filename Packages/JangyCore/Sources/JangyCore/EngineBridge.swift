@@ -83,6 +83,9 @@ public enum EngineBridge {
                     if clip.speed.rate != 1.0 {
                         videoClip = videoClip.speed(.flat(clip.speed.rate))
                     }
+                    if let t = clip.transform {
+                        videoClip = videoClip.transform(t.kadrTransform).opacity(t.opacity)
+                    }
                     elements.append(videoClip)
                 case .still(let duration):
                     // 图片无源区间：预合成到 preset 画幅（消除 Kadr 拉伸变形），
@@ -90,7 +93,11 @@ public enum EngineBridge {
                     guard let image = StillImagePreparer.prepare(url: sourceURL, canvas: preset.resolution) else {
                         throw ImageDecodeError(assetID: clip.assetID)
                     }
-                    elements.append(Kadr.ImageClip(image, duration: duration / clip.speed.rate))
+                    var imageClip = Kadr.ImageClip(image, duration: duration / clip.speed.rate)
+                    if let t = clip.transform {
+                        imageClip = imageClip.transform(t.kadrTransform).opacity(t.opacity)
+                    }
+                    elements.append(imageClip)
                 }
                 if let transition = clip.transitionAfter {
                     elements.append(kadrTransition(transition))
@@ -143,5 +150,12 @@ public enum EngineBridge {
             .position(.normalized(x: 0.5, y: 0.92))  // 底部居中，留 8% 安全边距
             .anchor(.bottom)
             .visible(during: cue.timeRange)          // CMTimeRange 直达：timescale 1000 原样保留
+    }
+}
+
+extension ClipTransform {
+    /// → Kadr 变换。中心是归一化坐标（Kadr `Position.normalized`，原点左上），scale 均匀。
+    var kadrTransform: Kadr.Transform {
+        Kadr.Transform(center: .normalized(x: centerX, y: centerY), scale: scale)
     }
 }

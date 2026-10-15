@@ -153,4 +153,42 @@ final class MultiTrackExportEndToEndTests: XCTestCase {
         XCTAssertGreaterThan(atB.blue, atB.red, "t=2.5 应见叠加元素 B 的蓝")
         XCTAssertGreaterThan(atB.blue, atB.green, "t=2.5 应见叠加元素 B 的蓝")
     }
+
+    /// 左右分屏：主轨左半屏 + 叠加轨右半屏 → 左半偏红、右半偏绿，居中带状。
+    ///
+    /// 用与画布等比（9:16）的竖屏素材：Kadr 的 `Transform.scale` 作用在
+    /// 「aspect-fill 之后、裁切之前」的内容上（见 Kadr `Transform.resolved` 注释），
+    /// 只有当素材宽高比不宽于画布时，「缩到 0.5」才等于「画面缩到半尺寸」。
+    /// 横屏素材（1280×720）会被 aspect-fill 撑到画布宽的 ~3.16 倍，缩 0.5 仍是满宽横带，
+    /// 两边直接叠死、分不出左右——故本条用 1080×1920 素材使半屏语义成立。
+    func testLeftRightSplitRendersBothHalves() async throws {
+        let a = try portraitAsset("splitRed.mp4", color: (0.90, 0.20, 0.20))   // 红
+        let b = try portraitAsset("splitGreen.mp4", color: (0.20, 0.80, 0.30)) // 绿
+        var mainClip = PlanClip(assetID: a.id, source: .video(0...3))
+        mainClip.transform = .leftHalf
+        var overlayClip = PlanClip(assetID: b.id, source: .video(0...3))
+        overlayClip.transform = .rightHalf
+        let primary = PlanTrack(kind: .video, placement: .chained, elements: [
+            PlanElement(content: .content(TrackPayload(mainClip)))])
+        let overlay = PlanTrack(kind: .video, placement: .absolute, elements: [
+            PlanElement(at: 0, content: .content(TrackPayload(overlayClip)))])
+        let plan = EditPlan(assets: [a, b], tracks: [primary, overlay], primaryTrackID: primary.id)
+
+        let out = try await export(plan, to: "split.mp4")
+        let asset = AVURLAsset(url: out)
+        let left = try meanColor(asset, at: 1.0, in: CGRect(x: 0.05, y: 0.4, width: 0.4, height: 0.2))
+        let right = try meanColor(asset, at: 1.0, in: CGRect(x: 0.55, y: 0.4, width: 0.4, height: 0.2))
+        XCTAssertGreaterThan(left.red, left.green, "左半应是主轨的红")
+        XCTAssertGreaterThan(right.green, right.red, "右半应是叠加轨的绿")
+    }
+
+    /// 与画布等比（9:16）的竖屏纯色素材——分屏 e2e 需要铺满画布的源，否则缩 0.5 不等于半屏。
+    private func portraitAsset(_ name: String, color: (r: CGFloat, g: CGFloat, b: CGFloat)) throws -> AssetItem {
+        let url = assetsDir.appendingPathComponent(name)
+        try AssetSynthesizer.writeSolidColorVideo(
+            to: url, color: CGColor(red: color.r, green: color.g, blue: color.b, alpha: 1),
+            seconds: 4, width: 1080, height: 1920)
+        return AssetItem(kind: .video, fileName: name, origin: .synthesized,
+                         duration: 4.0, pixelWidth: 1080, pixelHeight: 1920, hasAudio: false)
+    }
 }

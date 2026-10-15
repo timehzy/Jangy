@@ -55,6 +55,21 @@ public enum VideoFeature: TrackFeature {
             guard case .content(let payload) = element.content,
                   let clip = payload.value as? PlanClip else { continue }
 
+            if let transform = clip.transform {
+                if !(0...1).contains(transform.centerX) || !(0...1).contains(transform.centerY) {
+                    issues.append(ValidationIssue(path: "\(path).transform", elementID: element.id,
+                                                  message: "布局中心必须在 0–1 之间"))
+                }
+                if transform.scale <= 0 {
+                    issues.append(ValidationIssue(path: "\(path).transform", elementID: element.id,
+                                                  message: "布局缩放必须为正"))
+                }
+                if !(0...1).contains(transform.opacity) {
+                    issues.append(ValidationIssue(path: "\(path).transform", elementID: element.id,
+                                                  message: "布局不透明度必须在 0–1 之间"))
+                }
+            }
+
             let asset = context.asset(withID: clip.assetID)
             if asset == nil {
                 issues.append(ValidationIssue(path: "\(path).assetID", elementID: element.id,

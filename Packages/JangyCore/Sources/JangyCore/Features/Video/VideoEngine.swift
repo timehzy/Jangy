@@ -42,12 +42,19 @@ public enum VideoEngine {
                     guard let image = StillImagePreparer.prepare(url: url, canvas: preset.resolution) else {
                         throw EngineBridge.ImageDecodeError(assetID: planClip.assetID)
                     }
-                    clip = Kadr.ImageClip(image, duration: duration / planClip.speed.rate)
+                    var imageClip = Kadr.ImageClip(image, duration: duration / planClip.speed.rate)
+                    if let t = planClip.transform {
+                        imageClip = imageClip.transform(t.kadrTransform).opacity(t.opacity)
+                    }
+                    clip = imageClip
 
                 case .video(let range):
                     var videoClip = Kadr.VideoClip(url: url).trimmed(to: range)
                     if planClip.speed.rate != 1.0 {
                         videoClip = videoClip.speed(.flat(planClip.speed.rate))
+                    }
+                    if let t = planClip.transform {
+                        videoClip = videoClip.transform(t.kadrTransform).opacity(t.opacity)
                     }
                     clip = videoClip
                 }
