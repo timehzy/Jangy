@@ -231,17 +231,14 @@ final class AgentToolsTests: XCTestCase {
     // MARK: - trim / move / remove
 
     func testTrimClipUpdatesRange() async throws {
-        // 去掉字幕轨：trim 缩短主轨后，绝对定位的字幕 cue 会越界被校验拦下。
-        // 本用例测的是 trim 改源区间与成片时长，与字幕无关。
-        var plan = SamplePlan.make()
-        plan.tracks.removeAll { $0.kind == .caption }
-        let context = makeContext(plan: plan)
+        let context = makeContext()
         let result = try await TrimClipTool(context: context)
             .call(parsed: .init(clipID: clip1, rangeStart: 1, rangeEnd: 2.5))
         XCTAssertEqual(try decodeEnvelope(result).status, "ok")
         let after = await context.plan
         XCTAssertEqual(primaryClips(after)[0].source, .video(1...2.5))
-        XCTAssertEqual(after.renderedDuration, 8.0, accuracy: 0.001)
+        // trim 后主轨 8.0s，但字幕轨末端 9.0s → apply 自动补尾部 gap 到 9.0（不变式 #2）。
+        XCTAssertEqual(after.renderedDuration, 9.0, accuracy: 0.001)
     }
 
     func testTrimClipEmptyRangeFailsValidation() async throws {
@@ -263,14 +260,17 @@ final class AgentToolsTests: XCTestCase {
                        [SamplePlan.assetID3, SamplePlan.assetID1, SamplePlan.assetID2])
     }
 
-    func testMoveClipWithTransitionToLastFails() async throws {
+    func testMoveClipWithTransitionToLastClearsTransition() async throws {
         let context = makeContext()
-        // clip1 挂着 dissolve，移到最后一段会被校验拦下（最后一段不能挂转场）
+        // clip1 挂着 dissolve，移到最后一段：末位不能挂转场 → 归一化清掉，移动本身成功
+        //（EditStore.apply 统一归一化，与删除末位元素同一条路径）。
         let result = try await MoveClipTool(context: context)
             .call(parsed: .init(clipID: clip1, toIndex: 2))
-        let envelope = try decodeEnvelope(result)
-        XCTAssertEqual(envelope.status, "error")
-        XCTAssertTrue(envelope.issues?.contains { $0.path.contains("transitionAfter") } == true)
+        XCTAssertEqual(try decodeEnvelope(result).status, "ok")
+        let plan = await context.plan
+        XCTAssertEqual(primaryClips(plan).map(\.assetID),
+                       [SamplePlan.assetID2, SamplePlan.assetID3, SamplePlan.assetID1])
+        XCTAssertNil(primaryClips(plan).last?.transitionAfter, "移到末位的转场被归一化清掉")
     }
 
     func testRemoveLastRemainingClipFails() async throws {

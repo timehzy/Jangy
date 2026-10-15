@@ -5,6 +5,32 @@ public enum VideoFeature: TrackFeature {
     public static let kind = TrackKind.video
     public static let payloadTypes: [any TrackElementPayload.Type] = [PlanClip.self]
 
+    /// 归一化：转场只能挂在「后面紧跟一个内容元素」的位置上。
+    /// 结构变化（删除 → 变 gap、删末位、重排）会让原本合法的转场失效，这里统一清掉。
+    /// 不清的话 `validate` 会报「转场不能跨过空档」/「最后一个片段不能挂转场」，
+    /// 让**删除操作本身失败**——而用户的本意只是删一段。
+    public static func normalize(track: inout PlanTrack, context: TrackValidationContext) {
+        guard track.placement == .chained else { return }
+        for i in track.elements.indices {
+            guard case .content(let payload) = track.elements[i].content,
+                  var clip = payload.value as? PlanClip,
+                  clip.transitionAfter != nil else { continue }
+
+            let followedByAdjacentContent: Bool = {
+                let next = i + 1
+                guard next < track.elements.count else { return false }
+                guard case .content(let nextPayload) = track.elements[next].content,
+                      nextPayload.value is PlanClip else { return false }
+                return true
+            }()
+
+            if !followedByAdjacentContent {
+                clip.transitionAfter = nil
+                track.elements[i].content = .content(TrackPayload(clip))
+            }
+        }
+    }
+
     public static func validate(track: PlanTrack, context: TrackValidationContext) -> [ValidationIssue] {
         var issues: [ValidationIssue] = []
 

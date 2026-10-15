@@ -145,10 +145,9 @@ struct TimelineView: View {
     private func delete(_ index: Int) {
         model.edit { plan in
             guard let ti = plan.tracks.firstIndex(where: { $0.id == plan.primaryTrackID }),
-                  plan.tracks[ti].elements.indices.contains(index) else { return }
-            let element = plan.tracks[ti].elements[index]
-            plan.tracks[ti].elements[index] = PlanElement(id: element.id,
-                                                          content: .gap(duration: element.duration))
+                  index < plan.tracks[ti].elements.count else { return }
+            // 走核心操作（删除 = 留 gap；不变式与转场归一化由 EditStore.apply 统一处理）
+            TrackOperations.removeElement(plan.tracks[ti].elements[index].id, in: &plan)
         }
     }
 }

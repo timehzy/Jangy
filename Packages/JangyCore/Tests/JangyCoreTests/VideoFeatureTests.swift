@@ -145,4 +145,41 @@ final class VideoFeatureTests: XCTestCase {
         XCTAssertEqual(issue?.path, "tracks[0].elements[0].assetID",
                        "轨道段与元素段都应是下标，且下标正确解析（不是回落 ?）")
     }
+
+    // MARK: - normalize（结构变化后清掉失效的转场）
+
+    private func clipWithTransition() -> PlanClip {
+        PlanClip(assetID: assetID, source: .video(0...3), transitionAfter: .dissolve(duration: 0.5))
+    }
+
+    /// 跨 gap 的转场 → 归一化清掉（否则删除中间元素会让校验报「转场不能跨过空档」）。
+    func testNormalizeClearsTransitionCrossingGap() {
+        var track = PlanTrack(kind: .video, placement: .chained, elements: [
+            PlanElement(content: .content(TrackPayload(clipWithTransition()))),
+            PlanElement(content: .gap(duration: 1)),
+            PlanElement(content: .content(TrackPayload(PlanClip(assetID: assetID, source: .video(0...3))))),
+        ])
+        VideoFeature.normalize(track: &track, context: context(assets: []))
+        XCTAssertNil(track.elements[0].content.clipPayload?.transitionAfter, "跨 gap 的转场应被清掉")
+    }
+
+    /// 紧邻内容元素的转场 → 保留（合法，不该被误清）。
+    func testNormalizeKeepsTransitionBeforeAdjacentContent() {
+        var track = PlanTrack(kind: .video, placement: .chained, elements: [
+            PlanElement(content: .content(TrackPayload(clipWithTransition()))),
+            PlanElement(content: .content(TrackPayload(PlanClip(assetID: assetID, source: .video(0...3))))),
+        ])
+        VideoFeature.normalize(track: &track, context: context(assets: []))
+        XCTAssertEqual(track.elements[0].content.clipPayload?.transitionAfter, .dissolve(duration: 0.5),
+                       "紧邻内容元素的转场应保留")
+    }
+
+    /// 末位元素挂转场（没有「下一个」）→ 归一化清掉。
+    func testNormalizeClearsTransitionOnLastElement() {
+        var track = PlanTrack(kind: .video, placement: .chained, elements: [
+            PlanElement(content: .content(TrackPayload(clipWithTransition()))),
+        ])
+        VideoFeature.normalize(track: &track, context: context(assets: []))
+        XCTAssertNil(track.elements[0].content.clipPayload?.transitionAfter)
+    }
 }

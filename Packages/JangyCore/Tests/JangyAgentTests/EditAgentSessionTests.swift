@@ -70,12 +70,9 @@ final class EditAgentSessionTests: XCTestCase {
     }
 
     private func makeContext() -> AgentRunContext {
-        // 去掉字幕轨：字幕是绝对定位轨，clip 变速会缩短主轨、使越界的 cue 被校验拦下。
-        var plan = SamplePlan.make()
-        plan.tracks.removeAll { $0.kind == .caption }
-        return AgentRunContext(plan: plan,
-                               resolver: AssetResolver(directory: URL(fileURLWithPath: "/tmp/jangy-nonexistent-assets")),
-                               framesDirectory: FileManager.default.temporaryDirectory)
+        AgentRunContext(plan: SamplePlan.make(),
+                        resolver: AssetResolver(directory: URL(fileURLWithPath: "/tmp/jangy-nonexistent-assets")),
+                        framesDirectory: FileManager.default.temporaryDirectory)
     }
 
     func testTranscriptPersistsAcrossSends() async throws {

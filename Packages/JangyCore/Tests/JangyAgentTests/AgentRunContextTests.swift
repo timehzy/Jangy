@@ -8,12 +8,8 @@ import XCTest
 /// AgentRunContext 注入化：共享 store、调度器、didApply 联动、步数计数重置。
 final class AgentRunContextTests: XCTestCase {
 
-    /// 去掉字幕轨：字幕是绝对定位轨，clip 变速会缩短主轨、使越界的 cue 被校验拦下。
-    /// 本文件测的是 store 共享/联动，与字幕无关。
     private func makeStore() -> EditStore {
-        var plan = SamplePlan.make()
-        plan.tracks.removeAll { $0.kind == .caption }
-        return EditStore(initial: plan)
+        EditStore(initial: SamplePlan.make())
     }
 
     /// 主轨第 i 个元素解出的 clip（v4：片段在主轨元素里）。

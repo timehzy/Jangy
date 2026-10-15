@@ -11,6 +11,8 @@ public enum TrackOperations {
     /// - 链式轨的中间元素 → 原地换成等长 gap（内容消失、时长保留）
     /// - 链式轨的末尾元素 → 真正移除；若其他轨更靠后，随后由 maintainInvariants 补尾部 gap
     /// - 绝对轨元素 → 直接移除（主轨长度不受影响）
+    ///
+    /// 不在本函数内维持不变式——`EditStore.apply` 是唯一写入口，外层统一维持。
     public static func removeElement(_ elementID: UUID, in plan: inout EditPlan) {
         for (ti, track) in plan.tracks.enumerated() {
             guard let ei = track.elements.firstIndex(where: { $0.id == elementID }) else { continue }
@@ -21,18 +23,28 @@ public enum TrackOperations {
             } else {
                 plan.tracks[ti].elements.remove(at: ei)
             }
-            maintainInvariants(in: &plan)
             return
         }
     }
 
     /// 把元素放到绝对时间 `at`（仅绝对定位轨有意义）。
+    /// 同 `removeElement`：不变式维持交给 `EditStore.apply`。
     public static func moveElement(_ elementID: UUID, to at: TimeInterval, in plan: inout EditPlan) {
         for (ti, track) in plan.tracks.enumerated() {
             guard let ei = track.elements.firstIndex(where: { $0.id == elementID }) else { continue }
             plan.tracks[ti].elements[ei].at = at
-            maintainInvariants(in: &plan)
             return
+        }
+    }
+
+    /// 逐轨调特性模块的归一化。与 `maintainInvariants` 一样，只由 `EditStore.apply` 调用。
+    public static func normalizePayloads(in plan: inout EditPlan) {
+        let context = TrackValidationContext(assets: plan.assets,
+                                             mainTrackEnd: plan.renderedDuration,
+                                             tracks: plan.tracks)
+        for i in plan.tracks.indices {
+            guard let feature = TrackFeatureRegistry.feature(for: plan.tracks[i].kind) else { continue }
+            feature.normalize(track: &plan.tracks[i], context: context)
         }
     }
 

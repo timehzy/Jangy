@@ -43,6 +43,15 @@ public final class EditStore {
     public func apply(_ mutate: (inout EditPlan) -> Void) -> Result<EditPlan, ValidationFailure> {
         var next = plan
         mutate(&next)
+
+        // 结构变化后的不变式维持与归一化，**只在这一处做**：
+        // EditStore.apply 是唯一写入口，放这里任何编辑都绕不开。
+        // 散到各工具 / UI 动作里就是「隐式约定散落多处，漏改一处就复发」——
+        // 它已经复发过一次（trim/speed 让主轨变短却没人补 gap，编辑静默失败）。
+        // 顺序：先补尾部 gap（会改 renderedDuration），再归一化 payload。
+        TrackOperations.maintainInvariants(in: &next)
+        TrackOperations.normalizePayloads(in: &next)
+
         let issues = validator.validate(next)
         guard issues.isEmpty else { return .failure(ValidationFailure(issues: issues)) }
         if groupBase == nil { undoStack.push(next) }  // 组内不压栈，endGrouping 统一收

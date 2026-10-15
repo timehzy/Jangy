@@ -34,4 +34,14 @@ public protocol TrackFeature {
     static var payloadTypes: [any TrackElementPayload.Type] { get }
     /// 本特性的校验规则。由 EditPlanValidator 统一分派调用。
     static func validate(track: PlanTrack, context: TrackValidationContext) -> [ValidationIssue]
+
+    /// 结构变化后的**归一化**：把 payload 里因结构变化而失效的字段清掉。
+    /// 核心在 `EditStore.apply` 里逐轨调用——核心读不到 payload 内部，
+    /// 这类「跟着结构走」的字段只能由认识它的特性模块自己收。
+    static func normalize(track: inout PlanTrack, context: TrackValidationContext)
+}
+
+extension TrackFeature {
+    /// 默认无操作。
+    public static func normalize(track: inout PlanTrack, context: TrackValidationContext) {}
 }
