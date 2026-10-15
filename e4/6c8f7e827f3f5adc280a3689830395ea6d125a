@@ -1,0 +1,25 @@
+Packages/JangyCore/Sources/JangyCore/CoverGenerator.swift
+  s_9a70defc13b235::t_a1bb48d46220ba 23
+Packages/JangyCore/Sources/jangy-cli/JangyCLI.swift
+  s_9a70defc13b235::t_d6f7af2504290a 62
+Packages/JangyCore/Sources/JangyCore/ImageDownsampler.swift
+  s_9a70defc13b235::t_2474122936872a 1-19
+Packages/JangyCore/Sources/JangyCore/StillImagePreparer.swift
+  s_9a70defc13b235::t_68c259330d2336 34
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "e46c8f7e827f3f5adc280a3689830395ea6d125a",
+  "prompts": {},
+  "sessions": {
+    "s_9a70defc13b235": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8b9cd9a4-be2a-41b5-8f01-e1390b420087",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Michael <yiliforever@qq.com>"
+    }
+  }
+}
