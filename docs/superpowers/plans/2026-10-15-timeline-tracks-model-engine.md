@@ -14,6 +14,8 @@
 
 **执行顺序约束：** Task 1–4 每步独立可编译可测。**Task 5 起代码库进入红色区间，Task 5 + 6 + 7 必须作为一个工作单元连续完成**，中途不要提交。Task 11（迁移）的实现要在 Task 5 之前写好（Task 5 的 `PlanLoader` 要接线）——执行时把 Task 11 提到 Task 5 之前，或先按 Task 5 Step 5 的说明放最小占位再补。
 
+**`type` 判别字段归 `TrackPayload` box 所有（Task 1 执行时确认）**：box 在 `encode` 里注入 `type`、在 `init(from:)` 里用 `TypeProbe` 读它；**具体 payload 一律不得在自己的 `encode` 里写 `type`**（会写两次）。这样 payload 忘了写判别字段这件事在结构上不可能发生。Task 2 / Task 3 的 payload 代码已按此修正。
+
 ---
 
 ## 文件结构
@@ -69,6 +71,18 @@ struct TestPingPayload: TrackElementPayload {
 }
 
 final class PlanTrackTests: XCTestCase {
+
+    // 测试假特性必须注册进注册表：往返用例要经 TrackPayload 的解码路径查表。
+    // 注册在 setUp 而不是单个用例里——XCTest 按字母序执行，往返用例会排在注入用例之前。
+    override func setUp() {
+        super.setUp()
+        TrackFeatureRegistry.testOnlyFeatures = [TestPingFeature.self]
+    }
+
+    override func tearDown() {
+        TrackFeatureRegistry.testOnlyFeatures = []
+        super.tearDown()
+    }
 
     // MARK: 轨道与元素
 
@@ -129,6 +143,29 @@ final class PlanTrackTests: XCTestCase {
         XCTAssertThrowsError(try JSONDecoder().decode(TrackPayload.self, from: json)) { error in
             XCTAssertTrue("\(error)".contains("已注册"), "报错应列出已注册类型，便于排查")
         }
+    }
+
+    func testPayloadEqualityDistinguishesDifferentValuesOfSameType() {
+        XCTAssertNotEqual(TrackPayload(TestPingPayload(value: 1)),
+                          TrackPayload(TestPingPayload(value: 2)))
+    }
+
+    func testPlanTrackRoundTripsThroughJSON() throws {
+        // v4 JSON 是 CLI / Agent / 落盘共用的互操作契约，这个形状必须往返稳定
+        let track = PlanTrack(kind: .video, placement: .chained, name: "主轨",
+                              isMuted: true, elements: [
+            PlanElement(at: nil, content: .content(TrackPayload(TestPingPayload(value: 3)))),
+            PlanElement(at: nil, content: .gap(duration: 2)),
+        ])
+        let data = try JSONEncoder().encode(track)
+        XCTAssertEqual(try JSONDecoder().decode(PlanTrack.self, from: data), track)
+    }
+
+    func testChainedElementOmitsAtFromJSON() throws {
+        let element = PlanElement(content: .gap(duration: 1))
+        let data = try JSONEncoder().encode(element)
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        XCTAssertNil(json?["at"], "链式轨元素的 at 为 nil，不应出现在 JSON 里")
     }
 
     func testRegistryIsStaticallyAssembledWithoutExternalInit() {
@@ -206,6 +243,11 @@ public protocol TrackElementPayload: Codable, Equatable, Sendable {
     static var payloadType: String { get }
     /// 元素时长。有内容的元素时长由 payload 推出（gap 的时长自带）。
     var duration: TimeInterval { get }
+
+    /// 同具体类型的相等比较。**声明为协议要求**（而非仅扩展方法），
+    /// 保证通过 `any TrackElementPayload` 调用时走见证表动态派发，
+    /// 而不是被静态派发到默认实现上。
+    func isEqual(to other: any TrackElementPayload) -> Bool
 }
 
 /// type-erased payload box：JSON 形如 {"type":"clip", ...}。
@@ -233,26 +275,25 @@ public struct TrackPayload: Codable, Equatable, Sendable {
         self.value = try codec.init(from: decoder)
     }
 
+    private enum TypeKey: String, CodingKey { case type }
+
     public func encode(to encoder: Encoder) throws {
+        // 判别字段 `type` 由 box 注入（具体 payload 只关心自己的字段），
+        // 与 `init(from:)` 的 TypeProbe 对称：JSON 形如 {"type":"clip", ...}。
+        var container = encoder.container(keyedBy: TypeKey.self)
+        try container.encode(payloadType, forKey: .type)
         try value.encode(to: encoder)
     }
 
     public static func == (lhs: TrackPayload, rhs: TrackPayload) -> Bool {
-        guard lhs.payloadType == rhs.payloadType,
-              let other = rhs.value as? any Equatable else { return false }
-        return Self.areEqual(lhs.value, other)
-    }
-
-    /// 同类型 payload 的相等比较：借 Codable 往返（`any Equatable` 的 `==` 需要同具体类型）。
-    private static func areEqual(_ lhs: any TrackElementPayload, _ rhs: any Equatable) -> Bool {
-        guard let rhsValue = rhs as? any TrackElementPayload else { return false }
-        return lhs.isEqual(to: rhsValue)
+        guard lhs.payloadType == rhs.payloadType else { return false }
+        return lhs.value.isEqual(to: rhs.value)
     }
 }
 
 extension TrackElementPayload {
-    /// 同具体类型的相等比较。默认实现直接比 `self == other`（同类型才成立）。
-    func isEqual(to other: any TrackElementPayload) -> Bool {
+    /// 默认实现：同具体类型才相等。
+    public func isEqual(to other: any TrackElementPayload) -> Bool {
         guard let other = other as? Self else { return false }
         return self == other
     }
@@ -357,7 +398,12 @@ public struct PlanTrack: Codable, Equatable, Identifiable, Sendable {
         self.elements = elements
     }
 
-    /// 轨道覆盖的时间长度。链式轨 = Σ 元素时长；绝对轨 = max(at + duration)。
+    /// 轨道自身的时间跨度。链式轨 = Σ 元素时长（**不含转场重叠，因此不等于成片时长**）；
+    /// 绝对轨 = max(at + duration)（绝对轨元素本来就按成片时间轴定位，所以它等于轨道末端）。
+    ///
+    /// 成片时长一律用 `EditPlan.renderedDuration`（公约 §3.3 的实测口径）。
+    /// 校验「其他轨元素是否超出主轨末端」时也必须用 `renderedDuration`，不能用 `span`——
+    /// 样例工程两者差 0.5s（span 10 vs renderedDuration 9.5）。
     public var span: TimeInterval {
         switch placement {
         case .chained:
@@ -412,11 +458,14 @@ import Foundation
 /// 若编解码器由 App 注册，CLI 解码带新轨类型的 plan 会直接失败。
 public enum TrackFeatureRegistry {
 
-    /// 生产特性清单。
-    public static let features: [any TrackFeature.Type] = []
+    /// 生产特性清单。计算属性：无共享可变状态，因此不需要 nonisolated(unsafe) 豁免。
+    public static var features: [any TrackFeature.Type] {
+        []
+    }
 
     /// 测试注入点：可插拔性验收用（Task 13）。生产路径永不写入。
-    nonisolated(unsafe) public static var testOnlyFeatures: [any TrackFeature.Type] = []
+    /// `internal` 而非 `public`——测试经 `@testable import` 访问，生产 API 面不该暴露这个可变全局。
+    nonisolated(unsafe) static var testOnlyFeatures: [any TrackFeature.Type] = []
 
     public static var allFeatures: [any TrackFeature.Type] { features + testOnlyFeatures }
 
@@ -440,7 +489,7 @@ public enum TrackFeatureRegistry {
 - [ ] **Step 4: 运行确认通过**
 
 Run: `cd Packages/JangyCore && swift test --filter PlanTrackTests`
-Expected: PASS（9 个用例）
+Expected: PASS（13 个用例）
 
 - [ ] **Step 5: 提交**
 
@@ -550,6 +599,7 @@ Expected: 编译失败 —— `PlanClip` 不符合 `TrackElementPayload`
 
 ```swift
 /// 视频轨的元素 payload。id 不在这里——它归 PlanElement（唯一寻址单元）。
+/// `type` 判别字段也不在这里——它由 TrackPayload box 注入。
 public struct PlanClip: Codable, Equatable, Sendable, TrackElementPayload {
     public static let payloadType = "clip"
 
@@ -572,7 +622,7 @@ public struct PlanClip: Codable, Equatable, Sendable, TrackElementPayload {
     public var duration: TimeInterval { source.length / speed.rate }
 
     private enum CodingKeys: String, CodingKey {
-        case type, assetID, source, speed, transitionAfter
+        case assetID, source, speed, transitionAfter
     }
     private enum LegacyKeys: String, CodingKey { case range }
 
@@ -593,10 +643,9 @@ public struct PlanClip: Codable, Equatable, Sendable, TrackElementPayload {
         transitionAfter = try container.decodeIfPresent(PlanTransition.self, forKey: .transitionAfter)
     }
 
-    /// 编码必须写出 `type` 判别字段（TrackPayload 靠它分发）。
+    /// `type` 由 TrackPayload box 注入，这里只写自己的字段。
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(Self.payloadType, forKey: .type)
         try container.encode(assetID, forKey: .assetID)
         try container.encode(source, forKey: .source)
         try container.encode(speed, forKey: .speed)
@@ -870,7 +919,7 @@ public struct CaptionCuePayload: Codable, Equatable, Sendable, TrackElementPaylo
         self.duration = duration
     }
 
-    private enum CodingKeys: String, CodingKey { case type, text, duration }
+    private enum CodingKeys: String, CodingKey { case text, duration }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -878,9 +927,9 @@ public struct CaptionCuePayload: Codable, Equatable, Sendable, TrackElementPaylo
         duration = try container.decode(TimeInterval.self, forKey: .duration)
     }
 
+    /// `type` 由 TrackPayload box 注入，这里只写自己的字段。
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(Self.payloadType, forKey: .type)
         try container.encode(text, forKey: .text)
         try container.encode(duration, forKey: .duration)
     }
@@ -908,7 +957,7 @@ public struct CaptionTrackSettings: Codable, Equatable, Sendable, TrackElementPa
     public var duration: TimeInterval { 0 }
 
     private enum CodingKeys: String, CodingKey {
-        case type, fontSize, isBold, isEnabled, sourceAssetID
+        case fontSize, isBold, isEnabled, sourceAssetID
     }
 
     public init(from decoder: Decoder) throws {
@@ -919,9 +968,9 @@ public struct CaptionTrackSettings: Codable, Equatable, Sendable, TrackElementPa
         sourceAssetID = try container.decodeIfPresent(UUID.self, forKey: .sourceAssetID)
     }
 
+    /// `type` 由 TrackPayload box 注入，这里只写自己的字段。
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(Self.payloadType, forKey: .type)
         try container.encode(fontSize, forKey: .fontSize)
         try container.encode(isBold, forKey: .isBold)
         try container.encode(isEnabled, forKey: .isEnabled)
@@ -1501,9 +1550,11 @@ extension EditPlan {
             issues.append(ValidationIssue(path: "tracks[\(primary.id)].elements", message: "主轨至少需要一个元素"))
         }
 
-        // 逐轨分派给特性模块
+        // 逐轨分派给特性模块。
+        // mainTrackEnd 必须是 renderedDuration（扣过转场重叠的成片时长），
+        // 不能用 primary.span——链式轨的 span 是 Σ 元素时长，样例工程两者差 0.5s。
         let context = TrackValidationContext(assets: plan.assets,
-                                             mainTrackEnd: primary.span,
+                                             mainTrackEnd: plan.renderedDuration,
                                              tracks: plan.tracks)
         for track in plan.tracks {
             if let feature = TrackFeatureRegistry.feature(for: track.kind) {
@@ -1511,8 +1562,9 @@ extension EditPlan {
             }
         }
 
-        // 核心不变式兜底：任何轨的元素不得超出主轨末端
-        let mainEnd = primary.span
+        // 核心不变式兜底：任何轨的元素不得超出主轨末端。
+        // 用 renderedDuration 而非 primary.span——链式轨的 span 不含转场重叠。
+        let mainEnd = plan.renderedDuration
         for track in plan.tracks where track.id != primary.id {
             for (i, element) in track.elements.enumerated() {
                 let end = (element.at ?? 0) + element.duration
@@ -2145,6 +2197,30 @@ final class TrackOperationsTests: XCTestCase {
         XCTAssertEqual(plan.primaryTrack!.span, 10, accuracy: 0.001, "主轨不受影响")
     }
 
+    func testMaintainingInvariantsAccountsForTransitionOverlap() {
+        // 主轨带转场：span(6) ≠ renderedDuration(5.5)。
+        // 字幕轨末端 5.7s → 主轨必须补到 5.7s；按 span 算会得出「不用补」，漏掉 0.2s。
+        let a = PlanClip(assetID: UUID(), source: .video(0...3),
+                         transitionAfter: .dissolve(duration: 0.5))
+        let b = PlanClip(assetID: UUID(), source: .video(0...3))
+        let primary = PlanTrack(kind: .video, placement: .chained, elements: [
+            PlanElement(content: .content(TrackPayload(a))),
+            PlanElement(content: .content(TrackPayload(b))),
+        ])
+        var plan = EditPlan(tracks: [primary], primaryTrackID: primary.id)
+        XCTAssertEqual(plan.renderedDuration, 5.5, accuracy: 0.001)
+        XCTAssertEqual(plan.primaryTrack!.span, 6, accuracy: 0.001)
+
+        plan.tracks.append(PlanTrack(kind: .caption, placement: .absolute, elements: [
+            PlanElement(at: 4.7, content: .content(TrackPayload(
+                CaptionCuePayload(text: "x", duration: 1)))),   // 末端 5.7
+        ]))
+
+        TrackOperations.maintainInvariants(in: &plan)
+        XCTAssertEqual(plan.renderedDuration, 5.7, accuracy: 0.01,
+                       "主轨应补到字幕轨末端 5.7s（差额按 renderedDuration 算，不是 span）")
+    }
+
     func testMaintainingInvariantsIsIdempotent() {
         var plan = makePlan(mainSeconds: [3, 3], captionEnds: [9])
         TrackOperations.maintainInvariants(in: &plan)
@@ -2208,12 +2284,15 @@ public enum TrackOperations {
     public static func maintainInvariants(in plan: inout EditPlan) {
         guard let pi = plan.tracks.firstIndex(where: { $0.id == plan.primaryTrackID }) else { return }
 
-        var required = plan.tracks[pi].span
+        // 主轨的「末端」是成片时长 renderedDuration（已扣转场重叠），不是它的 span。
+        // 用 span 会少补：样例工程 span 10 vs renderedDuration 9.5，差额 0.5 会漏掉。
+        let mainEnd = plan.renderedDuration
+        var required = mainEnd
         for track in plan.tracks where track.id != plan.primaryTrackID {
             required = max(required, track.span)
         }
 
-        let deficit = required - plan.tracks[pi].span
+        let deficit = required - mainEnd
         if deficit > EditPlanValidator.durationTolerance {
             plan.tracks[pi].elements.append(PlanElement(content: .gap(duration: deficit)))
         }
