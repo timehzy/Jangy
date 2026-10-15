@@ -1800,7 +1800,13 @@ public struct EditPlan: Codable, Equatable, Sendable {
 }
 ```
 
-**同时删除** `CaptionTrack` 与 `CaptionStyle` 两个类型（已被 `CaptionTrackSettings` 取代）。`PlanClipSource` / `SpeedPlan` / `PlanTransition` / `PlanClip` 保留（`PlanClip` 已按 Task 2 改造）。
+**同时删除** `CaptionTrack` 与 `CaptionStyle` 两个类型（已被 `CaptionTrackSettings` 取代）。
+
+**本步还要把 `PlanClip.id` 去掉**（Task 2 只加了协议一致性、刻意保留了它）。删掉 `id` 字段、`init` 里的 `id:` 参数与默认值、`CodingKeys` 里的 `.id`、以及 `init(from:)` 里 `id = ...` 那一行。此后 `PlanClip` 就是纯 payload（`assetID` / `source` / `speed` / `transitionAfter`），寻址一律走 `PlanElement.id`。
+
+> 这一改会让所有 `clip.id` 的调用点失效——**这正是本步进入红色区间的原因**。`TimelineDuration` / `EngineBridge` / `AgentTools` / App / 全部测试里的 `clip.id` 都要改成对应的 `element.id`。
+
+`PlanClipSource` / `SpeedPlan` / `PlanTransition` 保留不变。
 
 - [ ] **Step 2: 改 TimelineDuration.swift**
 
@@ -1887,7 +1893,8 @@ extension EditPlan {
                 let end = (element.at ?? 0) + element.duration
                 if end > mainEnd + Self.durationTolerance {
                     issues.append(ValidationIssue(
-                        path: "tracks[\(track.id)].elements[\(i)].at", elementID: element.id,
+                        path: "\(context.pathPrefix(for: track)).elements[\(i)].at",
+                        elementID: element.id,
                         message: "元素末端 \(end)s 超出主轨末端 \(mainEnd)s"))
                 }
             }
@@ -3692,5 +3699,5 @@ git commit -m "docs: 时间线多轨阶段①收口——公约修订、roadmap�
 
 **执行顺序约束（务必遵守）：**
 1. Task 5（迁移）必须在 Task 6（`EditPlan` 切换）**之前**完成——Task 6 的 `PlanLoader` 要接线到它，且 `Fixtures/plan-v3.json` 必须在切换前用 `jangy-cli sample` 生成。
-2. Task 2 的 `PlanClip` 去 id 会让代码库进入红色区间；Task 2 / 6 / 7 / 8 的改动攒到 Task 8 末尾一次性提交。
+2. **红色区间是 Task 6 / 7 / 8**：Task 6 同时做「`EditPlan` 换形状」与「`PlanClip` 去 `id`」，所有消费者一起失效；这三步的改动攒到 Task 8 末尾一次性提交。Task 1–5 各自都是干净的绿色提交。
 3. Task 10 的 z 序结论（叠加轨谁盖谁）以实测为准，需回填 spec 与 Task 14 的公约条目。
