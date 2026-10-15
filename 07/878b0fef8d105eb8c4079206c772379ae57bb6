@@ -1,0 +1,21 @@
+Packages/JangyCore/Tests/JangyAgentTests/AgentToolsTests.swift
+  s_9a70defc13b235::t_42fbddb3854fde 166-179
+Packages/JangyCore/Sources/JangyAgent/AgentTools.swift
+  s_9a70defc13b235::t_d76b9c9aa96df9 192-196
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "07878b0fef8d105eb8c4079206c772379ae57bb6",
+  "prompts": {},
+  "sessions": {
+    "s_9a70defc13b235": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8b9cd9a4-be2a-41b5-8f01-e1390b420087",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Michael <yiliforever@qq.com>"
+    }
+  }
+}
