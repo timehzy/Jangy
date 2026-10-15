@@ -163,6 +163,20 @@ final class AgentToolsTests: XCTestCase {
         XCTAssertTrue(envelope.message?.contains("rangeStart") == true)
     }
 
+    func testAddClipRejectsAudioAsset() async throws {
+        // 已登记的音频素材：add_clip 应拒绝（音频后置），不得崩溃
+        let audio = AssetItem(kind: .audio, fileName: "bgm.mp3", duration: 30)
+        let plan = EditPlan(assets: SamplePlan.make().assets + [audio], clips: SamplePlan.make().clips)
+        let context = makeContext(plan: plan)
+        let result = try await AddClipTool(context: context)
+            .call(parsed: .init(fileName: "bgm.mp3", rangeStart: nil, rangeEnd: nil, speed: nil, duration: nil))
+        let envelope = try decodeEnvelope(result)
+        XCTAssertEqual(envelope.status, "error")
+        XCTAssertTrue(envelope.message?.contains("音频") == true)
+        let resultingPlan = await context.plan
+        XCTAssertEqual(resultingPlan.clips.count, 3, "失败不留痕")
+    }
+
     // MARK: - split_clip
 
     func testSplitClipKeepsSpeedAndMovesTransition() async throws {

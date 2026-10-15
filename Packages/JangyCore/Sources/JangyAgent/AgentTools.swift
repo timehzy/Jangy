@@ -189,6 +189,11 @@ struct AddClipTool: DefensiveAgentTool {
             }
         }
         guard let asset else { return ToolEnvelope.error("素材登记失败") }
+        // 非上轨素材类型直接拒绝（音频维持后置；字幕走 set_captions）——
+        // 否则下面的 .video 分支会对缺失的 range 强解包崩溃
+        guard asset.kind == .video || asset.kind == .image else {
+            return ToolEnvelope.error("不支持把 \(asset.kind.rawValue) 素材加入时间线（音频后置；字幕请用 set_captions）")
+        }
         let rate = args.speed ?? 1.0
 
         // 视频需 range（ClosedRange 构造下界>上界会运行时 trap，必须先拦）
