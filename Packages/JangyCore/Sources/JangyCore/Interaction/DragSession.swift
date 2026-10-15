@@ -52,6 +52,8 @@ public struct DragSession: Equatable, Sendable {
 
     /// 由拖拽瞬态解析出抬手要落的原子编辑；nil = 净变化为零（不落栈）。
     public func resolve(in context: DragContext) -> TimelineEdit? {
+        // px-per-sec 是位移→秒的唯一换算系数，0 会产出 inf/nan（DragContext 接受任意值）。
+        guard context.pointsPerSecond > 0 else { return nil }
         switch kind {
         case .trim(let elementID, let edge):
             return resolveTrim(elementID: elementID, edge: edge, context: context)
@@ -65,31 +67,41 @@ public struct DragSession: Equatable, Sendable {
     // MARK: trim
 
     private func resolveTrim(elementID: UUID, edge: Edge, context: DragContext) -> TimelineEdit? {
-        guard let (_, clip) = findClip(elementID, in: context.plan) else { return nil }
-        let deltaSeconds = TimeInterval(translation.width / context.pointsPerSecond)
-        guard deltaSeconds != 0 else { return nil }
+        guard let (track, index, element, clip) = findClip(elementID, in: context.plan) else { return nil }
+        let rate = clip.speed.rate
+        // 拖拽位移是**输出时间轴**的秒数（点 / px-per-sec）
+        let outputDelta = TimeInterval(translation.width / context.pointsPerSecond)
+        guard outputDelta != 0 else { return nil }
+
+        // 吸附必须在**输出时间轴**上做（snapPoints 是输出时间）；源时间只在最后换算。
+        let outputStart = track.elementOutputStarts()[index]
+        let outputDuration = element.duration                  // = 源长 / rate
+        let edgeOutput = (edge == .leading) ? outputStart : outputStart + outputDuration
+        let snappedOutput = SnapEngine.snap(edgeOutput + outputDelta, to: context.snapPoints,
+                                            within: context.snapTolerance)
+        // 输出时间轴的位移换算回源时间轴：源位移 = 输出位移 × rate
+        let sourceDelta = (snappedOutput - edgeOutput) * rate
 
         switch clip.source {
         case .video(let range):
             let assetDuration = context.plan.asset(withID: clip.assetID)?.duration ?? range.upperBound
+            let minSource = context.minElementDuration * rate   // 最短**输出**时长换算成源长
             var lower = range.lowerBound, upper = range.upperBound
             switch edge {
             case .leading:
-                lower = SnapEngine.snap(range.lowerBound + deltaSeconds, to: context.snapPoints,
-                                        within: context.snapTolerance)
-                lower = min(max(0, lower), upper - context.minElementDuration)
+                let maxLower = max(0, range.upperBound - minSource)   // 保证 lower ≤ upper
+                lower = min(max(0, range.lowerBound + sourceDelta), maxLower)
             case .trailing:
-                upper = SnapEngine.snap(range.upperBound + deltaSeconds, to: context.snapPoints,
-                                        within: context.snapTolerance)
-                upper = min(max(lower + context.minElementDuration, upper), assetDuration)
+                upper = min(assetDuration,
+                            max(range.lowerBound + minSource, range.upperBound + sourceDelta))
             }
             if lower == range.lowerBound, upper == range.upperBound { return nil }
             return .trimSource(elementID: elementID, source: .video(lower...upper))
 
         case .still(let duration):
-            // still 只有时长，两端等效
-            let delta = (edge == .leading ? -deltaSeconds : deltaSeconds)
-            let newDuration = max(context.minElementDuration, duration + delta)
+            // 输出时长 = duration / rate；边缘输出位移 × rate = duration 的增量
+            let sign: Double = (edge == .leading ? -1 : 1)
+            let newDuration = max(context.minElementDuration * rate, duration + sign * outputDelta * rate)
             if newDuration == duration { return nil }
             return .trimSource(elementID: elementID, source: .still(duration: newDuration))
         }
@@ -100,24 +112,26 @@ public struct DragSession: Equatable, Sendable {
     private func resolveMove(elementID: UUID, fromTrackID: UUID, context: DragContext) -> TimelineEdit? {
         let plan = context.plan
         guard let fromTrack = plan.tracks.first(where: { $0.id == fromTrackID }),
-              let element = fromTrack.elements.first(where: { $0.id == elementID }) else { return nil }
+              let fromIndex = fromTrack.elements.firstIndex(where: { $0.id == elementID }) else { return nil }
+        let element = fromTrack.elements[fromIndex]
 
         // 纵向换轨：按行高把位移换算成轨道下标偏移
         var targetTrackID = fromTrackID
         if context.trackRowHeight > 0, translation.height != 0,
-           let fromIndex = plan.tracks.firstIndex(where: { $0.id == fromTrackID }) {
+           let fromPlanIndex = plan.tracks.firstIndex(where: { $0.id == fromTrackID }) {
             let rowDelta = Int((translation.height / context.trackRowHeight).rounded())
             if rowDelta != 0 {
-                let target = min(max(0, fromIndex + rowDelta), plan.tracks.count - 1)
+                let target = min(max(0, fromPlanIndex + rowDelta), plan.tracks.count - 1)
                 targetTrackID = plan.tracks[target].id
             }
         }
 
-        // 目标轨是绝对定位：横向位移 → at（吸附）
+        // 目标轨是绝对定位：横向位移 → at（吸附）。
+        // 链式元素没有 at，用它在输出时间轴的当前起点兜底，纯纵向换轨才不会丢位落到 0。
         if let targetTrack = plan.tracks.first(where: { $0.id == targetTrackID }),
            targetTrack.placement == .absolute {
             let deltaSeconds = TimeInterval(translation.width / context.pointsPerSecond)
-            let originalAt = element.at ?? 0
+            let originalAt = element.at ?? fromTrack.elementOutputStarts()[fromIndex]
             let at = max(0, SnapEngine.snap(originalAt + deltaSeconds, to: context.snapPoints,
                                             within: context.snapTolerance))
             if targetTrackID == fromTrackID, at == originalAt { return nil }
@@ -166,12 +180,14 @@ public struct DragSession: Equatable, Sendable {
 
     // MARK: helpers
 
-    private func findClip(_ elementID: UUID, in plan: EditPlan) -> (PlanElement, PlanClip)? {
+    private func findClip(_ elementID: UUID, in plan: EditPlan)
+        -> (track: PlanTrack, index: Int, element: PlanElement, clip: PlanClip)? {
         for track in plan.tracks {
-            for element in track.elements where element.id == elementID {
+            if let index = track.elements.firstIndex(where: { $0.id == elementID }) {
+                let element = track.elements[index]
                 guard case .content(let payload) = element.content,
                       let clip = payload.value as? PlanClip else { return nil }
-                return (element, clip)
+                return (track, index, element, clip)
             }
         }
         return nil
