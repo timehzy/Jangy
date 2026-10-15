@@ -2303,7 +2303,7 @@ public enum TrackOperations {
 - [ ] **Step 4: 运行确认通过**
 
 Run: `cd Packages/JangyCore && swift test --filter TrackOperationsTests`
-Expected: PASS（7 个用例）
+Expected: PASS（8 个用例）
 
 - [ ] **Step 5: 提交**
 
