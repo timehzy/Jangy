@@ -2559,15 +2559,31 @@ final class TrackOperationsTests: XCTestCase {
     }
 
     func testRemovingMiddleElementReplacesItWithGap() {
-        var plan = makePlan(mainSeconds: [3, 3, 3])
-        TrackOperations.removeElement(plan.primaryTrack!.elements[1].id, in: &plan)
+        // 中间元素必须是**真的内容元素**——fixture 默认把主轨造成 gap，
+        // 「把 gap 换成 gap」是 no-op，测不出 removeElement 的行为（变异测试可证：
+        // 把 removeElement 改成 no-op，用 gap 版本这条照样绿）。
+        let middle = PlanElement(content: .content(TrackPayload(
+            PlanClip(assetID: UUID(), source: .video(0...3)))))
+        let primary = PlanTrack(kind: .video, placement: .chained, elements: [
+            PlanElement(content: .gap(duration: 3)),
+            middle,
+            PlanElement(content: .gap(duration: 3)),
+        ])
+        var plan = EditPlan(tracks: [primary], primaryTrackID: primary.id)
+
+        // 先钉住前置状态，否则「本来就是 gap」时也会绿
+        guard case .content = plan.primaryTrack!.elements[1].content else {
+            return XCTFail("前置：中间元素应是内容元素")
+        }
+
+        TrackOperations.removeElement(middle.id, in: &plan)
 
         XCTAssertEqual(plan.primaryTrack!.elements.count, 3, "元素位保留")
-        XCTAssertEqual(plan.renderedDuration, 9, accuracy: 0.001, "时长不变")
         guard case .gap(let d) = plan.primaryTrack!.elements[1].content else {
             return XCTFail("中间元素应被换成 gap")
         }
         XCTAssertEqual(d, 3, accuracy: 0.001)
+        XCTAssertEqual(plan.renderedDuration, 9, accuracy: 0.001, "时长不变")
     }
 
     func testRemovingLastElementJustRemovesItWithoutPadding() {
@@ -2597,11 +2613,21 @@ final class TrackOperationsTests: XCTestCase {
     }
 
     func testMovingElementSetsAtWithoutMaintainingInvariants() {
+        // 移到主轨末端**之外**——这样如果 moveElement 偷偷调了 maintainInvariants，
+        // 主轨会被补 gap、断言失败。移到末端之内的话两种实现都过，测不出契约。
         var plan = makePlan(mainSeconds: [10], captionEnds: [3])
-        TrackOperations.moveElement(plan.tracks[1].elements[0].id, to: 7, in: &plan)
+        TrackOperations.moveElement(plan.tracks[1].elements[0].id, to: 11, in: &plan)
 
-        XCTAssertEqual(plan.tracks[1].elements[0].at, 7)   // 同上，不带 accuracy:
+        XCTAssertEqual(plan.tracks[1].elements[0].at, 11)
+        XCTAssertEqual(plan.primaryTrack!.elements.count, 1, "主轨没有被补 gap")
         XCTAssertEqual(plan.renderedDuration, 10, accuracy: 0.001)
+    }
+
+    func testMovingUnknownElementIsNoOp() {
+        var plan = makePlan(mainSeconds: [3])
+        let before = plan
+        TrackOperations.moveElement(UUID(), to: 5, in: &plan)
+        XCTAssertEqual(plan, before)
     }
 
     func testMaintainingInvariantsPadsTailWhenOtherTrackExtends() {
