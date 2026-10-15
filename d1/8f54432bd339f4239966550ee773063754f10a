@@ -1,0 +1,23 @@
+Packages/JangyCore/Tests/JangyCoreTests/ImageExportEndToEndTests.swift
+  s_9a70defc13b235::t_98e01d6e6eabf1 4
+  s_9a70defc13b235::t_7d306f4470dc48 66
+  s_9a70defc13b235::t_6480aec4dc4681 37-38,50-52
+  s_9a70defc13b235::t_e49fd62c6ff4e1 114-121
+  s_9a70defc13b235::t_982aed522094fb 97-104
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "d18f54432bd339f4239966550ee773063754f10a",
+  "prompts": {},
+  "sessions": {
+    "s_9a70defc13b235": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8b9cd9a4-be2a-41b5-8f01-e1390b420087",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Michael <yiliforever@qq.com>"
+    }
+  }
+}
