@@ -1,0 +1,19 @@
+Packages/JangyCore/Tests/JangyCoreTests/ImageExportEndToEndTests.swift
+  s_9a70defc13b235::t_f27d4eff5d0944 1-110
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "dac94d125c45b6b16635d57bbf00de8d0881b0f1",
+  "prompts": {},
+  "sessions": {
+    "s_9a70defc13b235": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8b9cd9a4-be2a-41b5-8f01-e1390b420087",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Michael <yiliforever@qq.com>"
+    }
+  }
+}
