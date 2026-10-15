@@ -31,7 +31,7 @@ enum StillImagePreparer {
     static func prepareCGImage(url: URL, canvas: CGSize) -> CGImage? {
         let width = Int(canvas.width), height = Int(canvas.height)
         guard width > 0, height > 0,
-              let cgImage = downsample(url: url, maxPixel: max(width, height)),
+              let cgImage = ImageDownsampler.downsample(url: url, maxPixel: max(width, height)),
               let ctx = CGContext(data: nil, width: width, height: height,
                                   bitsPerComponent: 8, bytesPerRow: 0,
                                   space: CGColorSpace(name: CGColorSpace.sRGB)!,
@@ -53,20 +53,6 @@ enum StillImagePreparer {
         }
         ctx.draw(cgImage, in: drawRect)
         return ctx.makeImage()
-    }
-
-    /// ImageIO 降采样：不加载全尺寸像素进内存（大图也不爆）。
-    private static func downsample(url: URL, maxPixel: Int) -> CGImage? {
-        guard let source = CGImageSourceCreateWithURL(url as CFURL,
-                                                      [kCGImageSourceShouldCache: false] as CFDictionary) else {
-            return nil
-        }
-        let options: [CFString: Any] = [
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceThumbnailMaxPixelSize: maxPixel,
-            kCGImageSourceCreateThumbnailWithTransform: true,   // 应用 EXIF 方向
-        ]
-        return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
     }
 
     private static func preparedImage(from cgImage: CGImage) -> PreparedImage {

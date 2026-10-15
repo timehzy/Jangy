@@ -20,7 +20,7 @@ public enum CoverGenerator {
         switch asset.kind {
         case .image:
             // 图片：ImageIO 降采样（不走 AVAssetImageGenerator——它只对视频有效）
-            cgImage = downsample(url: sourceURL, maxPixel: 640)
+            cgImage = ImageDownsampler.downsample(url: sourceURL, maxPixel: 640)
         default:
             let generator = AVAssetImageGenerator(asset: AVURLAsset(url: sourceURL))
             generator.appliesPreferredTrackTransform = true
@@ -29,18 +29,6 @@ public enum CoverGenerator {
         }
         guard let cgImage, let data = jpegData(of: cgImage, quality: 0.8) else { return }
         try? data.write(to: url, options: .atomic)
-    }
-
-    /// ImageIO 降采样：不加载全尺寸像素进内存。
-    private static func downsample(url: URL, maxPixel: Int) -> CGImage? {
-        guard let source = CGImageSourceCreateWithURL(url as CFURL,
-                                                      [kCGImageSourceShouldCache: false] as CFDictionary) else { return nil }
-        let options: [CFString: Any] = [
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceThumbnailMaxPixelSize: maxPixel,
-            kCGImageSourceCreateThumbnailWithTransform: true,
-        ]
-        return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
     }
 
     /// CGImage → JPEG。走 ImageIO 而非 UIKit/AppKit：JangyCore 同时声明

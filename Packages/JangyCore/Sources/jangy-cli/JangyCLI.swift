@@ -59,7 +59,7 @@ struct Sample: AsyncParsableCommand {
 }
 
 struct GenAssets: AsyncParsableCommand {
-    static let configuration = CommandConfiguration(commandName: "genassets", abstract: "生成测试素材（3 段视频 + sample.srt）到指定目录")
+    static let configuration = CommandConfiguration(commandName: "genassets", abstract: "生成测试素材（3 段视频 + sample.srt + 1 张图片）到指定目录")
 
     @Option(help: "素材输出目录，默认 ./Assets")
     var to: String = "./Assets"
