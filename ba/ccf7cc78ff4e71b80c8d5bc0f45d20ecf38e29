@@ -1,0 +1,31 @@
+docs/roadmap-path-a.md
+  s_9a70defc13b235::t_b8d78f6603d30e 29-34
+AGENTS.md
+  s_9a70defc13b235::t_c3e8655b21ac06 20
+docs/known-pitfalls.md
+  s_9a70defc13b235::t_a7052559a5cc3d 25-26
+README.md
+  s_9a70defc13b235::t_850c2c5848c723 29
+  s_9a70defc13b235::t_cf2b073f043bf7 11
+docs/superpowers/specs/2026-10-15-image-on-timeline-design.md
+  s_9a70defc13b235::t_02e8b695b40cda 54
+docs/architecture-covenant.md
+  s_9a70defc13b235::t_7fc5d57ee0a560 100-101
+  s_9a70defc13b235::t_f6e989c3d8adfe 48
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "baccf7cc78ff4e71b80c8d5bc0f45d20ecf38e29",
+  "prompts": {},
+  "sessions": {
+    "s_9a70defc13b235": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8b9cd9a4-be2a-41b5-8f01-e1390b420087",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Michael <yiliforever@qq.com>"
+    }
+  }
+}
