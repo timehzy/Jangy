@@ -1,0 +1,28 @@
+docs/architecture-covenant.md
+  s_46e346c194b937::t_2e6ebdd9c171f0 116
+AGENTS.md
+  s_46e346c194b937::t_7585f1105dd3f9 53
+docs/known-pitfalls.md
+  s_46e346c194b937::t_4ab57d5f8d2a6a 21
+Jangy/AppModel.swift
+  s_46e346c194b937::t_d8969b28d48939 198-209,221-224,232-244,247-250,256-258,260,271
+  s_46e346c194b937::t_6959898f1fd045 253-255,259,261-269,282
+Jangy/EditorView.swift
+  s_46e346c194b937::t_ec6e9849b55275 84,86,91
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "e2eabc95fa475886da566a35ffef20b0b163a412",
+  "prompts": {},
+  "sessions": {
+    "s_46e346c194b937": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "21c5d417-5e59-430f-8d0c-2b1c2e5271e2",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Michael <yiliforever@qq.com>"
+    }
+  }
+}
