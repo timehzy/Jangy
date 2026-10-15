@@ -1,0 +1,26 @@
+Packages/JangyCore/Sources/jangy-cli/JangyCLI.swift
+  s_9a70defc13b235::t_c0c60b91ae1f98 71
+Packages/JangyCore/Sources/JangyTestSupport/AssetSynthesizer.swift
+  s_9a70defc13b235::t_7a8b0386a8046f 50-54,58-72
+  s_9a70defc13b235::t_1238d14ffee9cd 3,5,7,14
+Packages/JangyCore/Tests/JangyCoreTests/CoverGeneratorTests.swift
+  s_9a70defc13b235::t_02933e93302ebd 35-48
+Packages/JangyCore/Sources/JangyCore/CoverGenerator.swift
+  s_9a70defc13b235::t_fc5c1491b7e142 18-30,34-43
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "b83d0cdc198c88160e207f3b9e239b7b7c7cbf77",
+  "prompts": {},
+  "sessions": {
+    "s_9a70defc13b235": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8b9cd9a4-be2a-41b5-8f01-e1390b420087",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Michael <yiliforever@qq.com>"
+    }
+  }
+}
