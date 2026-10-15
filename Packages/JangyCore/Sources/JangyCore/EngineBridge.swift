@@ -25,7 +25,8 @@ public enum EngineBridge {
         public var description: String { "素材未登记: \(assetID)" }
     }
 
-    /// 图片素材无法解码（损坏/非图片）。正常路径已被 EditPlanValidator 拦截。
+    /// 图片素材无法解码（损坏/非图片）。validator 只校验 source 与 kind 一致、不校验可解码性，
+    /// 故损坏图片会在渲染期到此抛出（而非编辑期被拦）。
     public struct ImageDecodeError: Error, CustomStringConvertible {
         public let assetID: UUID
         public var description: String { "图片素材无法解码: \(assetID)" }

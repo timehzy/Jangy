@@ -3,7 +3,7 @@ import Foundation
 import ImageIO
 #if canImport(AppKit)
 import AppKit
-/// 本文件不 import Kadr（硬边界规则：仅引擎适配层文件族 EngineBridge/PreviewBridge/ExportRunner 允许 import），
+/// 本文件不 import Kadr（硬边界规则：仅引擎适配层（L3）文件允许 import），
 /// 因此不用 Kadr.PlatformImage，自行定义同义别名（macOS 下即 NSImage）。
 typealias PreparedImage = NSImage
 #elseif canImport(UIKit)

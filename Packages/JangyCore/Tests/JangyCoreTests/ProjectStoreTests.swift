@@ -46,9 +46,13 @@ final class ProjectStoreTests: XCTestCase {
 
     func testSchemaGuardRejectsNewerVersion() throws {
         let summary = try store.createProject(name: "A")
+        // 直接写一个「更新版本」的文件（模拟更新版 App 产出）；不走 saveProject——它会归一化版本
         var plan = EditPlan(clips: [])
         plan.version = ProjectStore.currentSchemaVersion + 1
-        try store.saveProject(id: summary.id, plan: plan)
+        let url = store.projectDirectory(id: summary.id).appendingPathComponent(ProjectStore.planFileName)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        try encoder.encode(plan).write(to: url)
         XCTAssertThrowsError(try store.loadProject(id: summary.id)) { error in
             guard case ProjectStoreError.unsupportedVersion(let found, _) = error else {
                 return XCTFail("应抛 unsupportedVersion，实际: \(error)")
@@ -139,5 +143,15 @@ final class ProjectStoreTests: XCTestCase {
 
         // 幂等：再跑一遍无变化
         XCTAssertFalse(try store.migrateLegacyLayoutIfNeeded())
+    }
+
+    /// 旧版本 plan 落盘后应标记为当前版本（防「旧版本号 + 新格式」混搭）。
+    func testSaveNormalizesLegacyVersionToCurrent() throws {
+        let summary = try store.createProject(name: "A")
+        var legacy = SamplePlan.make()
+        legacy.version = 2
+        try store.saveProject(id: summary.id, plan: legacy)
+        let url = store.projectDirectory(id: summary.id).appendingPathComponent(ProjectStore.planFileName)
+        XCTAssertEqual(try PlanLoader.load(from: url).version, ProjectStore.currentSchemaVersion)
     }
 }

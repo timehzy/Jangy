@@ -131,7 +131,11 @@ public struct ProjectStore: Sendable {
     }
 
     /// 原子写入：先写同目录临时文件再 rename，中途崩溃不留半截 JSON。
+    /// 落盘一律标记为当前 schema 版本：旧版本 plan（v2）解码后已是当前模型，
+    /// 若沿用旧版本号会写出「旧版本号 + 新格式」的混搭文件——旧代码按版本守卫放行后解码失败。
     public func saveProject(id: UUID, plan: EditPlan) throws {
+        var plan = plan
+        plan.version = Self.currentSchemaVersion
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         let data = try encoder.encode(plan)

@@ -59,4 +59,9 @@ final class TimelineDurationTests: XCTestCase {
     func testSamplePlanRenderedDurationMatchesMeasuredExport() {
         XCTAssertEqual(SamplePlan.make().renderedDuration, 9.5, accuracy: 1e-9)
     }
+
+    func testStillOutputDurationDividesBySpeed() {
+        XCTAssertEqual(PlanClip(assetID: UUID(), source: .still(duration: 3.0)).outputDuration, 3.0, accuracy: 1e-9)
+        XCTAssertEqual(PlanClip(assetID: UUID(), source: .still(duration: 6.0), speed: .flat(2.0)).outputDuration, 3.0, accuracy: 1e-9)
+    }
 }
