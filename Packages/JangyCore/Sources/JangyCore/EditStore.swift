@@ -48,13 +48,16 @@ public final class EditStore {
         // EditStore.apply 是唯一写入口，放这里任何编辑都绕不开。
         // 散到各工具 / UI 动作里就是「隐式约定散落多处，漏改一处就复发」——
         // 它已经复发过一次（trim/speed 让主轨变短却没人补 gap，编辑静默失败）。
-        // 顺序：先补尾部 gap（会改 renderedDuration），再归一化 payload。
-        TrackOperations.maintainInvariants(in: &next)
+        //
+        // **顺序不能反**：normalize 清掉悬空转场会「减少重叠」从而「增加」renderedDuration，
+        // 所以必须先归一化、再按最终结构补 gap。反过来会按「含转场的旧时长」算差额，
+        // 主轨被多补一个转场时长（实测：5.5s 的成片变成 6.0s）。
         TrackOperations.normalizePayloads(in: &next)
+        TrackOperations.maintainInvariants(in: &next)
 
         let issues = validator.validate(next)
         guard issues.isEmpty else { return .failure(ValidationFailure(issues: issues)) }
-        if groupBase == nil { undoStack.push(next) }  // 组内不压栈，endGrouping 统一收
+        if groupBase == nil, next != plan { undoStack.push(next) }  // 组内不压栈；无变化不压幽灵步
         plan = next
         return .success(next)
     }

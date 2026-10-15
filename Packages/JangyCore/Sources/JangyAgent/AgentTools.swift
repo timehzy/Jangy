@@ -428,7 +428,7 @@ struct MoveClipTool: DefensiveAgentTool {
 struct RemoveClipTool: DefensiveAgentTool {
     let context: AgentRunContext
     let name = "remove_clip"
-    let description = "删除片段。被删片段尾部的转场一并消失；前一片段若挂着指向它的转场会被校验拦下，需先移除该转场。"
+    let description = "删除片段。被删片段尾部的转场一并消失；前一片段若挂着指向它的转场会被自动清除。"
 
     @Generable
     struct Args {
@@ -543,6 +543,25 @@ struct SetTransitionTool: DefensiveAgentTool {
             case .success(let found): location = found
             case .failure(let error): return error.message
             }
+
+            // 前置守卫：转场要求「后面紧跟一个内容元素」。链式轨的末位（或后面是空档）挂转场，
+            // 会被 apply 的归一化静默清掉、工具回假成功——模型违反了自己 @Guide 的规则却收不到
+            // 纠正信号。这里显式报错让模型自纠。移除转场（transition == nil）不受此限。
+            if transition != nil, store.plan.tracks[location.trackIndex].placement == .chained {
+                let elements = store.plan.tracks[location.trackIndex].elements
+                let nextIndex = location.elementIndex + 1
+                let hasAdjacentContent: Bool = {
+                    guard nextIndex < elements.count,
+                          case .content(let nextPayload) = elements[nextIndex].content else { return false }
+                    return nextPayload.value is PlanClip
+                }()
+                guard hasAdjacentContent else {
+                    return ToolEnvelope.error(nextIndex < elements.count
+                                              ? "转场不能跨过空档——请先移除空档"
+                                              : "最后一个片段不能挂转场")
+                }
+            }
+
             let result = store.apply { plan in
                 guard case .content(let payload) = plan.tracks[location.trackIndex]
                         .elements[location.elementIndex].content,

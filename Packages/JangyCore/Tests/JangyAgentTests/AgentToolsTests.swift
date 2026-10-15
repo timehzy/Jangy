@@ -317,6 +317,18 @@ final class AgentToolsTests: XCTestCase {
         XCTAssertEqual(try decodeEnvelope(result).status, "error")
     }
 
+    /// 给末位元素设转场：会被 apply 的归一化静默清掉 → 工具必须显式报错（不假成功）。
+    func testSetTransitionOnLastElementReturnsError() async throws {
+        let context = makeContext()
+        let result = try await SetTransitionTool(context: context)
+            .call(parsed: .init(clipID: clip3, type: "dissolve", duration: 0.5))
+        let envelope = try decodeEnvelope(result)
+        XCTAssertEqual(envelope.status, "error")
+        XCTAssertTrue(envelope.message?.contains("最后一个片段不能挂转场") == true)
+        let plan = await context.plan
+        XCTAssertNil(primaryClips(plan).last?.transitionAfter, "失败不留痕")
+    }
+
     // MARK: - set_captions
 
     func testSetCaptionsUpdatesStyle() async throws {

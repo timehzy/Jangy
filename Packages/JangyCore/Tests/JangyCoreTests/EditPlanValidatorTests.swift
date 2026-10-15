@@ -39,6 +39,7 @@ final class EditPlanValidatorTests: XCTestCase {
         let issues = validator.validate(PlanTestSupport.plan(clips: []))
         XCTAssertEqual(issues.count, 1)
         XCTAssertEqual(issues.first?.message, "主轨至少需要一个元素")
+        XCTAssertTrue(issues.first?.path.hasPrefix("tracks[") == true, "path 应是 tracks[下标] 形状")
     }
 
     func testDanglingAssetReference() {

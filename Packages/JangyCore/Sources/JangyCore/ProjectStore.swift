@@ -241,8 +241,14 @@ public struct ProjectStore: Sendable {
         let planURL = projectDirectory(id: id).appendingPathComponent(Self.planFileName)
         let modified = (try? FileManager.default.attributesOfItem(atPath: planURL.path))?[.modificationDate] as? Date ?? meta.createdAt
         return ProjectSummary(id: id, name: meta.name, createdAt: meta.createdAt, modifiedAt: modified,
-                              clipCount: plan.primaryTrack?.elements.count ?? 0, duration: plan.renderedDuration,
+                              clipCount: Self.contentCount(of: plan.primaryTrack),
+                              duration: plan.renderedDuration,
                               referencedAssetCount: plan.assets.count, directory: projectDirectory(id: id))
+    }
+
+    /// 主轨「片段数」= 有内容的元素（删除留下的 gap 不计入）。
+    private static func contentCount(of track: PlanTrack?) -> Int {
+        track?.elements.filter { if case .content = $0.content { return true } else { return false } }.count ?? 0
     }
 
     // MARK: - 完整性校验（原 DraftStore.verify 平移）
