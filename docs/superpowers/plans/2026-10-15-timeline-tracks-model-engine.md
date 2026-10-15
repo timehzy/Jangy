@@ -2570,51 +2570,55 @@ final class TrackOperationsTests: XCTestCase {
         XCTAssertEqual(d, 3, accuracy: 0.001)
     }
 
-    func testRemovingLastElementPadsTailWhenOtherTrackExtends() {
+    func testRemovingLastElementJustRemovesItWithoutPadding() {
+        // 只移除，**不补 gap** —— 补 gap 是 maintainInvariants 的职责，不是 removeElement 的
         var plan = makePlan(mainSeconds: [3, 3], captionEnds: [5])
         TrackOperations.removeElement(plan.primaryTrack!.elements[1].id, in: &plan)
 
-        XCTAssertEqual(plan.primaryTrack!.span, 5, accuracy: 0.001, "主轨补到字幕轨末端")
-        XCTAssertEqual(plan.renderedDuration, 5, accuracy: 0.001)
-    }
-
-    func testRemovingLastElementShrinksWhenNothingExtends() {
-        var plan = makePlan(mainSeconds: [3, 3])
-        TrackOperations.removeElement(plan.primaryTrack!.elements[1].id, in: &plan)
-
         XCTAssertEqual(plan.primaryTrack!.elements.count, 1)
-        XCTAssertEqual(plan.renderedDuration, 3, accuracy: 0.001)
+        XCTAssertEqual(plan.renderedDuration, 3, accuracy: 0.001, "removeElement 自己不补 gap")
     }
 
-    func testMovingElementBeyondMainEndPadsTailGap() {
-        var plan = makePlan(mainSeconds: [3, 3])
-        let cue = PlanElement(at: 6, content: .content(TrackPayload(
-            CaptionCuePayload(text: "越界", duration: 2))))
-        plan.tracks.append(PlanTrack(kind: .caption, placement: .absolute, elements: [cue]))
-
-        TrackOperations.maintainInvariants(in: &plan)
-        XCTAssertEqual(plan.primaryTrack!.span, 8, accuracy: 0.001, "主轨尾部补 gap 到 8s")
-        XCTAssertEqual(plan.renderedDuration, 8, accuracy: 0.001)
-    }
-
-    func testClosingGapShiftsFollowingElementsEarlier() {
-        var plan = makePlan(mainSeconds: [3, 3, 3])
-        let middle = plan.primaryTrack!.elements[1].id
-        TrackOperations.removeElement(middle, in: &plan)   // → gap
-        TrackOperations.removeElement(middle, in: &plan)   // → 合上
-
-        XCTAssertEqual(plan.primaryTrack!.elements.count, 2)
-        XCTAssertEqual(plan.renderedDuration, 6, accuracy: 0.001)
-    }
-
-    func testRemovingElementFromAbsoluteTrackJustRemoves() {
+    func testRemovingElementFromAbsoluteTrackLeavesOthersInPlace() {
         var plan = makePlan(mainSeconds: [10], captionEnds: [3, 6])
-        let captionTrack = plan.tracks[1]
-        TrackOperations.removeElement(captionTrack.elements[0].id, in: &plan)
+        TrackOperations.removeElement(plan.tracks[1].elements[0].id, in: &plan)
 
         XCTAssertEqual(plan.tracks[1].elements.count, 1)
-        XCTAssertEqual(plan.tracks[1].elements[0].at, 5, accuracy: 0.001, "绝对轨元素不被挪动")
-        XCTAssertEqual(plan.primaryTrack!.span, 10, accuracy: 0.001, "主轨不受影响")
+        // at 是 TimeInterval?，不满足 XCTAssertEqual 的 FloatingPoint 重载，故不带 accuracy:
+        XCTAssertEqual(plan.tracks[1].elements[0].at, 5, "绝对轨元素不被挪动")
+        XCTAssertEqual(plan.renderedDuration, 10, accuracy: 0.001, "主轨不受影响")
+    }
+
+    func testRemovingUnknownElementIsNoOp() {
+        var plan = makePlan(mainSeconds: [3])
+        let before = plan
+        TrackOperations.removeElement(UUID(), in: &plan)
+        XCTAssertEqual(plan, before)
+    }
+
+    func testMovingElementSetsAtWithoutMaintainingInvariants() {
+        var plan = makePlan(mainSeconds: [10], captionEnds: [3])
+        TrackOperations.moveElement(plan.tracks[1].elements[0].id, to: 7, in: &plan)
+
+        XCTAssertEqual(plan.tracks[1].elements[0].at, 7)   // 同上，不带 accuracy:
+        XCTAssertEqual(plan.renderedDuration, 10, accuracy: 0.001)
+    }
+
+    func testMaintainingInvariantsPadsTailWhenOtherTrackExtends() {
+        // 主轨 3+1=4 < 字幕末端 5 → 补 1s gap
+        var plan = makePlan(mainSeconds: [3, 1], captionEnds: [5])
+        TrackOperations.maintainInvariants(in: &plan)
+
+        XCTAssertEqual(plan.primaryTrack!.span, 5, accuracy: 0.001)
+        XCTAssertEqual(plan.renderedDuration, 5, accuracy: 0.001)
+        XCTAssertEqual(plan.primaryTrack!.elements.count, 3, "尾部补了一个 gap 元素")
+    }
+
+    func testMaintainingInvariantsIsNoOpWhenMainIsLongest() {
+        var plan = makePlan(mainSeconds: [9], captionEnds: [5])
+        let before = plan
+        TrackOperations.maintainInvariants(in: &plan)
+        XCTAssertEqual(plan, before, "主轨最长时不追加任何元素")
     }
 
     func testMaintainingInvariantsAccountsForTransitionOverlap() {
@@ -2772,7 +2776,7 @@ public enum TrackOperations {
 - [ ] **Step 5: 运行确认通过**
 
 Run: `cd Packages/JangyCore && swift test --filter TrackOperationsTests`
-Expected: PASS（8 个用例）
+Expected: PASS（11 个用例）
 
 - [ ] **Step 6: 提交**
 
