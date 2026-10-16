@@ -13,6 +13,9 @@ final class AppModel {
     let projectID: UUID
     let store: EditStore
     let resolver: AssetResolver
+    /// 时间线缩略图器（L3）：车道抽帧与素材库共用同一约定（缓存按 assetID+档位+时间桶）。
+    /// 与 resolver 同时装配；跨轨道复用同一实例让缓存真正命中。
+    let thumbnailer: TimelineThumbnailer
     let player: PlayerController
     private let projectStore: ProjectStore
     private var autosaveTask: Task<Void, Never>?
@@ -39,6 +42,7 @@ final class AppModel {
         self.projectID = projectID
         self.store = store
         self.resolver = resolver
+        self.thumbnailer = TimelineThumbnailer(resolver: resolver)
         self.player = PlayerController(store: store, resolver: resolver)
         self.projectStore = projectStore
         self.projectMessage = restoreNotice

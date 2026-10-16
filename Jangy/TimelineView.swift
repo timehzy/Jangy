@@ -3,7 +3,8 @@ import SwiftUI
 
 /// 时间线：可拖分界下方的多轨视图（容器骨架）。水平位置由 `viewport.scrollOffset` 驱动
 /// （非 ScrollView 横向滚动）——单指横向拖 = 滚动 = 擦洗（同一手势）；纵向拖交给车道 ScrollView。
-/// 车道内容（缩略图 / 片段块 / 选择）留给 Task 8（TrackLaneView），本步用占位块。
+/// 车道内容走注册表（`TrackLaneView` + `TrackLaneRegistry`，不 switch 具体轨类型），
+/// 轨道头钉视口左缘；选择/trim/移动留给后续任务。
 struct TimelineView: View {
     let model: AppModel
     /// 由分界拖动决定的窗格高度。
@@ -40,24 +41,58 @@ struct TimelineView: View {
         }
     }
 
-    /// 内容层：标尺 + 车道，整体按 `-scrollOffset` 平移，宽度 = 视口宽 + 内容宽。
+    /// 车道呈现上下文（plan / 视口 / 解析器 / 缩略图器）——车道呈现器只读这里。
+    private var laneContext: LaneContext {
+        LaneContext(plan: model.store.plan, viewport: viewport,
+                    resolver: model.resolver, thumbnailer: model.thumbnailer)
+    }
+
+    /// 内容层：标尺 + 轨道行。横向位置由 `-scrollOffset` 驱动，但**只作用于标尺与车道内容**；
+    /// 轨道头钉在视口左缘（不参与横向平移，见 `laneRow` / `TrackCap`）。
+    /// 标尺与车道的局部坐标原点都落在「内容坐标 x=0」——都按 `contentX(forTime:)` 定位，故对齐。
     private func contentLayer(viewportWidth: CGFloat) -> some View {
-        VStack(spacing: 0) {
-            RulerView(viewport: viewport).frame(height: 24)
+        let totalWidth = viewportWidth + contentWidth
+        return VStack(spacing: 0) {
+            // 标尺：竖向钉顶；横向整体平移后裁到视口宽。
+            RulerView(viewport: viewport)
+                .frame(width: totalWidth, height: 24, alignment: .leading)
+                .offset(x: -viewport.scrollOffset)
+                .frame(width: viewportWidth, height: 24, alignment: .leading)
+                .clipped()
             ScrollView(.vertical) {
                 VStack(spacing: 2) {
-                    // Task 8 换成 TrackLaneView；本步每条轨一条占位带（按内容宽铺满，验证滚动/擦洗）。
-                    ForEach(model.store.plan.tracks) { _ in
-                        Color(.secondarySystemFill)
-                            .frame(width: contentWidth, height: 56)
+                    ForEach(Array(model.store.plan.tracks.enumerated()), id: \.element.id) { index, track in
+                        laneRow(track: track, number: index + 1, viewportWidth: viewportWidth,
+                                totalWidth: totalWidth)
                     }
                 }
-                .padding(.leading, viewportWidth / 2)   // 半视口留白，让 t=0 落在视口中央
-                .padding(.trailing, viewportWidth / 2)
             }
         }
-        .frame(width: viewportWidth + contentWidth, alignment: .leading)
-        .offset(x: -viewport.scrollOffset)
+        .frame(width: viewportWidth, alignment: .leading)
+    }
+
+    /// 一行 = 车道（横向平移）+ 轨道头（钉视口左缘）；整行裁到视口宽。
+    /// 轨道头是车道**偏移之外**的兄弟 —— 横向平移只作用于车道，轨道头不动，行内纵向自然对齐。
+    private func laneRow(track: PlanTrack, number: Int,
+                         viewportWidth: CGFloat, totalWidth: CGFloat) -> some View {
+        ZStack(alignment: .leading) {
+            TrackLaneView(track: track, context: laneContext)
+                .frame(width: totalWidth, height: LaneMetrics.height, alignment: .topLeading)
+                .offset(x: -viewport.scrollOffset)
+            TrackCap(track: track, number: number,
+                     onToggleMute: { setTrackFlag(track.id) { $0.isMuted.toggle() } },
+                     onToggleHidden: { setTrackFlag(track.id) { $0.isHidden.toggle() } })
+        }
+        .frame(width: viewportWidth, height: LaneMetrics.height, alignment: .leading)
+        .clipped()
+    }
+
+    /// 改某条轨的布尔标记（静音/隐藏）：在内存 plan 里就地改，走统一编辑入口（单撤销步）。
+    private func setTrackFlag(_ id: UUID, _ mutate: (inout PlanTrack) -> Void) {
+        model.edit { plan in
+            guard let i = plan.tracks.firstIndex(where: { $0.id == id }) else { return }
+            mutate(&plan.tracks[i])
+        }
     }
 
     /// 内容带宽度（点）= 时长 × px/s。
