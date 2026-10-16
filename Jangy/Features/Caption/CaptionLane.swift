@@ -28,7 +28,8 @@ struct CaptionLane: View {
             ForEach(Array(track.elements.enumerated()), id: \.element.id) { index, element in
                 let start = index < starts.count ? starts[index] : 0
                 if visible.upperBound > start, visible.lowerBound < start + element.duration {
-                    let geometry = TransientGeometry.make(elementID: element.id, drag: context.drag)
+                    let geometry = TransientGeometry.make(elementID: element.id, drag: context.drag,
+                                                         liftedID: context.liftedElementID)
                     cueBar(element: element, geometry: geometry)
                         // 定位与浮起收在这一处（内容块一律不自定位，见 `LaneElementModifier`）。
                         .modifier(LaneElementModifier(

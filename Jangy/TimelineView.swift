@@ -15,7 +15,7 @@ import SwiftUI
 ///
 /// **内容坐标是唯一约定**：车道内容与元素交互层都在 `contentX(forTime:)` 这套坐标里
 /// （其值只依赖 pps + 视口宽，**不依赖播放头**），横向平移统一由 `ScrollingOffset` 施加。
-/// 视口坐标（`viewportX(forTime:)`）只留给手势命中判定用（擦洗起手点、trim 手柄区）。
+/// 手势命中不做坐标算术——谁的手势先起手谁就是命中（见 `trimGesture` / `canScrub`）。
 struct TimelineView: View {
     let model: AppModel
     /// 由分界拖动决定的窗格高度。
@@ -49,10 +49,33 @@ struct TimelineView: View {
     /// 当前惯性推进任务（抬手后按衰减曲线继续滚动）。同一时刻至多一个。
     @State private var flingTask: Task<Void, Never>?
 
-    /// 选中元素所在**行**在 `timeline` 命名坐标系里的 frame（由选中行上报）。
-    /// 擦洗结构性让位按「行 Y 带 + 两处 trim 手柄的窄 X 带」判定——只挡选中元素的两处手柄，
-    /// 元素体与其它轨的擦洗照常放行。
-    @State private var selectedRowFrame: CGRect?
+    /// 「拾起」所需的**按住时长**（秒）。取 iOS 长按惯例的 0.5s。
+    private static let liftHoldDuration: TimeInterval = 0.5
+
+    /// 已拾起的对象（元素或轨道头）。浮起 / 选中 / 触感都看它。
+    /// **由自己数的时长得出**，不读系统长按手势的「成功」信号——理由见 `beginHold`。
+    @State private var liftedTarget: LiftTarget?
+    /// 正被按压的对象。`@GestureState`——**手势结束或取消都会自动复位**，故「抬手即撤计时」
+    /// 是结构性保证，不依赖 `.onEnded`（长按**失败**时它不触发，计时会成孤儿、抬手后照样浮起）。
+    @GestureState private var pressing: LiftTarget?
+    /// 「按满时长」的计时任务（未到点前可被撤：手指移开、按压结束）。
+    @State private var holdTask: Task<Void, Never>?
+    /// 「拾起」触感计数：只在拾起那一次 +1，由 `.sensoryFeedback` 播一下。
+    /// 触发器用**只增不减的计数**而不是 `liftedTarget` 本身——后者结束时要复位，
+    /// 拿它当 trigger 会连响两次（拾起 + 落下）。
+    @State private var liftTick = 0
+
+    /// 被拾起的对象。轨道头与元素不会重名，故共用一个类型即可。
+    private enum LiftTarget: Equatable {
+        case element(UUID)
+        case track(UUID)
+    }
+
+    /// 被拾起的**元素** id（车道呈现只关心元素）。
+    private var liftedElementID: UUID? {
+        if case .element(let id) = liftedTarget { return id }
+        return nil
+    }
 
     private var viewport: TimelineViewportState { model.viewport }
 
@@ -66,17 +89,41 @@ struct TimelineView: View {
             // 固定为视口尺寸：内容层比视口宽，靠它兜住 ZStack 尺寸，
             // 否则 maxWidth: .infinity 会居中到「内容宽度」而非视口中央。
             .frame(width: geo.size.width, height: geo.size.height, alignment: .topLeading)
-            // 命名坐标系：行上报交互区、擦洗读起手点，都在这一套坐标里（见 canScrub）。
-            .coordinateSpace(name: "timeline")
             .clipped()
             .contentShape(Rectangle())
             .simultaneousGesture(scrubGesture)
             .simultaneousGesture(magnifyGesture)
+            // 按压起止 → 计时起撤。**单点收敛**：`@GestureState` 在手势结束**或取消**时都自动复位，
+            // 所以「抬手即撤计时」不依赖 `.onEnded`——长按失败时它不触发，计时会成孤儿，
+            // 抬手约 0.5s 后照样浮起 + 震动（原始症状的延迟版）。
+            .onChange(of: pressing) { _, new in
+                if let new { beginHold(new) } else { endHold() }
+            }
+            // 拾起：选中 + 一次触感（浮起由 `TransientGeometry` 随 liftedTarget 立即生效）。
+            .onChange(of: liftedTarget) { old, new in
+                guard let new, new != old else { return }
+                if case .element(let id) = new { selection = id }
+                liftTick += 1
+            }
+            // 手指移开超过起手阈值 = 用户在滚动，不是拾起：撤掉未到点的计时（已拾起的不动）。
+            .onChange(of: scrubAxis) { _, new in
+                if new != nil { cancelPendingHold() }
+            }
+            // 兜底：若「按压起点」这个信号没在**触地**时派发（见 `beginHold`），
+            // 就把「开始跟手」那一刻也算作拾起——并**锁住**拾起态，
+            // 免得随后计时到点再响一次（同一个值写两次，`onChange` 不会重复触发）。
+            .onChange(of: drag) { old, new in
+                guard liftedTarget == nil, Self.isFollowingFinger(new),
+                      !Self.isFollowingFinger(old), let target = Self.liftTarget(of: new) else { return }
+                cancelPendingHold()
+                liftedTarget = target
+            }
+            .sensoryFeedback(.impact(weight: .medium), trigger: liftTick)
             .overlay(alignment: .bottomTrailing) { bottomControls }
             .background { PlaybackFollow(player: model.player, viewport: viewport) }
             .onAppear { viewport.viewportWidth = geo.size.width }
             .onChange(of: geo.size.width) { _, w in viewport.viewportWidth = w }
-            .onDisappear { cancelFling() }
+            .onDisappear { cancelFling(); endHold() }
         }
         .frame(height: height)
     }
@@ -85,7 +132,8 @@ struct TimelineView: View {
     /// `drag` 每帧传入，被拖元素据此做局部浮起；plan 引用不变。
     private var laneContext: LaneContext {
         LaneContext(plan: model.store.plan, viewport: viewport,
-                    resolver: model.resolver, thumbnailer: model.thumbnailer, drag: drag)
+                    resolver: model.resolver, thumbnailer: model.thumbnailer, drag: drag,
+                    liftedElementID: liftedElementID)
     }
 
     /// 内容层：标尺 + 轨道行。横向位置由 `-scrollOffset` 驱动，但**只作用于标尺与车道内容**
@@ -146,30 +194,83 @@ struct TimelineView: View {
                 .gesture(reorderGesture(trackID: track.id))
         }
         .frame(width: viewportWidth, height: LaneMetrics.height, alignment: .leading)
-        .clipped()
-        .background { selectionRowProbe(track: track) }
+        // **行内不裁剪**：被拖元素要能纵向拖出本行（换轨），裁了它就只剩邻行边界内的一条，
+        // 看着像被邻行挡住。横向溢出由外层纵向 ScrollView 与时间线自身的 `.clipped()` 兜住
+        // （两者都与本行等宽，越界内容照样裁掉），故本行的 `.clipped()` 是多余的。
+        .zIndex(dragRowZIndex(for: track))
     }
 
-    /// 只有**含选中元素的行**才上报它的 frame（在 `timeline` 命名坐标系里）；上报后
-    /// `selectedRowFrame` 给出该行的 Y 带。用 `.background` 探测不改变既有布局。
-    @ViewBuilder
-    private func selectionRowProbe(track: PlanTrack) -> some View {
-        if track.elements.contains(where: { $0.id == selection }) {
-            GeometryReader { geo in
-                let frame = geo.frame(in: .named("timeline"))
-                Color.clear
-                    .onAppear { reportRowFrame(frame) }
-                    .onChange(of: frame) { _, newFrame in reportRowFrame(newFrame) }
-            }
+    /// 拖动中要浮在**最上层**的行：被拖元素所在行 / 正在重排的轨道行。
+    /// 行内已不裁剪，但 VStack 里兄弟仍按声明顺序绘制——往下拖到后声明的邻行时，
+    /// 邻行的实色内容会盖住被拖元素，故给源行抬一层（向上拖本就后绘制，抬了也无害）。
+    private func dragRowZIndex(for track: PlanTrack) -> Double {
+        guard let drag else { return 0 }
+        switch drag.kind {
+        case .moveElement(let elementID, _):
+            return track.elements.contains { $0.id == elementID } ? 1 : 0
+        case .reorderTrack(let trackID):
+            return trackID == track.id ? 1 : 0
+        case .trim:
+            return 0
         }
     }
 
-    private func reportRowFrame(_ frame: CGRect) {
-        if selectedRowFrame != frame { selectedRowFrame = frame }
+    /// 按压开始：起一个「按满时长」的计时，到点即拾起（浮起 + 选中 + 触感）。
+    ///
+    /// **为什么自己数时长，而不是问系统长按手势「成功了吗」**：那个信号在本 SDK 上不可靠——
+    /// ① `LongPressGesture.sequenced(before:)` 的取值在同层有点选手势时，**点一下抬手也会报成功**
+    ///    （于是点选跟着浮起）；② 单体 `LongPressGesture` 的 `.updating` / `.onChanged` 在 iOS 18+
+    ///    有「从不触发」的公开缺陷（FB14372706 / FB16449802，DTS 已复现），只剩 `.onEnded`，
+    ///    而官方替代 `onLongPressGesture` 又记录为不能与 `.simultaneousGesture` 合用。
+    /// 所以这里只借序列的**触地那一下**（`.first(false)`，见 `moveGesture` 的 `.updating`），
+    /// 时长与判据都归自己。若那个信号不派发，`pressing` 永远为 nil → 不走本条，
+    /// 退化成「开始跟手时拾起」（见 body 的兜底 `.onChange(of: drag)`）。
+    ///
+    /// 先撤旧计时再起新的：连按两个对象时不能让上一个的计时把结果算到下一个头上。
+    private func beginHold(_ target: LiftTarget) {
+        guard liftedTarget != target else { return }
+        cancelPendingHold()
+        holdTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(Self.liftHoldDuration))
+            guard !Task.isCancelled else { return }
+            holdTask = nil
+            liftedTarget = target
+        }
+    }
+
+    /// 撤掉**未到点**的计时（已拾起的保持不动——用户正是在拖着它）。
+    private func cancelPendingHold() {
+        holdTask?.cancel()
+        holdTask = nil
+    }
+
+    /// 按压结束 / 手势取消：撤计时并清掉拾起态。
+    private func endHold() {
+        cancelPendingHold()
+        if liftedTarget != nil { liftedTarget = nil }
+    }
+
+    /// 会话是否已「真的在跟手」（移动元素 / 重排轨道，且**位移非零**）。
+    /// 点选那一下也会建一个位移恒 0 的 moveElement 会话，故必须看位移——否则点选又会被当成拾起。
+    /// trim 不算（拖手柄是直接的连续操作，不是「把东西拿起来」）。
+    private static func isFollowingFinger(_ session: DragSession?) -> Bool {
+        guard let session, session.translation != .zero else { return false }
+        switch session.kind {
+        case .moveElement, .reorderTrack: return true
+        case .trim: return false
+        }
+    }
+
+    /// 从「已真的在跟手」的会话反推拾起对象（兜底路径用，见 body 的 `.onChange(of: drag)`）。
+    private static func liftTarget(of session: DragSession?) -> LiftTarget? {
+        switch session?.kind {
+        case .moveElement(let id, _): return .element(id)
+        case .reorderTrack(let trackID): return .track(trackID)
+        case .trim, .none: return nil
+        }
     }
 
     // MARK: 元素交互层（点选 / trim 手柄 / 长按移动）
-
     /// 元素交互层：铺在车道内容之上、轨道头之下，与车道**同一套内容坐标**（同在外层 `ScrollingOffset` 里）。
     /// 每个**内容**元素上盖一个透明命中层：点它选中、长按拖动移动（gap 不参与，点它即视为空白）；
     /// 选中元素再叠加边框与 trim 手柄。所有层都只读 `drag` / `selection` 做瞬时呈现，不改 plan。
@@ -190,7 +291,8 @@ struct TimelineView: View {
     /// 位置由 `contentX(forTime:)` + 拖动瞬态几何推出，与车道内容同源换算（同一内容坐标）。
     /// 选中框 / trim 手柄只给**可裁剪的片段**（payload 为 `PlanClip`）——字幕 cue 可选中/移动，但无 trim。
     private func elementInteraction(element: PlanElement, start: TimeInterval) -> some View {
-        let geometry = TransientGeometry.make(elementID: element.id, drag: drag)
+        let geometry = TransientGeometry.make(elementID: element.id, drag: drag,
+                                              liftedID: liftedElementID)
         let baseWidth = LaneMetrics.width(forDuration: element.duration, viewport: viewport)
         let width = max(1, baseWidth - geometry.leadingDelta + geometry.trailingDelta)
         let x = viewport.contentX(forTime: start) + geometry.leadingDelta
@@ -236,20 +338,18 @@ struct TimelineView: View {
 
     // MARK: 手势 → 会话 → 原子编辑
 
-    /// 长按元素后拖动 = 移动 / 换轨。长按完成即进会话并选中（此时位移恒 0：**只选中、不浮起**），
-    /// 位移越过起手阈值后 `DragGesture` 才给出位移 → 元素浮起跟手；抬手 `resolve` → 一个原子编辑。
-    /// 拖动全程只写 `@GestureState drag`（经 `.updating`），plan 不动。
+    /// 长按元素后拖动 = 移动 / 换轨。**序列只负责跟手位移、抬手落编辑，以及报「按压起止」**；
+    /// 拾起（浮起 + 选中 + 触感）由 `beginHold` 自己数时长给出——见它的注释。
     ///
     /// **长按完成那一步就要写会话**（哪怕位移为 0）：擦洗的让位判据是 `drag != nil`，会话早写一步，
     /// 长按期间横向拖才不会被擦洗抢走（起手阈值与擦洗同为 8pt，光靠阈值分不出先后）。
-    /// 而**浮起由位移驱动**（见 `TransientGeometry.make`），故「按住不放」不会浮起。
     ///
     /// 长按完成时系统派发 `.first(true)` 还是 `.second(true, nil)` 不作假设（实测与文档不一致）——
     /// **两个 case 都要覆盖**：只留 `.second(true, value)` 会让会话在越过阈值前一直为 nil，
     /// 长按期间横拖就被擦洗抢走；只留 `.first(true)` 则万一不派发就整个没反应。
     private func moveGesture(element: PlanElement) -> some Gesture {
         let kind = GestureRouter.liftSession(for: .element(id: element.id), plan: model.store.plan)?.kind
-        return LongPressGesture(minimumDuration: 0.25)
+        return LongPressGesture(minimumDuration: Self.liftHoldDuration)
             .sequenced(before: DragGesture(minimumDistance: Self.dragThreshold))
             .updating($drag) { value, state, _ in
                 guard let kind else { return }
@@ -262,13 +362,16 @@ struct TimelineView: View {
                     break
                 }
             }
+            .updating($pressing) { value, state, _ in
+                // **只认触地那一下**（`.first(false)` = 长按尚未成立）：计时要从触地起算，
+                // 若改成长按成立才置位，按住 0.5s 就得等 1.0s 才浮起。
+                // 抬手 / 取消由 @GestureState 自动复位。
+                if case .first(false) = value { state = .element(element.id) }
+            }
             .onChanged { value in
-                // 长按完成即选中（拖动中的元素高亮，操作条同步）——不等拖动起手：
-                // 「按住不放」也是选中，不该因为没越过阈值就没有选中反馈。
-                switch value {
-                case .first(true), .second(true, _): selection = element.id
-                default: break
-                }
+                // 长按成立即选中（拖动中的元素高亮，操作条同步）——不等拖动起手。
+                if case .first(true) = value, selection != element.id { selection = element.id }
+                if case .second(true, _) = value, selection != element.id { selection = element.id }
             }
             .onEnded { value in
                 guard let kind, case .second(true, let dragValue) = value else { return }
@@ -276,11 +379,15 @@ struct TimelineView: View {
             }
     }
 
-    /// 拖 trim 手柄 = 伸缩片段。`minimumDistance` 取 1（< 擦洗的 8）——手柄先起手并写 `drag`，
-    /// 擦洗的 onChanged 首帧即读到 drag 非空而让位，杜绝「先擦一下再 trim」的抢跑。
+    /// 拖 trim 手柄 = 伸缩片段。`minimumDistance` 取 **0**——会话在**触地那一下**就写进 `drag`，
+    /// 于是擦洗（8pt 才起手）读到 `drag` 时手柄必已先手，杜绝「先擦一下再 trim」的抢跑。
+    /// 取 1 只保证「手柄先于擦洗起手」，但两者可能在同一帧里双双越过阈值，先后就说不准了；
+    /// 取 0 把这件事从「同帧比先后」挪到「触地事件里就写好了」——触地与首次位移是两个独立事件，
+    /// 正常投递下必然一先一后。代价：点手柄时的自然抖动也算位移，但吸附会把它吸回原边缘
+    /// （video 与 still 同一条吸附路径，见 `DragSession.resolveTrim`），净变化为零。
     private func trimGesture(elementID: UUID, edge: DragSession.Edge) -> some Gesture {
         let kind = GestureRouter.trimSession(for: .trimHandle(elementID: elementID, edge: edge))?.kind
-        return DragGesture(minimumDistance: 1)
+        return DragGesture(minimumDistance: 0)
             .updating($drag) { value, state, _ in
                 guard let kind else { return }
                 state = DragSession(kind: kind).translated(to: value.translation)
@@ -291,10 +398,10 @@ struct TimelineView: View {
             }
     }
 
-    /// 长按轨道头上下拖 = 轨道重排。与元素移动同构（含起手阈值：长按不放不跟手抖动）。
+    /// 长按轨道头上下拖 = 轨道重排。与元素移动同构（同一按住时长与起手阈值，拾起也同一条计时）。
     private func reorderGesture(trackID: UUID) -> some Gesture {
         let kind = GestureRouter.liftSession(for: .trackCap(trackID: trackID), plan: model.store.plan)?.kind
-        return LongPressGesture(minimumDuration: 0.25)
+        return LongPressGesture(minimumDuration: Self.liftHoldDuration)
             .sequenced(before: DragGesture(minimumDistance: Self.dragThreshold))
             .updating($drag) { value, state, _ in
                 guard let kind else { return }
@@ -306,6 +413,9 @@ struct TimelineView: View {
                 default:
                     break
                 }
+            }
+            .updating($pressing) { value, state, _ in
+                if case .first(false) = value { state = .track(trackID) }
             }
             .onEnded { value in
                 guard let kind, case .second(true, let dragValue) = value else { return }
@@ -396,11 +506,9 @@ struct TimelineView: View {
     /// 用**累计**位移判断横向为主（逐帧差分会因抖动丢动作），纵向留给 ScrollView。
     /// 播放头 = 起手位置 − 累计横向位移 / pps；起手位置存 `@GestureState`（结束/取消自动复位）。
     /// 抬手按预测行程起**惯性**（`startFling`），所以甩一下会继续滑、预览跟着滚。
-    /// **让位有两层**：① `drag/magnifyBase` 非空（编辑拖拽/缩放进行中）；
-    /// ② **结构性**：起手点落在选中元素的**两处 trim 手柄区**内就不擦洗——这不依赖
-    /// `drag` 的写入时序，故快速甩动一帧越过 trim 与擦洗两个阈值也不会误擦。
+    /// **让位只有一层**：`drag/magnifyBase` 非空（编辑拖拽 / trim / 缩放进行中）。见 `canScrub`。
     private var scrubGesture: some Gesture {
-        DragGesture(minimumDistance: 8, coordinateSpace: .named("timeline"))
+        DragGesture(minimumDistance: 8)
             .updating($scrubBase) { _, state, _ in
                 if state == nil { state = viewport.playheadTime }
             }
@@ -412,10 +520,10 @@ struct TimelineView: View {
                 }
             }
             .onChanged { value in
-                // 三种「本手势不擦洗」的情形都要**顺手清 didScrub / 停惯性**：
+                // 两种「本手势不擦洗」的情形都要**顺手清 didScrub / 停惯性**：
                 // 上一手势若被取消（不走 onEnded）标志会残留 true，只有在这里清才能保证
                 // onEnded 的判定不误用上一手势的结论；而抓住画面（哪怕纵向）本就该止住惯性。
-                guard scrubAxis == .horizontal, canScrub(from: value.startLocation) else {
+                guard scrubAxis == .horizontal, canScrub() else {
                     if didScrub { didScrub = false }
                     cancelFling()
                     return
@@ -470,42 +578,26 @@ struct TimelineView: View {
         flingTask = nil
     }
 
-    /// 擦洗是否放行：编辑拖拽/缩放进行中、或起手落在**选中元素的 trim 手柄区**内——都不擦洗。
-    /// 元素**体上**无拖拽手势（横拖本应擦洗），故体不挡；只有两处手柄区把擦洗让给 trim。
-    /// Y 由选中行上报在 `timeline` 命名坐标系里的 frame 给出（见 `selectionRowProbe`）。
-    private func canScrub(from startLocation: CGPoint) -> Bool {
-        guard drag == nil, magnifyBase == nil else { return false }
-        return !isInSelectedTrimHandle(startLocation)
+    /// 擦洗是否放行：编辑拖拽 / trim / 缩放进行中就不擦洗。
+    ///
+    /// 曾另有一条「起手点是否落在选中元素的 trim 手柄区」的让位判据，已删：那条 X 带
+    /// （元素边缘 ±8pt）与手柄自身的 16pt 命中区逐点相同，而手柄的会话本来就挡擦洗
+    /// （`drag != nil`），故属冗余；它唯一的独立作用是「不依赖 `drag` 的写入时序」，
+    /// 那件事由 trim 手柄取 `minimumDistance: 0`（触地即建会话）接手，见 `trimGesture`。
+    ///
+    /// 短片段「滚不动」不在本条：那是手柄固定 16pt、低缩放下盖满整条所致，压在手柄上归 trim。
+    private func canScrub() -> Bool {
+        drag == nil && magnifyBase == nil
     }
 
-    /// 起手点是否落在选中元素的 trim 手柄区（选中行 Y 带 × 两处手柄 X 带）。
-    /// 缺任一半（无选中 / 行 frame 未上报）时返回 false（放行）。
-    private func isInSelectedTrimHandle(_ location: CGPoint) -> Bool {
-        guard let id = selection, let rowFrame = selectedRowFrame else { return false }
-        guard (rowFrame.minY ... rowFrame.maxY).contains(location.y) else { return false }
-        for track in model.store.plan.tracks {
-            guard let index = track.elements.firstIndex(where: { $0.id == id }) else { continue }
-            // 只有片段才画 trim 手柄；字幕 cue 无手柄，故其边缘不得挡擦洗（与呈现路径一致）。
-            guard Self.hasClipPayload(track.elements[index]) else { return false }
-            let starts = track.elementOutputStarts()
-            let start = index < starts.count ? starts[index] : 0
-            let leadingX = viewport.viewportX(forTime: start)
-            let trailingX = leadingX
-                + LaneMetrics.width(forDuration: track.elements[index].duration, viewport: viewport)
-            let half = Self.trimHandleHalfWidth
-            return (leadingX - half ... leadingX + half).contains(location.x)
-                || (trailingX - half ... trailingX + half).contains(location.x)
-        }
-        return false
-    }
-
-    /// trim 手柄宽度（点）及其相对元素边缘的居中偏移——手柄区判定与手柄呈现共用，避免两处对不上。
+    /// trim 手柄宽度（点）及其相对元素边缘的居中偏移——手柄呈现用（两处手柄按它居中到边缘上）。
     private static let trimHandleWidth: CGFloat = 16
 
-    /// 「长按浮起」类拖动的**起手阈值**（点，与擦洗同口径）。
+    /// 「长按拾起」类拖动的**起手阈值**（点，与擦洗同口径）。
     /// **不能取 0**：`DragGesture(minimumDistance: 0)` 会把「按住不动」也算成拖动——手指的自然
-    /// 抖动被当成位移，元素立刻浮起并跟着抖（表现为「点一下就抖」）。过阈值才算真的在拖，
-    /// 浮起也随之推迟到那一刻（见 `TransientGeometry.make`）。trim 手柄另取 1（见 `trimGesture`）。
+    /// 抖动被当成位移，元素跟着抖（表现为「点一下就抖」）。浮起不在此列：它在长按完成那一刻
+    /// 就发生（见 `TransientGeometry.make`），与本阈值无关；阈值只管「跟手位移何时开始」。
+    /// trim 手柄另取 0（见 `trimGesture`）——它要的是「会话先于擦洗建立」。
     private static let dragThreshold: CGFloat = 8
     private static var trimHandleHalfWidth: CGFloat { trimHandleWidth / 2 }
 

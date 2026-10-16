@@ -14,6 +14,9 @@ struct LaneContext {
     /// 当前拖拽会话（高频，来自 L0 的手势态）。车道据此对**被拖元素**施加瞬态位移/缩放——
     /// 只改局部 SwiftUI，plan 不动（公约 §6.5）。非拖动态恒 nil。
     var drag: DragSession? = nil
+    /// 被「长按拾起」的元素 id（低频，来自 L0 的手势态）。**浮起由它（或「已真的在跟手」）决定**，
+    /// 不看会话本身——点选那一下也会建一个位移恒 0 的会话，见 `TimelineView.beginHold`。
+    var liftedElementID: UUID? = nil
 }
 
 /// 拖动中元素的瞬态几何（点）：move 的偏移、trim 的左右边缘增量。
@@ -31,22 +34,27 @@ struct TransientGeometry {
     /// 浮起放大系数（唯一来源；容器层与车道共用）。
     static let liftScale: CGFloat = 1.06
 
-    static func make(elementID: UUID, drag: DragSession?) -> TransientGeometry {
-        guard let drag else { return TransientGeometry() }
-        switch drag.kind {
-        case .moveElement(let id, _) where id == elementID:
-            // 浮起 = 「元素已离开原位」：位移非零才算真的在拖。手势层的起手阈值保证未越过阈值时
-            // 给不出非零位移，故长按不放（位移恒 0）不浮起——否则「只想点一下」也会弹一下。
-            return TransientGeometry(offsetX: drag.translation.width, offsetY: drag.translation.height,
-                                     isLifted: drag.translation != .zero)
-        case .trim(let id, let edge) where id == elementID:
-            var geometry = TransientGeometry()
-            if edge == .leading { geometry.leadingDelta = drag.translation.width }
-            else { geometry.trailingDelta = drag.translation.width }
-            return geometry
-        default:
-            return TransientGeometry()
+    static func make(elementID: UUID, drag: DragSession?, liftedID: UUID?) -> TransientGeometry {
+        var geometry = TransientGeometry()
+        var followingFinger = false
+        if let drag {
+            switch drag.kind {
+            case .moveElement(let id, _) where id == elementID:
+                geometry.offsetX = drag.translation.width
+                geometry.offsetY = drag.translation.height
+                followingFinger = drag.translation != .zero
+            case .trim(let id, let edge) where id == elementID:
+                if edge == .leading { geometry.leadingDelta = drag.translation.width }
+                else { geometry.trailingDelta = drag.translation.width }
+            default:
+                break
+            }
         }
+        // 浮起 = ①「按满时长」（`liftedID`，L0 自己数出来的，见 `TimelineView.beginHold`）
+        // 或 ②「已真的在跟手」（位移非零，兜底：① 的计时可能被撤，而拖动期间不该掉下来）。
+        // **不能只看会话**：点选那一下也会建一个位移恒 0 的会话，拿它当判据会让点选也浮起。
+        geometry.isLifted = (liftedID == elementID) || followingFinger
+        return geometry
     }
 }
 

@@ -35,7 +35,8 @@ struct VideoLane: View {
     private func elementView(element: PlanElement, start: TimeInterval,
                             window: ClosedRange<TimeInterval>) -> some View {
         // 拖动瞬态几何：trim 时伸缩内容宽度、move 时整体浮起（见末尾 modifier）。
-        let geometry = TransientGeometry.make(elementID: element.id, drag: context.drag)
+        let geometry = TransientGeometry.make(elementID: element.id, drag: context.drag,
+                                             liftedID: context.liftedElementID)
         let end = start + element.duration
         // 只渲染窗口内：元素输出区间与裁剪窗口不相交（离屏）→ 完全不建视图。
         if window.upperBound > start, window.lowerBound < end {
