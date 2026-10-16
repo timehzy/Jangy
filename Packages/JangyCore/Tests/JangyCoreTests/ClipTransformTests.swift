@@ -1,4 +1,5 @@
 import XCTest
+import CoreGraphics
 @testable import JangyCore
 
 final class ClipTransformTests: XCTestCase {
@@ -9,19 +10,49 @@ final class ClipTransformTests: XCTestCase {
         XCTAssertEqual(ClipTransform.fullScreen.centerX, 0.5)
     }
 
-    func testLeftRightHalfPresetsAreMirrored() {
-        XCTAssertEqual(ClipTransform.leftHalf.scale, 0.5)
-        XCTAssertEqual(ClipTransform.rightHalf.scale, 0.5)
-        XCTAssertEqual(ClipTransform.leftHalf.centerX + ClipTransform.rightHalf.centerX, 1.0, accuracy: 0.0001)
-        XCTAssertEqual(ClipTransform.leftHalf.centerY, ClipTransform.rightHalf.centerY)
+    func testHalfScreenSymmetry() {
+        let canvas = CGSize(width: 1080, height: 1920)
+        let left = ClipTransform.halfScreen(sourceSize: canvas, canvasSize: canvas, side: .left)
+        let right = ClipTransform.halfScreen(sourceSize: canvas, canvasSize: canvas, side: .right)
+        XCTAssertEqual(left.centerX + right.centerX, 1.0, accuracy: 0.0001)
+        XCTAssertEqual(left.centerY, right.centerY)
+        // 源已铺满画布（filledWidth == canvasWidth）时，半宽块就是 scale 0.5。
+        XCTAssertEqual(left.scale, 0.5, accuracy: 0.0001)
+        XCTAssertEqual(right.scale, 0.5, accuracy: 0.0001)
+    }
+
+    func testHalfScreenLandscapeSourceScalesToHalfWidth() {
+        let source = CGSize(width: 1280, height: 720)
+        let canvas = CGSize(width: 1080, height: 1920)
+        let left = ClipTransform.halfScreen(sourceSize: source, canvasSize: canvas, side: .left)
+        XCTAssertEqual(left.scale, 0.1582, accuracy: 0.001)
+
+        // 出来的块宽就是画布一半宽。
+        let fill = max(canvas.width / source.width, canvas.height / source.height)
+        let filledWidth = source.width * fill
+        XCTAssertEqual(left.scale * filledWidth, 0.5 * canvas.width, accuracy: 0.5)
+    }
+
+    func testHalfScreenImageUsesCanvasAsSource() {
+        // 图片经 StillImagePreparer 预合成到画布（letterbox），填充后尺寸即画布 → scale 0.5。
+        let asset = AssetItem(kind: .image, fileName: "i.png")
+        let transform = ClipTransform.halfScreen(for: asset, preset: .reelsAndShorts, side: .left)
+        XCTAssertEqual(transform.scale, 0.5, accuracy: 0.0001)
+    }
+
+    func testHalfScreenDegenerateSourceFallsBackToFullScreen() {
+        let transform = ClipTransform.halfScreen(
+            sourceSize: CGSize(width: 0, height: 0),
+            canvasSize: CGSize(width: 1080, height: 1920), side: .left)
+        XCTAssertEqual(transform, .fullScreen)
     }
 
     func testClipRoundTripsWithTransform() throws {
         var clip = PlanClip(assetID: UUID(), source: .video(0...3))
-        clip.transform = .rightHalf
+        clip.transform = ClipTransform(centerX: 0.25, centerY: 0.5, scale: 0.1582)
         let data = try JSONEncoder().encode(clip)
         let decoded = try JSONDecoder().decode(PlanClip.self, from: data)
-        XCTAssertEqual(decoded.transform, .rightHalf)
+        XCTAssertEqual(decoded.transform, ClipTransform(centerX: 0.25, centerY: 0.5, scale: 0.1582))
     }
 
     func testClipWithoutTransformDecodesAsNil() throws {

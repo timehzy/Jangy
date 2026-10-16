@@ -1,15 +1,12 @@
+import CoreGraphics
 import Foundation
 
 /// 元素在成片画布上的布局变换（归一化坐标）。元素 `transform == nil` 表示全屏（恒等）。
 /// 与 Kadr `Transform` 语义对齐但独立定义——L2 不能 import Kadr（公约 §1）。
 ///
-/// **Kadr 的 `scale` 是均匀缩放**（`Double`，非 `CGSize`），故「半屏」= 整体缩到 0.5
-/// （宽高各半、垂直居中）——呈现为「两块半尺寸画面左右并排 + 上下黑边」，
-/// 不是边到边的裁切式分屏。旋转 / 锚点留 backlog（Kadr 支持，本期不用）。
-///
-/// 前提：`scale` 作用在 aspect-fill 后、裁切前的内容上，只有素材宽高比不宽于画布时
-/// 「缩到 0.5」才等于「画面缩到半尺寸」。横屏素材放进竖屏画布时会被撑满宽度，缩 0.5
-/// 后仍是满宽横带（左右并排会叠死）——此边界记入 backlog。
+/// **Kadr 的 `scale` 是均匀缩放**（`Double`，非 `CGSize`），且作用在 aspect-fill 之后、
+/// 裁切之前的内容上。所以「半屏」不是恒定的 0.5——要得到半宽块得按素材宽高比换算
+/// `scale`（见 `halfScreen(...)`）。旋转 / 锚点留 backlog（Kadr 支持，本期不用）。
 public struct ClipTransform: Codable, Equatable, Sendable {
     /// 画布上的归一化中心（0...1，原点左上）。
     public var centerX: Double
@@ -28,8 +25,37 @@ public struct ClipTransform: Codable, Equatable, Sendable {
     }
 
     public static let fullScreen = ClipTransform()
-    /// 左半屏：缩到 0.5、中心在画布左侧 1/4。
-    public static let leftHalf = ClipTransform(centerX: 0.25, centerY: 0.5, scale: 0.5)
-    /// 右半屏。
-    public static let rightHalf = ClipTransform(centerX: 0.75, centerY: 0.5, scale: 0.5)
+}
+
+extension ClipTransform {
+    public enum Half: Sendable { case left, right }
+
+    /// 左右分屏：元素等比缩放到**画布一半宽**、垂直居中，落在指定一侧。
+    ///
+    /// 素材先按「铺满画布」（aspect-fill）落到画布，Kadr 的 transform 作用于**这之后**——
+    /// 所以要得到「半宽块」，scale = 0.5 × 画布宽 / 填充后内容宽，而**不是**恒定的 0.5。
+    /// （横屏素材填充后远宽于画布，恒定 0.5 会得到整幅宽色带而非半屏列——见 known-pitfalls。）
+    public static func halfScreen(sourceSize: CGSize, canvasSize: CGSize, side: Half) -> ClipTransform {
+        guard sourceSize.width > 0, sourceSize.height > 0,
+              canvasSize.width > 0, canvasSize.height > 0 else { return .fullScreen }
+        let fill = max(canvasSize.width / sourceSize.width, canvasSize.height / sourceSize.height)
+        let filledWidth = sourceSize.width * fill
+        let scale = 0.5 * canvasSize.width / filledWidth
+        return ClipTransform(centerX: side == .left ? 0.25 : 0.75, centerY: 0.5, scale: scale)
+    }
+
+    /// 由素材与预设直接算分屏预设（调用方拿得到 asset + plan.preset 时用这个）。
+    /// 图片先经 StillImagePreparer 预合成到画布（等比 letterbox），故其填充后尺寸就是画布本身。
+    public static func halfScreen(for asset: AssetItem, preset: OutputPreset, side: Half) -> ClipTransform {
+        let canvas = preset.renderSize
+        let sourceSize: CGSize
+        switch asset.kind {
+        case .image:
+            sourceSize = canvas
+        default:
+            sourceSize = CGSize(width: Double(asset.pixelWidth ?? Int(canvas.width)),
+                                height: Double(asset.pixelHeight ?? Int(canvas.height)))
+        }
+        return halfScreen(sourceSize: sourceSize, canvasSize: canvas, side: side)
+    }
 }

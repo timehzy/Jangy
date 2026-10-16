@@ -37,7 +37,7 @@ public enum ExportVerifier {
         let naturalSize = try await track.load(.naturalSize)
         let transform = try await track.load(.preferredTransform)
         let renderSize = naturalSize.applying(transform)
-        let expected = preset.expectedResolution
+        let expected = preset.renderSize
         guard abs(abs(renderSize.width) - expected.width) <= 2,
               abs(abs(renderSize.height) - expected.height) <= 2 else {
             throw Failure.passthroughSuspected(
@@ -70,9 +70,9 @@ public enum ExportVerifier {
 }
 
 extension OutputPreset {
-    /// 导出后校验用：渲染分辨率（与 Kadr.Preset 对齐）。
+    /// 渲染分辨率（与 Kadr.Preset 对齐）。导出后校验用；也是分屏预设算 scale 的画布尺寸。
     /// 显式 switch：新增 OutputPreset case 时此处必须编译报错。
-    var expectedResolution: CGSize {
+    var renderSize: CGSize {
         switch self {
         case .reelsAndShorts: return CGSize(width: 1080, height: 1920)
         }
