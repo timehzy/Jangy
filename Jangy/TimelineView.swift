@@ -123,7 +123,7 @@ struct TimelineView: View {
                 .onTapGesture { selection = nil }
             ForEach(Array(track.elements.enumerated()), id: \.element.id) { index, element in
                 if case .content = element.content {
-                    elementInteraction(element: element, track: track,
+                    elementInteraction(element: element,
                                        start: index < starts.count ? starts[index] : 0)
                 }
             }
@@ -133,19 +133,20 @@ struct TimelineView: View {
 
     /// 单个元素的交互层：透明命中层（点选 + 长按移动，跟随拖动态位移到手指下）+ 选中框 + trim 手柄。
     /// 位置由 `viewportX(forTime:)` + 拖动瞬态几何推出，与车道内容同源换算。
-    private func elementInteraction(element: PlanElement, track: PlanTrack,
-                                    start: TimeInterval) -> some View {
+    /// 选中框 / trim 手柄只给**可裁剪的片段**（payload 为 `PlanClip`）——字幕 cue 可选中/移动，但无 trim。
+    private func elementInteraction(element: PlanElement, start: TimeInterval) -> some View {
         let geometry = TransientGeometry.make(elementID: element.id, drag: drag)
         let baseWidth = LaneMetrics.width(forDuration: element.duration, viewport: viewport)
         let width = max(1, baseWidth - geometry.leadingDelta + geometry.trailingDelta)
         let x = viewport.viewportX(forTime: start) + geometry.leadingDelta + geometry.offsetX
+        let isClip = Self.hasClipPayload(element)
         return ZStack(alignment: .leading) {
             Color.clear
                 .frame(width: width, height: LaneMetrics.height)
                 .contentShape(Rectangle())
                 .onTapGesture { selection = element.id }
-                .gesture(moveGesture(element: element, track: track))
-            if selection == element.id {
+                .gesture(moveGesture(element: element))
+            if isClip, selection == element.id {
                 RoundedRectangle(cornerRadius: LaneMetrics.cornerRadius)
                     .stroke(Color.accentColor, lineWidth: 2)
                     .frame(width: width, height: LaneMetrics.height)
@@ -158,6 +159,12 @@ struct TimelineView: View {
         }
         .frame(width: width, height: LaneMetrics.height, alignment: .leading)
         .offset(x: x, y: geometry.offsetY)
+    }
+
+    /// 元素的 payload 是否是片段（可 trim 的唯一类型）。字幕等其它 payload 不产生 trim 手柄。
+    private static func hasClipPayload(_ element: PlanElement) -> Bool {
+        guard case .content(let payload) = element.content else { return false }
+        return payload.value is PlanClip
     }
 
     /// trim 手柄：竖条 + 内侧白条，命中区比视觉略宽（`frame(width: 16)`）。
@@ -175,7 +182,7 @@ struct TimelineView: View {
     /// 长按元素浮起后拖动 = 移动 / 换轨。`LongPressGesture` 成功即浮起（translation 0），
     /// 随后 `DragGesture` 累计位移；抬手 `resolve` → 一个原子编辑。
     /// 拖动全程只写 `@GestureState drag`（经 `.updating`），plan 不动。
-    private func moveGesture(element: PlanElement, track: PlanTrack) -> some Gesture {
+    private func moveGesture(element: PlanElement) -> some Gesture {
         let kind = GestureRouter.liftSession(for: .element(id: element.id), plan: model.store.plan)?.kind
         return LongPressGesture(minimumDuration: 0.25)
             .sequenced(before: DragGesture(minimumDistance: 0))
@@ -301,24 +308,41 @@ struct TimelineView: View {
     /// 单指横向拖 = 滚动 = 擦洗。与车道纵向 ScrollView 并存（`.simultaneousGesture`）：
     /// 用**累计**位移判断横向为主（逐帧差分会因抖动丢动作），纵向留给 ScrollView。
     /// 播放头 = 起手位置 − 累计横向位移 / pps；起手位置存 `@GestureState`（结束/取消自动复位）。
-    /// **拖拽会话或双指缩放进行中一律让位**：元素 trim / 移动、轨道重排都不该顺带擦洗。
+    /// **让位有两层**：① `drag/magnifyBase` 非空（编辑拖拽/缩放进行中）；
+    /// ② **结构性**：起手点落在选中元素的交互区（选中框/手柄）内就不擦洗——这不依赖
+    /// `drag` 的写入时序，故快速甩动一帧越过 trim 与擦洗两个阈值也不会误擦。
     private var scrubGesture: some Gesture {
         DragGesture(minimumDistance: 8)
             .updating($scrubBase) { _, state, _ in
                 if state == nil { state = viewport.playheadTime }
             }
             .onChanged { value in
-                guard drag == nil, magnifyBase == nil else { return }   // 编辑拖拽/缩放期间不擦洗
+                guard canScrub(from: value.startLocation) else { return }
                 guard let base = scrubBase else { return }
                 guard abs(value.translation.width) >= abs(value.translation.height) else { return }
                 let target = base - TimeInterval(value.translation.width / viewport.pointsPerSecond)
                 viewport.setPlayhead(target)
                 model.scrubTo(viewport.playheadTime)
             }
-            .onEnded { _ in
-                guard drag == nil, magnifyBase == nil else { return }   // 编辑拖拽/缩放中不做收尾 seek
+            .onEnded { value in
+                guard canScrub(from: value.startLocation) else { return }
                 model.scrubEnded()   // 补最终 seek；player 仍暂停，不会回跳
             }
+    }
+
+    /// 擦洗是否放行：编辑拖拽/缩放进行中、或起手落在**选中元素交互区**内——都不擦洗。
+    private func canScrub(from startLocation: CGPoint) -> Bool {
+        guard drag == nil, magnifyBase == nil else { return false }
+        guard let id = selection else { return true }
+        for track in model.store.plan.tracks {
+            guard let index = track.elements.firstIndex(where: { $0.id == id }) else { continue }
+            let starts = track.elementOutputStarts()
+            let start = index < starts.count ? starts[index] : 0
+            let x = viewport.viewportX(forTime: start)
+            let width = LaneMetrics.width(forDuration: track.elements[index].duration, viewport: viewport)
+            return !(x - 8 ... x + width + 8).contains(startLocation.x)
+        }
+        return true
     }
 
     /// 双指捏合的起手基准：手势开始那一刻的 pps 与累计 magnification。

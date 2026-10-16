@@ -16,23 +16,27 @@ struct LaneContext {
     var drag: DragSession? = nil
 }
 
-/// 拖动中元素的瞬态几何（点）：move 的偏移/缩放、trim 的左右边缘增量。
-/// 选中框/手柄（容器层）与车道内容都用它换算，保证图层与手势一致；plan 不动。
+/// 拖动中元素的瞬态几何（点）：move 的偏移、trim 的左右边缘增量。
+/// 选中框/手柄（容器层）与车道内容都用它换算（同源），保证图层与手势一致；plan 不动。
 struct TransientGeometry {
     var offsetX: CGFloat = 0
     var offsetY: CGFloat = 0
-    var scale: CGFloat = 1
     /// 左边缘位移（点，右正）：>0 = 前沿内收（trim 起手侧）。
     var leadingDelta: CGFloat = 0
     /// 右边缘位移（点，右正）：>0 = 后沿外扩（trim 收尾侧）。
     var trailingDelta: CGFloat = 0
+    /// 是否处于「移动浮起」态（决定放大 + 阴影；trim 不是浮起）。
+    var isLifted = false
+
+    /// 浮起放大系数（唯一来源；容器层与车道共用）。
+    static let liftScale: CGFloat = 1.06
 
     static func make(elementID: UUID, drag: DragSession?) -> TransientGeometry {
         guard let drag else { return TransientGeometry() }
         switch drag.kind {
         case .moveElement(let id, _) where id == elementID:
             return TransientGeometry(offsetX: drag.translation.width, offsetY: drag.translation.height,
-                                     scale: 1.06)
+                                     isLifted: true)
         case .trim(let id, let edge) where id == elementID:
             var geometry = TransientGeometry()
             if edge == .leading { geometry.leadingDelta = drag.translation.width }
@@ -44,16 +48,15 @@ struct TransientGeometry {
     }
 }
 
-/// 被拖元素的浮起反馈：跟随手指位移 + 放大 + 阴影。只读 drag 会话，plan 不动。
+/// 被拖元素的浮起反馈：跟随手指位移 + 放大 + 阴影。只读瞬态几何，plan 不动。
 struct ElementLiftModifier: ViewModifier {
-    let elementID: UUID
-    let drag: DragSession?
+    let geometry: TransientGeometry
 
     @ViewBuilder func body(content: Content) -> some View {
-        if let drag, case .moveElement(let id, _) = drag.kind, id == elementID {
+        if geometry.isLifted {
             content
-                .offset(x: drag.translation.width, y: drag.translation.height)
-                .scaleEffect(1.06)
+                .offset(x: geometry.offsetX, y: geometry.offsetY)
+                .scaleEffect(TransientGeometry.liftScale)
                 .shadow(color: .black.opacity(0.4), radius: 6)
                 .zIndex(1)
         } else {

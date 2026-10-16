@@ -23,7 +23,6 @@ struct VideoLane: View {
             ForEach(Array(track.elements.enumerated()), id: \.element.id) { index, element in
                 let start = index < starts.count ? starts[index] : 0
                 elementView(element: element, start: start, visible: visible)
-                    .modifier(ElementLiftModifier(elementID: element.id, drag: context.drag))
             }
         }
     }
@@ -31,36 +30,43 @@ struct VideoLane: View {
     @ViewBuilder
     private func elementView(element: PlanElement, start: TimeInterval,
                             visible: ClosedRange<TimeInterval>) -> some View {
+        // 拖动瞬态几何：trim 时伸缩内容宽度、move 时整体浮起（见末尾 modifier）。
+        let geometry = TransientGeometry.make(elementID: element.id, drag: context.drag)
         let end = start + element.duration
         // 只渲染可见区：元素输出区间与视口不相交（离屏）→ 完全不建视图。
         if visible.upperBound > start, visible.lowerBound < end {
-            switch element.content {
-            case .gap:
-                // 空档：纯黑占位条（链保持连续）。
-                Rectangle().fill(.black)
-                    .frame(width: LaneMetrics.width(forDuration: element.duration, viewport: context.viewport),
-                           height: LaneMetrics.height)
-                    .offset(x: context.viewport.contentX(forTime: start))
-            case .content(let payload):
-                if let clip = payload.value as? PlanClip,
-                   let asset = context.plan.asset(withID: clip.assetID) {
-                    // `.task(id:)` 只在「档位 + 可见桶」变化时重取（见 StripTaskID）。
-                    VideoElementStrip(clip: clip, asset: asset, element: element,
-                                      start: start, visible: visible, context: context)
-                } else {
-                    // 素材未登记 / payload 类型不符：灰条兜底，不崩。
-                    placeholder(element: element, start: start)
+            Group {
+                switch element.content {
+                case .gap:
+                    // 空档：纯黑占位条（链保持连续）。不可拖，几何恒为恒等。
+                    Rectangle().fill(.black)
+                        .frame(width: LaneMetrics.width(forDuration: element.duration, viewport: context.viewport),
+                               height: LaneMetrics.height)
+                        .offset(x: context.viewport.contentX(forTime: start))
+                case .content(let payload):
+                    if let clip = payload.value as? PlanClip,
+                       let asset = context.plan.asset(withID: clip.assetID) {
+                        // `.task(id:)` 只在「档位 + 可见桶」变化时重取（见 StripTaskID）。
+                        VideoElementStrip(clip: clip, asset: asset, element: element,
+                                          start: start, visible: visible, context: context, geometry: geometry)
+                    } else {
+                        // 素材未登记 / payload 类型不符：灰条兜底，不崩。
+                        placeholder(element: element, start: start, geometry: geometry)
+                    }
                 }
             }
+            .modifier(ElementLiftModifier(geometry: geometry))
         }
     }
 
-    private func placeholder(element: PlanElement, start: TimeInterval) -> some View {
-        RoundedRectangle(cornerRadius: LaneMetrics.cornerRadius)
+    private func placeholder(element: PlanElement, start: TimeInterval,
+                             geometry: TransientGeometry) -> some View {
+        let baseWidth = LaneMetrics.width(forDuration: element.duration, viewport: context.viewport)
+        return RoundedRectangle(cornerRadius: LaneMetrics.cornerRadius)
             .fill(Color(.secondarySystemFill))
-            .frame(width: LaneMetrics.width(forDuration: element.duration, viewport: context.viewport),
+            .frame(width: max(1, baseWidth - geometry.leadingDelta + geometry.trailingDelta),
                    height: LaneMetrics.height)
-            .offset(x: context.viewport.contentX(forTime: start))
+            .offset(x: context.viewport.contentX(forTime: start) + geometry.leadingDelta)
     }
 }
 
@@ -73,6 +79,8 @@ private struct VideoElementStrip: View {
     let start: TimeInterval
     let visible: ClosedRange<TimeInterval>
     let context: LaneContext
+    /// 拖动瞬态几何（trim 时伸缩本条宽度，与选中框同源）。
+    let geometry: TransientGeometry
 
     @Environment(\.displayScale) private var displayScale
     @State private var images: [Image?] = []
@@ -85,7 +93,9 @@ private struct VideoElementStrip: View {
         // 元素内可见子区间（输出偏移，秒）：把视口可见区夹到本元素区间。
         let lower = max(0, visible.lowerBound - start)
         let upper = min(element.duration, visible.upperBound - start)
-        let stripWidth = max(1, CGFloat(max(0, upper - lower)) * pps)
+        // trim 预览：按瞬态增量伸缩条宽 / 平移左缘，与选中框一致。
+        let stripWidth = max(1, CGFloat(max(0, upper - lower)) * pps
+                                - geometry.leadingDelta + geometry.trailingDelta)
         let level = ThumbnailLevel.level(forPointsPerSecond: pps)
         let stripID = StripTaskID(
             elementID: element.id, level: level,
@@ -112,7 +122,7 @@ private struct VideoElementStrip: View {
         }
         .frame(width: stripWidth, height: LaneMetrics.height)
         .clipped()
-        .offset(x: context.viewport.contentX(forTime: start + lower))
+        .offset(x: context.viewport.contentX(forTime: start + lower) + geometry.leadingDelta)
         .task(id: stripID) {
             // debounce：手势期间可见桶连续变化会不断重启本任务，睡一小会儿把中间态吃掉。
             try? await Task.sleep(for: .milliseconds(120))

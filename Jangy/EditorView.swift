@@ -90,7 +90,7 @@ struct EditorView: View {
     }
 
     /// 改选中片段的 payload（按 id 跨轨定位，一次 model.edit = 单撤销步）。
-    private func updateSelectedClip(_ mutate: @escaping (inout PlanClip) -> Void) {
+    private func updateSelectedClip(_ mutate: (inout PlanClip) -> Void) {
         guard let id = selection else { return }
         model.edit { plan in
             for ti in plan.tracks.indices {
@@ -137,7 +137,7 @@ struct EditorView: View {
                    let transform = ClipTransform.halfScreen(for: asset, preset: plan.preset, side: side) {
                     clip.transform = transform
                 } else {
-                    clip.transform = nil   // 全屏（或算不出时也回全屏）
+                    clip.transform = nil   // 全屏
                 }
                 plan.tracks[ti].elements[ei].content = .content(TrackPayload(clip))
                 return

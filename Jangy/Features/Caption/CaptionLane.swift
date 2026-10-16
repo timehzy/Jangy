@@ -23,16 +23,20 @@ struct CaptionLane: View {
             ForEach(Array(track.elements.enumerated()), id: \.element.id) { index, element in
                 let start = index < starts.count ? starts[index] : 0
                 if visible.upperBound > start, visible.lowerBound < start + element.duration {
-                    cueBar(element: element, start: start)
-                        .modifier(ElementLiftModifier(elementID: element.id, drag: context.drag))
+                    let geometry = TransientGeometry.make(elementID: element.id, drag: context.drag)
+                    cueBar(element: element, start: start, geometry: geometry)
+                        .modifier(ElementLiftModifier(geometry: geometry))
                 }
             }
         }
     }
 
     @ViewBuilder
-    private func cueBar(element: PlanElement, start: TimeInterval) -> some View {
-        let width = LaneMetrics.width(forDuration: element.duration, viewport: context.viewport)
+    private func cueBar(element: PlanElement, start: TimeInterval,
+                        geometry: TransientGeometry) -> some View {
+        let baseWidth = LaneMetrics.width(forDuration: element.duration, viewport: context.viewport)
+        // 字幕不可 trim（无手柄），几何的 leading/trailing 恒 0；move 时浮起由 modifier 处理。
+        let width = max(1, baseWidth - geometry.leadingDelta + geometry.trailingDelta)
         let barHeight: CGFloat = 28
         let text: String? = {
             if case .content(let payload) = element.content,
@@ -51,7 +55,7 @@ struct CaptionLane: View {
                         .padding(.horizontal, 5)
                 }
             }
-            .offset(x: context.viewport.contentX(forTime: start),
+            .offset(x: context.viewport.contentX(forTime: start) + geometry.leadingDelta,
                     y: (LaneMetrics.height - barHeight) / 2)
     }
 }
