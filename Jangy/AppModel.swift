@@ -17,6 +17,9 @@ final class AppModel {
     private let projectStore: ProjectStore
     private var autosaveTask: Task<Void, Never>?
 
+    /// 时间线视口状态（高频，不进 EditStore）。App 侧唯一持有者。
+    let viewport = TimelineViewportState()
+
     var exportProgress: Double?
     var exportMessage: String?
     var lastIssues: [ValidationIssue]?
@@ -39,6 +42,8 @@ final class AppModel {
         self.player = PlayerController(store: store, resolver: resolver)
         self.projectStore = projectStore
         self.projectMessage = restoreNotice
+        // 播放器建好后同步初始视口时长（与 afterPlanMutation 同一写入点口径）。
+        viewport.contentDuration = store.plan.renderedDuration
         verifyIntegrity()
     }
 
@@ -67,11 +72,28 @@ final class AppModel {
         }
     }
 
-    /// plan 变更后的统一下行联动：校验提示清零 + 预览重建 + 防抖落盘。
+    /// plan 变更后的统一下行联动：校验提示清零 + 视口时长同步 + 预览重建 + 防抖落盘。
     private func afterPlanMutation() {
         lastIssues = nil
+        viewport.contentDuration = store.plan.renderedDuration
         player.rebuild()
         scheduleAutosave()
+    }
+
+    /// 时间线擦洗：落播放头 + seek 播放器（节流）+ 暂停（剪映同款：擦洗即暂停）。
+    private var lastSeek = Date.distantPast
+    func scrubTo(_ time: TimeInterval) {
+        viewport.setPlayhead(time)
+        player.pauseForScrub()
+        guard Date().timeIntervalSince(lastSeek) > 0.05 else { return }
+        lastSeek = Date()
+        player.seek(to: time)
+    }
+
+    /// 擦洗结束：补一次**非节流** seek，把播放器对齐到最终播放头。
+    /// 否则节流可能漏掉末帧 seek，松手后轮询把播放头拉回旧 seek 位置（bounce-back）。
+    func scrubEnded() {
+        player.seek(to: viewport.playheadTime)
     }
 
     func edit(_ mutate: (inout EditPlan) -> Void) {
@@ -248,6 +270,19 @@ final class PlayerController {
         if let player { wantsPlaying = player.rate > 0 }   // 尚无实例（未装载完）时保留原意图
         isPageActive = false
         applyDesired()
+    }
+
+    /// 时间线擦洗导致的暂停：把「用户希望暂停」写入意图并收敛（擦洗即暂停）。
+    /// 走意图单点而非直接 `player.pause()`，这样跨页返回时不会被 `pageDidAppear` 重新起播。
+    func pauseForScrub() {
+        wantsPlaying = false
+        applyDesired()
+    }
+
+    /// 擦洗定位：seek 播放器并同步 `currentTime`（避免 100ms 轮询延迟带来的播放头回跳）。
+    func seek(to time: TimeInterval) {
+        player?.seek(to: CMTime(seconds: time, preferredTimescale: 600))
+        currentTime = time
     }
 
     /// 单点收敛：把意图落到当前实例上。

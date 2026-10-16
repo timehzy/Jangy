@@ -1,153 +1,105 @@
-import SwiftUI
 import JangyCore
+import SwiftUI
 
-/// 时间线（简化版）：水平排布、每段固定宽度。点片段弹操作（裁剪/变速/转场/删除）。
-/// 「＋」浮动在可见区域右缘（不随轨道滚动），点击进素材库追加素材。
-/// 精细化（缩放/拖拽排序/可变宽度）留给时间线专项。
+/// 时间线：可拖分界下方的多轨视图（容器骨架）。水平位置由 `viewport.scrollOffset` 驱动
+/// （非 ScrollView 横向滚动）——单指横向拖 = 滚动 = 擦洗（同一手势）；纵向拖交给车道 ScrollView。
+/// 车道内容（缩略图 / 片段块 / 选择）留给 Task 8（TrackLaneView），本步用占位块。
 struct TimelineView: View {
     let model: AppModel
+    /// 由分界拖动决定的窗格高度。
+    var height: CGFloat
     var onAdd: () -> Void
 
-    @State private var actionIndex: Int?
+    @State private var lastTranslation: CGFloat = 0
+    @State private var lastVertical: CGFloat = 0
+    @State private var isScrubbing = false
 
-    /// 主轨元素（v4：片段在主轨元素里；删除会留下等长 gap 元素）。
-    private var primaryElements: [PlanElement] {
-        model.store.plan.primaryTrack?.elements ?? []
-    }
-
-    /// 主轨第 index 个元素解出的 clip（gap / 越界 → nil）。
-    private func clip(_ index: Int) -> PlanClip? {
-        guard primaryElements.indices.contains(index),
-              case .content(let payload) = primaryElements[index].content else { return nil }
-        return payload.value as? PlanClip
-    }
+    private var viewport: TimelineViewportState { model.viewport }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            // 总时长用实测口径（dissolve 重叠扣除），与导出产物时长一致
-            Text("总时长 \(model.store.plan.renderedDuration.formatted(.number.precision(.fractionLength(1))))s")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal)
+        GeometryReader { geo in
+            ZStack(alignment: .topLeading) {
+                contentLayer(viewportWidth: geo.size.width)
+                PlayheadOverlay(time: viewport.playheadTime)
+                    .frame(maxWidth: .infinity, alignment: .center)
+            }
+            // 固定为视口尺寸：内容层比视口宽，靠它兜住 ZStack 尺寸，
+            // 否则 maxWidth: .infinity 会居中到「内容宽度」而非视口中央。
+            .frame(width: geo.size.width, height: geo.size.height, alignment: .topLeading)
+            .clipped()
+            .contentShape(Rectangle())
+            .simultaneousGesture(scrubGesture)
+            .overlay(alignment: .bottomTrailing) { addButton }
+            .onAppear { viewport.viewportWidth = geo.size.width }
+            .onChange(of: geo.size.width) { _, w in viewport.viewportWidth = w }
+        }
+        .frame(height: height)
+        // 播放推进（非擦洗时）驱动播放头；擦洗期间由手势自行更新，避免相互打架。
+        .onChange(of: model.player.currentTime) { _, t in
+            if !isScrubbing { viewport.setPlayhead(t) }
+        }
+    }
 
-            ZStack(alignment: .trailing) {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 4) {
-                        ForEach(Array(primaryElements.enumerated()), id: \.element.id) { index, element in
-                            elementBlock(index: index, element: element)
-                        }
+    /// 内容层：标尺 + 车道，整体按 `-scrollOffset` 平移，宽度 = 视口宽 + 内容宽。
+    private func contentLayer(viewportWidth: CGFloat) -> some View {
+        VStack(spacing: 0) {
+            RulerView(viewport: viewport).frame(height: 24)
+            ScrollView(.vertical) {
+                VStack(spacing: 2) {
+                    // Task 8 换成 TrackLaneView；本步每条轨一条占位带（按内容宽铺满，验证滚动/擦洗）。
+                    ForEach(model.store.plan.tracks) { _ in
+                        Color(.secondarySystemFill)
+                            .frame(width: contentWidth, height: 56)
                     }
-                    .padding(.horizontal)
-                    .padding(.trailing, 56)  // 给浮动＋让位
                 }
-
-                Button(action: onAdd) {
-                    Image(systemName: "plus")
-                        .font(.body.bold())
-                        .frame(width: 40, height: 40)
-                        .background(Color.accentColor, in: Circle())
-                        .foregroundStyle(.white)
-                        .shadow(radius: 3)
-                }
-                .padding(.trailing, 8)
-                .buttonStyle(.plain)
-                // Agent 运行中禁用：quick-add 上轨会并入 Agent 撤销组
-                .disabled(model.agent.isRunning)
+                .padding(.leading, viewportWidth / 2)   // 半视口留白，让 t=0 落在视口中央
+                .padding(.trailing, viewportWidth / 2)
             }
         }
-        .padding(.vertical, 4)
-        .confirmationDialog("片段 \((actionIndex ?? 0) + 1)", isPresented: actionBinding, titleVisibility: .visible) {
-            Button("裁剪") { if let i = actionIndex { toggleTrim(i) } }
-            Button("变速") { if let i = actionIndex { cycleSpeed(i) } }
-            if let i = actionIndex, i < primaryElements.count - 1, let c = clip(i) {
-                Button(c.transitionAfter == nil ? "加转场" : "去转场") { toggleTransition(i) }
-            }
-            Button("删除", role: .destructive) { if let i = actionIndex { delete(i) } }
-            Button("取消", role: .cancel) {}
-        }
+        .frame(width: viewportWidth + contentWidth, alignment: .leading)
+        .offset(x: -viewport.scrollOffset)
     }
 
-    @ViewBuilder
-    private func elementBlock(index: Int, element: PlanElement) -> some View {
-        if let clip = clip(index) {
-            clipBlock(index: index, clip: clip)
-        } else {
-            // 删除留下的空档：占位显示，保留时长
-            Text("空档\n\(element.duration.formatted(.number.precision(.fractionLength(1))))s")
-                .font(.caption2)
-                .multilineTextAlignment(.center)
-                .foregroundStyle(.secondary)
-                .frame(width: 72, height: 56)
-                .background(Color(.tertiarySystemFill), in: RoundedRectangle(cornerRadius: 8))
-        }
+    /// 内容带宽度（点）= 时长 × px/s。
+    private var contentWidth: CGFloat {
+        CGFloat(viewport.contentDuration) * viewport.pointsPerSecond
     }
 
-    private func clipBlock(index: Int, clip: PlanClip) -> some View {
-        Button { actionIndex = index } label: {
-            VStack(spacing: 2) {
-                Text(displayName(for: clip))
-                    .font(.caption2)
-                    .lineLimit(1)
-                Text("\(clip.outputDuration.formatted(.number.precision(.fractionLength(1))))s · \(clip.speed.rate.formatted(.number.precision(.fractionLength(2))))x")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                if clip.transitionAfter != nil {
-                    Text("⇄ 转场").font(.caption2).foregroundStyle(Color.accentColor)
-                }
-            }
-            .frame(width: 72, height: 56)
-            .background(Color(.secondarySystemFill), in: RoundedRectangle(cornerRadius: 8))
+    private var addButton: some View {
+        Button(action: onAdd) {
+            Image(systemName: "plus")
+                .font(.body.bold())
+                .frame(width: 36, height: 36)
+                .background(Color.accentColor, in: Circle())
+                .foregroundStyle(.white)
+                .shadow(radius: 3)
         }
+        .padding(8)
         .buttonStyle(.plain)
-        // Agent 运行中禁用：分组期间手动编辑会并入 Agent 撤销组
+        // Agent 运行中禁用：quick-add 上轨会并入 Agent 撤销组
         .disabled(model.agent.isRunning)
     }
 
-    private var actionBinding: Binding<Bool> {
-        Binding(get: { actionIndex != nil }, set: { if !$0 { actionIndex = nil } })
-    }
-
-    /// 片段标题：素材登记表里的 displayName；登记项缺失时兜底显示 ID 前 8 位
-    private func displayName(for clip: PlanClip) -> String {
-        model.store.plan.asset(withID: clip.assetID)?.displayName
-            ?? String(clip.assetID.uuidString.prefix(8))
-    }
-
-    private func toggleTrim(_ index: Int) {
-        model.edit { plan in
-            guard let clip = clip(index) else { return }
-            switch clip.source {
-            case .video(let range):
-                plan.updatePrimaryClip(at: index) { $0.source = .video(range.lowerBound == 0 ? 0.5...2.5 : 0...3) }
-            case .still:
-                plan.updatePrimaryClip(at: index) { $0.source = .still(duration: 2.0) }
+    /// 单指横向拖 = 滚动 = 擦洗。与车道纵向 ScrollView 并存（`.simultaneousGesture`）：
+    /// 逐帧比较横/纵位移，**横向为主才算擦洗**，纵向留给 ScrollView，两者互不抢。
+    private var scrubGesture: some Gesture {
+        DragGesture(minimumDistance: 8)
+            .onChanged { value in
+                let dx = value.translation.width - lastTranslation
+                let dy = value.translation.height - lastVertical
+                lastTranslation = value.translation.width
+                lastVertical = value.translation.height
+                guard abs(dx) >= abs(dy) else { return }
+                isScrubbing = true
+                viewport.scrub(by: dx)
+                model.scrubTo(viewport.playheadTime)
             }
-        }
-    }
-
-    private func cycleSpeed(_ index: Int) {
-        model.edit { plan in
-            guard let current = clip(index)?.speed.rate else { return }
-            let next: Double = current == 1.0 ? 0.5 : (current == 0.5 ? 2.0 : 1.0)
-            plan.updatePrimaryClip(at: index) { $0.speed = .flat(next) }
-        }
-    }
-
-    private func toggleTransition(_ index: Int) {
-        model.edit { plan in
-            guard let clip = clip(index) else { return }
-            plan.updatePrimaryClip(at: index) {
-                $0.transitionAfter = clip.transitionAfter == nil ? .dissolve(duration: 0.5) : nil
+            .onEnded { _ in
+                lastTranslation = 0
+                lastVertical = 0
+                let wasScrubbing = isScrubbing
+                isScrubbing = false
+                if wasScrubbing { model.scrubEnded() }   // 补最终 seek，防松手回跳
             }
-        }
-    }
-
-    private func delete(_ index: Int) {
-        model.edit { plan in
-            guard let ti = plan.tracks.firstIndex(where: { $0.id == plan.primaryTrackID }),
-                  index < plan.tracks[ti].elements.count else { return }
-            // 走核心操作（删除 = 留 gap；不变式与转场归一化由 EditStore.apply 统一处理）
-            TrackOperations.removeElement(plan.tracks[ti].elements[index].id, in: &plan)
-        }
     }
 }

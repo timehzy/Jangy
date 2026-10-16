@@ -14,6 +14,13 @@ struct EditorView: View {
     @State private var showRename = false
     @State private var renameText = ""
 
+    /// 时间线窗格高度（预览 / 时间线分界的拖动量）；档位由屏幕高度推导，见 snapLevels。
+    @State private var timelineHeight: CGFloat = 0
+    /// 页面可用高度（GeometryReader 回填），拖动与吸附档位都据此推导。
+    @State private var screenHeight: CGFloat = 0
+    /// 分界拖动起点高度（首次 onChanged 时锁定，避免逐帧累加漂移）。
+    @State private var dividerBaseHeight: CGFloat?
+
     init(model: AppModel, libraryModel: LibraryModel, projectName: String) {
         self._model = State(initialValue: model)
         self._libraryModel = State(initialValue: libraryModel)
@@ -28,6 +35,58 @@ struct EditorView: View {
     private var captionEnabled: Bool {
         guard let track = captionTrack else { return false }
         return CaptionFeature.settings(of: track).isEnabled
+    }
+
+    // MARK: 预览 / 时间线可拖分界
+
+    /// 可拖动的分界条：上拖放大时间线，下拖放大预览；松手吸附到最近档位。
+    private var divider: some View {
+        Rectangle()
+            .fill(Color(.separator))
+            .frame(height: 10)
+            .overlay(Capsule().fill(Color(.tertiaryLabel)).frame(width: 40, height: 4))
+            .contentShape(Rectangle())
+            .gesture(dividerDrag)
+    }
+
+    private var dividerDrag: some Gesture {
+        DragGesture(minimumDistance: 2)
+            .onChanged { value in
+                let base = dividerBaseHeight ?? timelineHeight
+                dividerBaseHeight = base
+                // 上拖（translation.height < 0）→ 时间线变高：base − translation.height
+                timelineHeight = Self.clamp(base - value.translation.height,
+                                            min: screenHeight * 0.15,
+                                            max: screenHeight * 0.85)
+            }
+            .onEnded { _ in
+                dividerBaseHeight = nil
+                timelineHeight = Self.snapHeight(timelineHeight, levels: snapLevels)
+            }
+    }
+
+    /// 三个吸附档位（时间线高度，点），随屏幕高度缩放：
+    /// 预览最大档 → 时间线 = screenH − previewMin；半屏档 → 0.5·screenH；接近全屏档 → 0.8·screenH。
+    private var snapLevels: [CGFloat] { Self.snapLevels(forScreenHeight: screenHeight) }
+
+    static func snapLevels(forScreenHeight h: CGFloat) -> [CGFloat] {
+        let previewMin = h * 0.6   // 时间线最小时，预览保留的高度（比例，非写死像素）
+        return [h - previewMin, h * 0.5, h * 0.8].sorted()
+    }
+
+    /// 纯函数：取离 value 最近的档位。
+    static func snapHeight(_ value: CGFloat, levels: [CGFloat]) -> CGFloat {
+        levels.min(by: { abs($0 - value) < abs($1 - value) }) ?? value
+    }
+
+    static func clamp(_ value: CGFloat, min lo: CGFloat, max hi: CGFloat) -> CGFloat {
+        Swift.min(Swift.max(value, lo), hi)
+    }
+
+    /// 回填页面可用高度；首次测量时给时间线一个默认档位（最小档，预览为主）。
+    private func syncScreenHeight(_ h: CGFloat) {
+        screenHeight = h
+        if timelineHeight == 0 { timelineHeight = Self.snapLevels(forScreenHeight: h)[0] }
     }
 
     var body: some View {
@@ -86,7 +145,17 @@ struct EditorView: View {
                     .font(.caption).foregroundStyle(.red).padding(.horizontal)
             }
 
-            TimelineView(model: model, onAdd: { showLibrary = true })
+            divider
+
+            TimelineView(model: model, height: timelineHeight, onAdd: { showLibrary = true })
+        }
+        // 量页面可用高度（背景读取不改变既有布局），档位据此推导，不写死像素。
+        .background {
+            GeometryReader { geo in
+                Color.clear
+                    .onAppear { syncScreenHeight(geo.size.height) }
+                    .onChange(of: geo.size.height) { _, h in syncScreenHeight(h) }
+            }
         }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
