@@ -371,6 +371,8 @@ struct TimelineView: View {
         guard (rowFrame.minY ... rowFrame.maxY).contains(location.y) else { return false }
         for track in model.store.plan.tracks {
             guard let index = track.elements.firstIndex(where: { $0.id == id }) else { continue }
+            // 只有片段才画 trim 手柄；字幕 cue 无手柄，故其边缘不得挡擦洗（与呈现路径一致）。
+            guard Self.hasClipPayload(track.elements[index]) else { return false }
             let starts = track.elementOutputStarts()
             let start = index < starts.count ? starts[index] : 0
             let leadingX = viewport.viewportX(forTime: start)

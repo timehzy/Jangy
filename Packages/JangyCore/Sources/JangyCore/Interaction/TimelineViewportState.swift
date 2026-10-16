@@ -54,11 +54,6 @@ public final class TimelineViewportState {
         contentX(forTime: t) - scrollOffset
     }
 
-    /// 单指横向拖拽 = 滚动 = 擦洗。dx 为位移（点，右正）。
-    public func scrub(by dx: CGFloat) {
-        setPlayhead(playheadTime - TimeInterval(dx / pointsPerSecond))
-    }
-
     /// 直接落播放头（播放推进 / 点选定位）。夹在 [0, contentDuration]。
     public func setPlayhead(_ t: TimeInterval) {
         playheadTime = min(max(0, t), max(0, contentDuration))

@@ -29,14 +29,6 @@ final class TimelineViewportStateTests: XCTestCase {
         s.setPlayhead(999); XCTAssertEqual(s.playheadTime, 100)
     }
 
-    func testScrubRightMovesPlayheadEarlier() {
-        // 内容往右拖（dx>0）= 看更早的内容 = 播放头时间减小
-        let s = makeState()
-        s.setPlayhead(5)
-        s.scrub(by: 20)   // 20pt / 10pps = 2s
-        XCTAssertEqual(s.playheadTime, 3, accuracy: 0.001)
-    }
-
     func testZoomKeepsTimeUnderAnchorFixed() {
         let s = makeState(width: 400, duration: 100)
         s.setPlayhead(50)
