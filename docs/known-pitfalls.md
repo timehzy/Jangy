@@ -23,7 +23,14 @@
 - **转场预览直通怪癖（iOS 26 模拟器实测）**：转场路径（双视频轨 composition）中素材分辨率恰等于 preset renderSize 时，显示管线把解码 buffer 直通 CA image queue，像素格式被拒（-11800 / 底层 -19230）→ `AVPlayerItemFailedToPlayToEndTime`，播到转场即停；identity transform 微扰无效（判定基于尺寸相等），`PreviewBridge.breakRenderSizeEquality` 给 renderSize 加 0.5pt 规避。注意 `AVPlayerItem.videoComposition` setter 是 copy 语义，改完要 mutableCopy 赋回。真机已验证无此问题（2026-10-12），微扰为模拟器保留；正式版发布前再移除或按模拟器条件编译（见 roadmap backlog；降级登记见架构公约 §6.4）
 - **Kadr ImageClip 拉伸图片到 preset 画幅（不保宽高比）**（2026-10-15 实测：100×100 方图导出 1080×1920 整帧填充）：`ImageEncoder.createPixelBuffer` 把 CGImage 直接 `draw(in: 全画幅 rect)`，非匹配宽高比的图片被压扁/拉长。规避：`EngineBridge` 交给 Kadr 前先用 `StillImagePreparer` 把图片等比 aspect-fit 居中贴到 preset 画幅黑底画布（`preset.resolution`），之后 Kadr 的拉伸变为恒等缩放。`ImageClip.background(_:)` 不能替代——`insertImageClip` 调 `ImageEncoder.encode` 时未传 backgroundColor，该修饰符在此路径不生效
 - **Kadr ImageClip 内部物化**：`CompositionBuilder.insertImageClip` 每次构建 composition 都把图片按 preset 分辨率+帧率编码成临时 mp4、插入后即删。我们层无需物化/缓存/登记表扩展；代价是图片工程每次 rebuild 都有一次编码开销（当前可接受）
+- **`naturalSize` / ImageIO 像素尺寸都是「未应用方向」的原始尺寸**（2026-10-16 定位）：竖拍视频的 `AVAssetTrack.naturalSize` 是 1920×1080 加一个 90° `preferredTransform`，图片的 `kCGImagePropertyPixelWidth/Height` 同样不含 EXIF orientation——而抽帧器（`appliesPreferredTrackTransform` / `kCGImageSourceCreateThumbnailWithTransform`）产出的是**已摆正**的图。两边口径不一致时，按元数据算出来的「宽高比」会把竖屏当横屏：时间线帧格宽按横屏算 → 画面被 `aspectRatio(.fill)` 裁成一条横带；`ClipTransform.halfScreen` 的 scale 同理算错。规避：探测时先摆正（见架构公约 §3.8），且时间线格宽**以已抽到的那张图为准**、元数据只作首帧兜底
 - **Kadr `Transform` 作用于 aspect-fill 之后、裁切之前**（2026-10-16 实测）：`VideoClip`/`ImageClip` 先按「铺满画布」（`max(resW/natW, resH/natH)`）落到画布，再叠加 `Transform`。故「半屏」不能写成恒定的 `scale 0.5`——横屏素材填充后远宽于画布，缩 0.5 仍是整幅宽色带。要得到「占画布一半宽」的块，scale = `0.5 × 画布宽 / 填充后内容宽`（见 `ClipTransform.halfScreen`）
+- **精确 seek（无容差）在合成器上每次全量重渲**（2026-10-16 定位）：`AVPlayer.seek(to:)` 单参重载等价于 `toleranceBefore/After = .zero`，多段 composition + videoComposition 下每次都要把合成器渲到目标帧。时间线擦洗是每 ~50ms 一次的高频 seek，精确 seek 直接打满播放管线——**这是擦洗手感卡顿的主因**。规避：擦洗用 0.1s 容差 seek、松手补一次精确 seek（降级登记见架构公约 §6.4）
+
+## SwiftUI 状态观察
+
+- **`@Observable` 的 setter 不做相等判断，同值写也通知依赖者**（2026-10-16 定位）：`currentTime` / `playheadTime` 这类高频量若无条件回写，暂停期间值不变也会按轮询频率持续通知，让时间线白重算（实测暂停时仍 10Hz 重建）。凡「每帧 / 每拍回写」的 stored 属性都要加同值 guard
+- **依赖按 body 作用域内读到的 stored 属性注册**（2026-10-16 定位）：计算属性（`scrollOffset` / `visibleTimeRange` / `contentX(forTime:)`）只是转调 stored getter，照常注册依赖；手势闭包里的读取不注册。故容器 body 一旦读高频量就会每帧重建整棵树，而父视图 body 重算**不会**无条件强制子视图 body 重算（SwiftUI 对子视图值做 diff，相等即跳过）——每个读了该对象的视图是**各自独立失效**的，修法是「把高频读取收进最小叶子」，不是「让父别重算」（约束见架构公约 §6.6）
 
 ## 文件系统（Foundation）
 

@@ -48,13 +48,13 @@
 | `TrackOperations` | L2 | 两条主轨不变式的唯一维持点 |
 | `EditStore` / `UndoStack` / `EditPlanValidator` | L2 | apply 是全库唯一写入口 |
 | `AssetResolver` / `ProjectStore` / `AssetLibrary` / `PlanLoader` | L2 基础设施 | ProjectStore 多项目持久化；AssetLibrary 全局素材登记表 |
-| `EngineBridge` / `PreviewBridge` / `ExportRunner` / `PhotosBridge` / `AssetImporter` / `CaptionImageRenderer` / `StillImagePreparer` / `ImageDownsampler` / `CoverGenerator` / `TimelineThumbnailer` | L3 | `TimelineThumbnailer` 从源素材抽帧（档位离散 + 缓存），由原 L0 `ThumbnailLoader` 收口上来——后者在 L0 却 `import AVFoundation`，违反 §1 |
+| `EngineBridge` / `PreviewBridge` / `ExportRunner` / `PhotosBridge` / `AssetImporter` / `CaptionImageRenderer` / `StillImagePreparer` / `ImageDownsampler` / `CoverGenerator` / `TimelineThumbnailer` | L3 | `TimelineThumbnailer` 从源素材抽帧（抽帧像素高按档量化 + 缓存），由原 L0 `ThumbnailLoader` 收口上来——后者在 L0 却 `import AVFoundation`，违反 §1 |
 | `Features/<Name>/<Name>Engine.swift`（`VideoEngine` / `CaptionEngine`） | L3 | 同一 kind 的引擎映射片（见「轨道模型」节） |
 | App 壳全部 SwiftUI + `AppModel` | L0 | AppModel 为表现层状态壳 |
 | `Jangy/TrackLaneRegistry.swift` / `Jangy/Features/<Name>/<Name>Lane.swift` | L0 | 轨道呈现注册表：镜像 L2 的 `Features/<Name>/<Name>Feature.swift` 切片模式（同一 kind 在每层各注册一片），`TrackLaneView` 按 kind 查表取呈现器 |
 | `AgentToolSet` / `EditAgentSession` / `AgentRunContext`（`JangyAgent` target） | L1 headless 消费方 | 剪辑 Agent：工具层（原子编辑 → `EditStore.apply`，校验失败结构化回喂）+ 编排层（连续对话 session，agent loop + snapshot 视觉自检）；App 与 CLI 共用 |
 | `AssetSynthesizer` / `SamplePlan`（`JangyTestSupport` target） | 测试脚手架 | 不分层：仅测试与 CLI 依赖，App 不链接，不进正式产物 |
-| `TimelineViewportState` / `SnapEngine` / `DragSession` / `GestureRouter` / `TimelineEdit`（`JangyCore/Interaction`） | L1 | 交互操作层：手势→原子意图翻译；**纯 Swift（无 SwiftUI）**——手势识别仍在 L0 |
+| `TimelineViewportState` / `SnapEngine` / `DragSession` / `GestureRouter` / `TimelineEdit` / `TimelineFilmstrip` / `TimelineFling`（`JangyCore/Interaction`） | L1 | 交互操作层：手势→原子意图翻译；**纯 Swift（无 SwiftUI）**——手势识别仍在 L0。`TimelineFilmstrip` 是时间线胶片条的纯算术（格宽 / 建哪些格），`TimelineFling` 是横向滚动惯性的纯算术（指数衰减） |
 | **待建** | L2 | 原语事件 + reactor 注册表（见 §4） |
 
 ## 2. 数据流公约
@@ -73,6 +73,7 @@
 5. **schema 版本守卫**：plan JSON 带 `version`，过新拒绝加载，不静默丢字段。
 6. **工程读写必经 `ProjectStore`**：`Projects/<uuid>/project.json`（plan 格式不变）+ `meta.json`，原子写入 + 完整性校验；禁止在 App 层手写 project.json；素材完整性问题经 `verify` 报告显式上报，不静默丢弃。素材实体归全局 `AssetLibrary`（`library.json` 登记表 + `Assets/`），项目只持有引用子集。
 7. **命名避让**：模型层用 `PlanClip` / `PlanTransition`——Kadr 有同名 `Clip` 协议与 `Transition` 枚举，同模块会歧义。新增模型类型命名前先查 Kadr 符号表。
+8. **素材分辨率报显示方向尺寸**：`AssetItem.pixelWidth/pixelHeight` 一律是**应用方向之后**的尺寸（视频过 `preferredTransform`、图片过 EXIF orientation），`AssetImporter.probeMetadata` / `probeImageMetadata` 是唯一写入点。报原始尺寸会让下游把竖拍素材当横屏——时间线帧格按横屏算宽（画面被裁成横带）、`ClipTransform.halfScreen` 的 scale 也算错。完整性比对对该字段**宽高互换不算漂移**（旧登记值可能是未摆正的原始尺寸）。
 
 ### 轨道模型（v4，2026-10-15）
 
@@ -145,10 +146,13 @@ v1 范围：**导入 + 剪辑 + 导出保元数据**；球形交互预览进 bac
 | 字幕 | SwiftUI Text 叠加层按播放时间近似 | 烧录（预渲染 `ImageOverlay`，非 `TextOverlay`） | Kadr overlay 仅导出时生效；macOS headless 下 CATextLayer 不绘制，故用图片 |
 | 转场直通规避 | renderSize +0.5pt 微扰（仅模拟器） | 无微扰 | iOS 26 模拟器像素格式直通怪癖 |
 | 拖动期间帧率 | trim/拖动手势期间允许降帧率 | 不受影响 | 交互流畅优先 |
-| 拖动期间缩略图 | 用当前档位拉伸顶替、不重算（手势结束才重算） | 不受影响 | 交互流畅优先 |
-| 时间线缩略图 | 从源素材抽帧、档位离散，不反映变速 / 转场 / 叠加 / 字幕 / 删除留下的 gap 内实际画面 | 不受影响 | 仅用于识别素材 |
+| 擦洗 / 惯性期间 seek | 落在目标 ±0.1s 的邻近帧（节流 20Hz）；停稳后补一次精确 seek | 不受影响 | 精确 seek 每次全量重渲，是擦洗手感卡顿的主因 |
+| 时间线缩略图 | 从源素材抽帧、抽帧像素高按档量化，不反映变速 / 转场 / 叠加 / 字幕 / 删除留下的 gap 内实际画面；trim 拖动期间不重算（只随瞬态几何裁切）；抽帧范围比可见区宽（提前抽），未抽好时用**最近已抽好的帧**顶替（限两个格宽内）；已抽好的帧在滚动 / 播放期间不重取 | 不受影响 | 仅用于识别素材；交互流畅优先 |
 
 5. **高频操作合并**：拖动类手势（trim 手柄、滑块、时间线拖动 / 轨道重排）产生的连续 Intent 在 L1 节流/合并，手势结束才落一个撤销步。
+
+6. **高频量只由叶子视图读取**：`playheadTime` / `scrollOffset` / `player.currentTime` 这类每帧都变的量，只允许在**叶子视图的 body** 里读（`ScrollingOffset` / `PlayheadOverlay` / `PlaybackFollow`），容器 body 一律不得读——`@Observable` 的依赖按「body 作用域内读到的 stored 属性」注册（计算属性只是转调 stored getter，照常注册），容器一读就会在滚动 / 播放的每一帧重建整棵树。**离散手势态（`@GestureState`）不属此列**——它每手势只变几次，容器读它（如轴锁定态）没有每帧代价。
+   与之配套：**裁剪窗（量化、只管「建哪些内容」）与平移（连续、由叶子承载）必须分开**——用量化窗去定位平移会让滚动跳步；量化窗必须是**存储属性**且只在跨量子时写（同值写照样通知）。
 
 ## 7. 测试与验收公约
 
