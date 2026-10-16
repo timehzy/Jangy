@@ -107,8 +107,9 @@ public enum EngineBridge {
 
         // 叠加视频轨 → Kadr.Track（每个元素一个，锚在 element.at）。Track 本身是 Clip，
         // 直接进 builder 数组（Kadr.Video 没有 track(_:) modifier）。
-        // 声明顺序 = 绘制顺序，后面的盖前面的。
-        for track in plan.tracks where track.id != primary.id && track.kind == .video {
+        // 声明顺序 = 绘制顺序，后面的盖前面的。`isHidden` 的轨整条跳过（预览与导出共用这份
+        // composition，故所见即所得）；主轨是链式基底，不可能进这个循环。
+        for track in plan.tracks where track.id != primary.id && track.kind == .video && !track.isHidden {
             elements.append(contentsOf: try await VideoEngine.makeParallelTracks(track: track, plan: plan,
                                                                                 resolver: resolver, preset: preset))
         }
@@ -119,8 +120,8 @@ public enum EngineBridge {
             for element in elements { element }
         }.preset(preset)
 
-        // 字幕轨（可能多条，accumulate）
-        for track in plan.tracks where track.kind == .caption {
+        // 字幕轨（可能多条，accumulate）。隐藏轨整条跳过。
+        for track in plan.tracks where track.kind == .caption && !track.isHidden {
             let cues = CaptionEngine.makeCues(track: track)
             guard !cues.isEmpty else { continue }
             video = video.captions(cues)                    // 软字幕：AVMetadataItem

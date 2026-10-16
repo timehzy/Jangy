@@ -31,7 +31,7 @@ struct CaptionLane: View {
 
     @ViewBuilder
     private func cueBar(element: PlanElement, start: TimeInterval) -> some View {
-        let width = max(1, CGFloat(element.duration) * context.viewport.pointsPerSecond)
+        let width = LaneMetrics.width(forDuration: element.duration, viewport: context.viewport)
         let barHeight: CGFloat = 28
         let text: String? = {
             if case .content(let payload) = element.content,

@@ -35,8 +35,13 @@ enum TrackLaneRegistry {
     }
 }
 
-/// 车道 / 轨道头共用的尺寸常量（同一行内高度对齐靠它）。
+/// 车道 / 轨道头共用的尺寸常量与几何（同一行内高度对齐、元素定宽都靠它）。
 enum LaneMetrics {
     static let height: CGFloat = 56
     static let cornerRadius: CGFloat = 4
+
+    /// 元素/车道块宽（点）= 时长 × px/s；下限 1 避免零宽或负宽。
+    static func width(forDuration duration: TimeInterval, viewport: TimelineViewportState) -> CGFloat {
+        max(1, CGFloat(duration) * viewport.pointsPerSecond)
+    }
 }

@@ -80,6 +80,7 @@ struct TimelineView: View {
                 .frame(width: totalWidth, height: LaneMetrics.height, alignment: .topLeading)
                 .offset(x: -viewport.scrollOffset)
             TrackCap(track: track, number: number,
+                     isPrimary: track.id == model.store.plan.primaryTrackID,
                      onToggleMute: { setTrackFlag(track.id) { $0.isMuted.toggle() } },
                      onToggleHidden: { setTrackFlag(track.id) { $0.isHidden.toggle() } })
         }

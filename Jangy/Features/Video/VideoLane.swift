@@ -1,5 +1,4 @@
 import SwiftUI
-import UIKit
 import JangyCore
 
 /// 视频轨 L0 呈现片：注册进 `TrackLaneRegistry`。元素按其输出起点 / 时长定位，铺缩略图条
@@ -32,45 +31,40 @@ struct VideoLane: View {
     private func elementView(element: PlanElement, start: TimeInterval,
                             visible: ClosedRange<TimeInterval>) -> some View {
         let end = start + element.duration
-        switch element.content {
-        case .gap:
-            // 空档：纯黑占位条（链保持连续）。
-            Rectangle().fill(.black)
-                .frame(width: elementWidth(element), height: LaneMetrics.height)
-                .offset(x: context.viewport.contentX(forTime: start))
-        case .content(let payload):
-            if let clip = payload.value as? PlanClip,
-               let asset = context.plan.asset(withID: clip.assetID) {
-                if visible.upperBound > start, visible.lowerBound < end {
-                    // 可见：铺缩略图条。`.task(id:)` 只在档位变时重取，缩放期间旧帧被拉伸。
-                    // 该子视图仅在可见时存在 → 滚入可见时重新起任务、滚出时任务取消。
+        // 只渲染可见区：元素输出区间与视口不相交（离屏）→ 完全不建视图。
+        if visible.upperBound > start, visible.lowerBound < end {
+            switch element.content {
+            case .gap:
+                // 空档：纯黑占位条（链保持连续）。
+                Rectangle().fill(.black)
+                    .frame(width: LaneMetrics.width(forDuration: element.duration, viewport: context.viewport),
+                           height: LaneMetrics.height)
+                    .offset(x: context.viewport.contentX(forTime: start))
+            case .content(let payload):
+                if let clip = payload.value as? PlanClip,
+                   let asset = context.plan.asset(withID: clip.assetID) {
+                    // `.task(id:)` 只在「档位 + 可见桶」变化时重取（见 StripTaskID）。
                     VideoElementStrip(clip: clip, asset: asset, element: element,
                                       start: start, visible: visible, context: context)
                 } else {
+                    // 素材未登记 / payload 类型不符：灰条兜底，不崩。
                     placeholder(element: element, start: start)
                 }
-            } else {
-                // 素材未登记 / payload 类型不符：灰条兜底，不崩。
-                placeholder(element: element, start: start)
             }
         }
-    }
-
-    /// 元素宽（点）= 输出时长 × px/s。
-    private func elementWidth(_ element: PlanElement) -> CGFloat {
-        max(1, CGFloat(element.duration) * context.viewport.pointsPerSecond)
     }
 
     private func placeholder(element: PlanElement, start: TimeInterval) -> some View {
         RoundedRectangle(cornerRadius: LaneMetrics.cornerRadius)
             .fill(Color(.secondarySystemFill))
-            .frame(width: elementWidth(element), height: LaneMetrics.height)
+            .frame(width: LaneMetrics.width(forDuration: element.duration, viewport: context.viewport),
+                   height: LaneMetrics.height)
             .offset(x: context.viewport.contentX(forTime: start))
     }
 }
 
 /// 单段视频元素的缩略图条：只铺「元素与可见区的交集」子区间，缩略图从源素材抽帧。
-/// 载荷对应的素材必须是视频；图片元素由调用方走 `thumbnail(for:maxPixel:)` 分支（见 `load`）。
+/// 图片元素由 `load` 走 `thumbnail(for:maxPixel:)` 分支（`frames` 对 `.still` 恒 nil）。
 private struct VideoElementStrip: View {
     let clip: PlanClip
     let asset: AssetItem
@@ -79,7 +73,11 @@ private struct VideoElementStrip: View {
     let visible: ClosedRange<TimeInterval>
     let context: LaneContext
 
+    @Environment(\.displayScale) private var displayScale
     @State private var images: [Image?] = []
+
+    /// 缩略图时间桶（秒）：与 `TimelineThumbnailer` 缓存粒度一致。
+    private static let bucket: TimeInterval = 0.5
 
     var body: some View {
         let pps = context.viewport.pointsPerSecond
@@ -88,6 +86,11 @@ private struct VideoElementStrip: View {
         let upper = min(element.duration, visible.upperBound - start)
         let stripWidth = max(1, CGFloat(max(0, upper - lower)) * pps)
         let level = ThumbnailLevel.level(forPointsPerSecond: pps)
+        let stripID = StripTaskID(
+            elementID: element.id, level: level,
+            lowerBucket: Int((lower / Self.bucket).rounded(.down)),
+            upperBucket: Int((upper / Self.bucket).rounded(.up)))
+        let scale = displayScale
 
         HStack(spacing: 0) {
             if images.isEmpty {
@@ -109,14 +112,18 @@ private struct VideoElementStrip: View {
         .frame(width: stripWidth, height: LaneMetrics.height)
         .clipped()
         .offset(x: context.viewport.contentX(forTime: start + lower))
-        .task(id: StripTaskID(elementID: element.id, level: level)) {
-            await load(lower: lower, upper: upper, level: level)
+        .task(id: stripID) {
+            // debounce：手势期间可见桶连续变化会不断重启本任务，睡一小会儿把中间态吃掉。
+            try? await Task.sleep(for: .milliseconds(120))
+            guard !Task.isCancelled else { return }
+            await load(lower: lower, upper: upper, level: level, scale: scale)
         }
     }
 
     /// 抽帧：视频按可见宽度铺 N 帧；图片无源区间（`frames` 恒 nil）→ 单帧降采样图铺满。
     @MainActor
-    private func load(lower: TimeInterval, upper: TimeInterval, level: ThumbnailLevel) async {
+    private func load(lower: TimeInterval, upper: TimeInterval,
+                      level: ThumbnailLevel, scale: CGFloat) async {
         let pps = context.viewport.pointsPerSecond
         let stripWidth = max(1, CGFloat(max(0, upper - lower)) * pps)
         switch clip.source {
@@ -127,17 +134,20 @@ private struct VideoElementStrip: View {
             let offsets = (0..<count).map { i in lower + span * (Double(i) + 0.5) / Double(count) }
             let cgImages = await context.thumbnailer.frames(asset: asset, clip: clip, level: level,
                                                             outputOffsets: offsets)
-            images = cgImages.map { $0.map { Image(decorative: $0, scale: UIScreen.main.scale) } }
+            images = cgImages.map { $0.map { Image(decorative: $0, scale: scale) } }
         case .still:
             let single = await context.thumbnailer.thumbnail(for: asset, maxPixel: level.rawValue * 2)
-            images = [single.map { Image(decorative: $0, scale: UIScreen.main.scale) }]
+            images = [single.map { Image(decorative: $0, scale: scale) }]
         }
     }
 }
 
-/// `.task(id:)` 的键：元素 id + 档位。缩放（pps）不停变化，但档位是离散的——
-/// 只在跨档时重取，档位内的缩放沿用旧帧（被拉伸）。
+/// `.task(id:)` 的键：元素 id + 档位 + **可见桶范围**（0.5s 桶，和缩略图缓存同粒度）。
+/// 档位离散（80/160/320）——缩放跨档才换档；可见桶让滚动/缩放换了可见区后重取，
+/// 又因桶量化 + debounce，手势期间的连续变化被合并成一次请求。
 private struct StripTaskID: Equatable {
     let elementID: UUID
     let level: ThumbnailLevel
+    let lowerBucket: Int
+    let upperBucket: Int
 }

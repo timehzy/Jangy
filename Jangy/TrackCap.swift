@@ -6,6 +6,8 @@ import JangyCore
 struct TrackCap: View {
     let track: PlanTrack
     let number: Int
+    /// 是否主轨（链式基底）。主轨不可隐藏——隐藏会让成片没有主轨。
+    let isPrimary: Bool
     let onToggleMute: () -> Void
     let onToggleHidden: () -> Void
 
@@ -13,6 +15,8 @@ struct TrackCap: View {
         HStack(spacing: 6) {
             Image(systemName: TrackLaneRegistry.icon(for: track.kind))
             Text("\(number)").monospacedDigit()
+            // 静音开关：v1 音频后置，`isMuted` 目前无播放效果（引擎未接音频）。
+            // 仍保留开关——它是模型字段，剪辑 Agent 的 set_track_flags 也会用它。
             Button(action: onToggleMute) {
                 Image(systemName: track.isMuted ? "speaker.slash.fill" : "speaker.wave.1")
             }
@@ -20,6 +24,7 @@ struct TrackCap: View {
             Button(action: onToggleHidden) {
                 Image(systemName: track.isHidden ? "eye.slash.fill" : "eye")
             }
+            .disabled(isPrimary)
             .accessibilityLabel(track.isHidden ? "显示轨道" : "隐藏轨道")
         }
         .font(.caption)

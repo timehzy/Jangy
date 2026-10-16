@@ -28,7 +28,7 @@ private struct GenericLane: View {
                 let start = index < starts.count ? starts[index] : 0
                 RoundedRectangle(cornerRadius: LaneMetrics.cornerRadius)
                     .fill(Color(.secondarySystemFill))
-                    .frame(width: max(1, CGFloat(element.duration) * viewport.pointsPerSecond),
+                    .frame(width: LaneMetrics.width(forDuration: element.duration, viewport: viewport),
                            height: LaneMetrics.height)
                     .offset(x: viewport.contentX(forTime: start))
             }
