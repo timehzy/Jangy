@@ -70,14 +70,6 @@ public enum ExportVerifier {
 }
 
 extension OutputPreset {
-    /// 渲染分辨率（与 Kadr.Preset 对齐）。导出后校验用；也是分屏预设算 scale 的画布尺寸。
-    /// 显式 switch：新增 OutputPreset case 时此处必须编译报错。
-    var renderSize: CGSize {
-        switch self {
-        case .reelsAndShorts: return CGSize(width: 1080, height: 1920)
-        }
-    }
-
     /// 导出后校验用：期望的视频编码 FourCC。HDR 直通走 HEVC（允许 hvc1/hev1 两种封装）；
     /// SDR 降级走 H.264（EngineBridge 把 preset 映射为同几何的 Codec.h264，见该处注释）。
     /// 显式 switch：新增 OutputPreset case 时此处必须编译报错。

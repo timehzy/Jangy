@@ -37,7 +37,21 @@ final class ClipTransformTests: XCTestCase {
         // 图片经 StillImagePreparer 预合成到画布（letterbox），填充后尺寸即画布 → scale 0.5。
         let asset = AssetItem(kind: .image, fileName: "i.png")
         let transform = ClipTransform.halfScreen(for: asset, preset: .reelsAndShorts, side: .left)
+        XCTAssertEqual(transform?.scale ?? 0, 0.5, accuracy: 0.0001)
+    }
+
+    func testHalfScreenNarrowerThanCanvasSource() {
+        // 比画布更窄的源：fill = max(1080/800, 1920/2000) = 1.35，filledWidth = 800×1.35 = 1080。
+        let source = CGSize(width: 800, height: 2000)
+        let canvas = CGSize(width: 1080, height: 1920)
+        let transform = ClipTransform.halfScreen(sourceSize: source, canvasSize: canvas, side: .left)
         XCTAssertEqual(transform.scale, 0.5, accuracy: 0.0001)
+    }
+
+    func testHalfScreenReturnsNilForUnknownVideoDimensions() {
+        // 视频像素尺寸未知（探测失败）→ nil，绝不用画布尺寸兜底（那会静默退回满宽色带）。
+        let asset = AssetItem(kind: .video, fileName: "v.mp4", duration: 10)
+        XCTAssertNil(ClipTransform.halfScreen(for: asset, preset: .reelsAndShorts, side: .left))
     }
 
     func testHalfScreenDegenerateSourceFallsBackToFullScreen() {

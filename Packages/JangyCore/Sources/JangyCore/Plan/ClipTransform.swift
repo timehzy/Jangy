@@ -32,9 +32,13 @@ extension ClipTransform {
 
     /// 左右分屏：元素等比缩放到**画布一半宽**、垂直居中，落在指定一侧。
     ///
-    /// 素材先按「铺满画布」（aspect-fill）落到画布，Kadr 的 transform 作用于**这之后**——
-    /// 所以要得到「半宽块」，scale = 0.5 × 画布宽 / 填充后内容宽，而**不是**恒定的 0.5。
-    /// （横屏素材填充后远宽于画布，恒定 0.5 会得到整幅宽色带而非半屏列——见 known-pitfalls。）
+    /// `sourceSize` 必须是**填充后（filled）尺寸**：素材先按「铺满画布」（aspect-fill）落到画布，
+    /// Kadr 的 transform 作用于**这之后**——所以要得到「半宽块」，scale = 0.5 × 画布宽 / 填充后内容宽，
+    /// 而**不是**恒定的 0.5。（横屏素材填充后远宽于画布，恒定 0.5 会得到整幅宽色带而非半屏列——
+    /// 见 known-pitfalls。）
+    ///
+    /// 注意：这是 **fill** 语义。图片是先按 **letterbox**（等比留黑）预合成到画布的，其「填充后尺寸」
+    /// 恰好就是画布本身——图片调用方请用 `halfScreen(for:preset:side:)`，不要自己传原始像素尺寸。
     public static func halfScreen(sourceSize: CGSize, canvasSize: CGSize, side: Half) -> ClipTransform {
         guard sourceSize.width > 0, sourceSize.height > 0,
               canvasSize.width > 0, canvasSize.height > 0 else { return .fullScreen }
@@ -45,17 +49,19 @@ extension ClipTransform {
     }
 
     /// 由素材与预设直接算分屏预设（调用方拿得到 asset + plan.preset 时用这个）。
+    ///
+    /// 视频取 `pixelWidth/Height`；为 nil（探测失败）时返回 **nil**——用画布尺寸兜底会把
+    /// 横屏素材误算成 `scale 0.5`，得到满宽色带（即本函数要修的那个 bug），静默出错。
     /// 图片先经 StillImagePreparer 预合成到画布（等比 letterbox），故其填充后尺寸就是画布本身。
-    public static func halfScreen(for asset: AssetItem, preset: OutputPreset, side: Half) -> ClipTransform {
+    public static func halfScreen(for asset: AssetItem, preset: OutputPreset, side: Half) -> ClipTransform? {
         let canvas = preset.renderSize
-        let sourceSize: CGSize
         switch asset.kind {
         case .image:
-            sourceSize = canvas
+            return halfScreen(sourceSize: canvas, canvasSize: canvas, side: side)
         default:
-            sourceSize = CGSize(width: Double(asset.pixelWidth ?? Int(canvas.width)),
-                                height: Double(asset.pixelHeight ?? Int(canvas.height)))
+            guard let w = asset.pixelWidth, let h = asset.pixelHeight, w > 0, h > 0 else { return nil }
+            return halfScreen(sourceSize: CGSize(width: Double(w), height: Double(h)),
+                              canvasSize: canvas, side: side)
         }
-        return halfScreen(sourceSize: sourceSize, canvasSize: canvas, side: side)
     }
 }
