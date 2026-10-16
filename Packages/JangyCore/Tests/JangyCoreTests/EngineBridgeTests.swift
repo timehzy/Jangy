@@ -51,6 +51,52 @@ final class EngineBridgeTests: XCTestCase {
         XCTAssertEqual(video.overlays.count, 0)
     }
 
+    // MARK: - isHidden 引擎行为（隐藏轨不进 composition；预览与导出共用这份 composition）
+
+    /// 隐藏的字幕轨与「settings.isEnabled = false」同形：软字幕与烧录 overlay 都不产出。
+    func testHiddenCaptionTrackProducesNoCaptions() async throws {
+        var plan = SamplePlan.make()
+        let ti = try XCTUnwrap(plan.tracks.firstIndex { $0.kind == .caption })
+        plan.tracks[ti].isHidden = true
+        let video = try await EngineBridge.makeComposition(from: plan, resolver: resolver)
+        XCTAssertEqual(video.captions.count, 0)
+        XCTAssertEqual(video.overlays.count, 0)
+    }
+
+    /// 隐藏的叠加视频轨（非主轨）：其元素对应的 `Kadr.Track` clip 不产出。
+    func testHiddenOverlayTrackExcludedFromComposition() async throws {
+        let a = AssetItem(kind: .video, fileName: "clip1.mp4", origin: .synthesized,
+                          duration: 4.0, pixelWidth: 1280, pixelHeight: 720, hasAudio: false)
+        let b = AssetItem(kind: .video, fileName: "clip2.mp4", origin: .synthesized,
+                          duration: 4.0, pixelWidth: 1280, pixelHeight: 720, hasAudio: false)
+        let primary = PlanTrack(kind: .video, placement: .chained, elements: [
+            PlanElement(content: .content(TrackPayload(PlanClip(assetID: a.id, source: .video(0...3))))),
+        ])
+        let overlay = PlanTrack(kind: .video, placement: .absolute, elements: [
+            PlanElement(at: 0.5, content: .content(TrackPayload(
+                PlanClip(assetID: b.id, source: .video(0...2))))),
+        ])
+        let shown = EditPlan(assets: [a, b], tracks: [primary, overlay], primaryTrackID: primary.id)
+        var hidden = shown
+        hidden.tracks[try XCTUnwrap(hidden.tracks.firstIndex { $0.id == overlay.id })].isHidden = true
+
+        let shownVideo = try await EngineBridge.makeComposition(from: shown, resolver: resolver)
+        let hiddenVideo = try await EngineBridge.makeComposition(from: hidden, resolver: resolver)
+
+        // 叠加轨每个元素 → 一个 Kadr.Track clip；隐藏后该 Track 不产出。
+        XCTAssertEqual(shownVideo.clips.filter { $0 is Kadr.Track }.count, 1)
+        XCTAssertEqual(hiddenVideo.clips.filter { $0 is Kadr.Track }.count, 0)
+        XCTAssertEqual(hiddenVideo.clips.count, shownVideo.clips.count - 1)
+    }
+
+    /// 主轨是链式基底，`isHidden` 不作用于它：3 个 PlanClip + 1 个转场仍全在。
+    func testPrimaryTrackNotSkippedWhenHidden() async throws {
+        var plan = SamplePlan.make()
+        plan.tracks[try XCTUnwrap(plan.tracks.firstIndex { $0.id == plan.primaryTrackID })].isHidden = true
+        let video = try await EngineBridge.makeComposition(from: plan, resolver: resolver)
+        XCTAssertEqual(video.clips.count, 4)
+    }
+
     func testTransitionMapping() {
         // Kadr.Transition 无 Equatable 一致性——用 switch 模式匹配断言 case 与 duration。
         let dissolve = EngineBridge.kadrTransition(.dissolve(duration: 0.5))
