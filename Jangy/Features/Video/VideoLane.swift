@@ -138,7 +138,8 @@ private struct VideoElementStrip: View {
         .frame(width: stripWidth, height: LaneMetrics.height, alignment: .topLeading)
         .clipped()   // 末格越过元素尾部时裁掉
         // 键就是「要抽哪些帧」：映射（pps / clip 源区间 / 素材 / 像素档）一变就换键、任务重启，
-        // 已取到的旧帧同时被裁掉——不会出现「键没变、帧却已不是那一帧」的错位。
+        // 旧帧在重启后**顶替**用（见 `nearbyLoadedFrame`），等任务活过 debounce 再随新帧一起裁——
+        // 不会出现「键没变、帧却已不是那一帧」的错位，也不会在缩放全程露灰底。
         .task(id: wanted.keys.sorted { $0.time < $1.time }) {
             // 先用**缓存里已有的**帧铺一遍（不抽帧、不等 debounce）：元素被裁剪窗移出时视图连同
             // `@State` 一起销毁，滚回来重建时若直接等 debounce，整条会先空白一下再出现。
@@ -204,30 +205,35 @@ private struct VideoElementStrip: View {
     }
 
     /// 取帧并合并。`cacheOnly` = 只查缓存、不抽帧（重建时先铺一遍，见 `.task`）。
-    /// 只请求缺失的帧；同时把抽帧窗外的旧帧裁掉（否则随滚动无界增长）。
+    /// 裁帧**只有一个落点**：本函数末尾，且只在 `cacheOnly == false`（任务活过 debounce 的那次）——
+    /// 放在开头裁会让「键已换、新帧未到」的窗口期没有可顶替的旧帧（见 `nearbyLoadedFrame`），
+    /// 捏合缩放时键每帧都变，每帧裁一次就是缩放全程闪灰底。
     @MainActor
     private func load(wanted: [FrameKey: TimeInterval], cacheOnly: Bool = false) async {
-        if !frames.keys.allSatisfy(wanted.keys.contains) {
+        let missing = wanted.filter { frames[$0.key] == nil }.sorted { $0.key.time < $1.key.time }
+        if !missing.isEmpty {
+            // 本条所有帧身份共用同一像素档（同一次 body 求出），取任一即可。
+            let maxPixel = missing[0].key.maxPixel
+            let offsets = missing.map { $0.value }
+            let images = cacheOnly
+                ? await context.thumbnailer.cachedFrames(asset: asset, clip: clip, maxPixel: maxPixel,
+                                                         outputOffsets: offsets)
+                : await context.thumbnailer.frames(asset: asset, clip: clip, maxPixel: maxPixel,
+                                                   outputOffsets: offsets)
+            guard !Task.isCancelled else { return }   // 取消即不写、不裁（用过期的 wanted 裁会误伤）
+            // 重新读 `frames` 再合并：await 期间可能已有别的加载写入，基于旧值写会丢更新。
+            var next = frames
+            for (entry, image) in zip(missing, images) {
+                if let image { next[entry.key] = image }
+            }
+            frames = next
+            adoptAspectIfNeeded(from: images)
+        }
+        // 裁掉抽帧窗外的旧帧（否则随滚动无界增长）。**必须在新帧合并之后**。
+        // 同值不写：`@State` 写即失效视图。
+        if !cacheOnly, !frames.keys.allSatisfy(wanted.keys.contains) {
             frames = frames.filter { wanted.keys.contains($0.key) }
         }
-        let missing = wanted.filter { frames[$0.key] == nil }.sorted { $0.key.time < $1.key.time }
-        guard !missing.isEmpty else { return }
-        // 本条所有帧身份共用同一像素档（同一次 body 求出），取任一即可。
-        let maxPixel = missing[0].key.maxPixel
-        let offsets = missing.map { $0.value }
-        let images = cacheOnly
-            ? await context.thumbnailer.cachedFrames(asset: asset, clip: clip, maxPixel: maxPixel,
-                                                     outputOffsets: offsets)
-            : await context.thumbnailer.frames(asset: asset, clip: clip, maxPixel: maxPixel,
-                                               outputOffsets: offsets)
-        guard !Task.isCancelled else { return }
-        // 重新读 `frames` 再合并：await 期间可能已有别的加载写入，基于旧值写会丢更新。
-        var next = frames
-        for (entry, image) in zip(missing, images) {
-            if let image { next[entry.key] = image }
-        }
-        frames = next
-        adoptAspectIfNeeded(from: images)
     }
 
     /// 从抽到的图里认出方向：**只在图比例与元数据差到方向级别**（相对差 > 5%）时采纳。

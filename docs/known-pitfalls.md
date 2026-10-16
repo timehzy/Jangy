@@ -31,6 +31,7 @@
 
 - **`@Observable` 的 setter 不做相等判断，同值写也通知依赖者**（2026-10-16 定位）：`currentTime` / `playheadTime` 这类高频量若无条件回写，暂停期间值不变也会按轮询频率持续通知，让时间线白重算（实测暂停时仍 10Hz 重建）。凡「每帧 / 每拍回写」的 stored 属性都要加同值 guard
 - **依赖按 body 作用域内读到的 stored 属性注册**（2026-10-16 定位）：计算属性（`scrollOffset` / `visibleTimeRange` / `contentX(forTime:)`）只是转调 stored getter，照常注册依赖；手势闭包里的读取不注册。故容器 body 一旦读高频量就会每帧重建整棵树，而父视图 body 重算**不会**无条件强制子视图 body 重算（SwiftUI 对子视图值做 diff，相等即跳过）——每个读了该对象的视图是**各自独立失效**的，修法是「把高频读取收进最小叶子」，不是「让父别重算」（约束见架构公约 §6.6）
+- **`@ViewBuilder` 的 if/else 换分支 = 子树重建、`@State` 清空**（2026-10-16 定位）：两个分支在视图结构里是**两个不同位置**（哪怕包的是同一个视图值），条件翻转时 SwiftUI 拆旧建新，里面的 `@State` 全部重来。`ElementLiftModifier` 原写成 `if isLifted { content.offset()… } else { content }`，于是长按浮起 / 落下各清空一次胶片条的帧缓存——表现为**点选（按下）时缩略图闪一下灰底**。对策：修饰链恒定，非浮起态各参数取中性值（`scaleEffect(1)` / `shadow(opacity: 0, radius: 0)`）
 
 ## 文件系统（Foundation）
 

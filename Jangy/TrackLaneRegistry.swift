@@ -49,19 +49,20 @@ struct TransientGeometry {
 }
 
 /// 被拖元素的浮起反馈：跟随手指位移 + 放大 + 阴影。只读瞬态几何，plan 不动。
+///
+/// **修饰链恒定**：非浮起时各参数取中性值，**不得**写成 `if isLifted { … } else { … }`——
+/// `@ViewBuilder` 的 if/else 是两个分支，切换分支 = 被包内容换了结构位置 = SwiftUI 拆掉旧子树
+/// 重建新子树，里面的 `@State`（如胶片条的帧缓存）跟着清空。浮起 / 落下各来一次，缩略图就闪两下灰底。
 struct ElementLiftModifier: ViewModifier {
     let geometry: TransientGeometry
 
-    @ViewBuilder func body(content: Content) -> some View {
-        if geometry.isLifted {
-            content
-                .offset(x: geometry.offsetX, y: geometry.offsetY)
-                .scaleEffect(TransientGeometry.liftScale)
-                .shadow(color: .black.opacity(0.4), radius: 6)
-                .zIndex(1)
-        } else {
-            content
-        }
+    func body(content: Content) -> some View {
+        content
+            .offset(x: geometry.offsetX, y: geometry.offsetY)
+            .scaleEffect(geometry.isLifted ? TransientGeometry.liftScale : 1)
+            .shadow(color: .black.opacity(geometry.isLifted ? 0.4 : 0),
+                    radius: geometry.isLifted ? 6 : 0)
+            .zIndex(geometry.isLifted ? 1 : 0)
     }
 }
 
