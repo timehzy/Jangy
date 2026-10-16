@@ -28,6 +28,10 @@ struct TimelineView: View {
     /// （公约 §6.5 高频分界）。擦洗据此让位：会话活跃时不做擦洗。
     @GestureState private var drag: DragSession?
 
+    /// 选中元素所在**行**在 `timeline` 命名坐标系里的 frame（由选中行上报）。
+    /// 擦洗结构性让位按「行 Y 带 + 元素 X 带」判定——只挡选中元素那一条，不误伤其它轨的擦洗。
+    @State private var selectedRowFrame: CGRect?
+
     private var viewport: TimelineViewportState { model.viewport }
 
     var body: some View {
@@ -40,6 +44,8 @@ struct TimelineView: View {
             // 固定为视口尺寸：内容层比视口宽，靠它兜住 ZStack 尺寸，
             // 否则 maxWidth: .infinity 会居中到「内容宽度」而非视口中央。
             .frame(width: geo.size.width, height: geo.size.height, alignment: .topLeading)
+            // 命名坐标系：行上报交互区、擦洗读起手点，都在这一套坐标里（见 canScrub）。
+            .coordinateSpace(name: "timeline")
             .clipped()
             .contentShape(Rectangle())
             .simultaneousGesture(scrubGesture)
@@ -106,6 +112,25 @@ struct TimelineView: View {
         }
         .frame(width: viewportWidth, height: LaneMetrics.height, alignment: .leading)
         .clipped()
+        .background { selectionRowProbe(track: track) }
+    }
+
+    /// 只有**含选中元素的行**才上报它的 frame（在 `timeline` 命名坐标系里）；上报后
+    /// `selectedRowFrame` 给出该行的 Y 带。用 `.background` 探测不改变既有布局。
+    @ViewBuilder
+    private func selectionRowProbe(track: PlanTrack) -> some View {
+        if track.elements.contains(where: { $0.id == selection }) {
+            GeometryReader { geo in
+                let frame = geo.frame(in: .named("timeline"))
+                Color.clear
+                    .onAppear { reportRowFrame(frame) }
+                    .onChange(of: frame) { _, newFrame in reportRowFrame(newFrame) }
+            }
+        }
+    }
+
+    private func reportRowFrame(_ frame: CGRect) {
+        if selectedRowFrame != frame { selectedRowFrame = frame }
     }
 
     // MARK: 元素交互层（点选 / trim 手柄 / 长按移动）
@@ -312,7 +337,7 @@ struct TimelineView: View {
     /// ② **结构性**：起手点落在选中元素的交互区（选中框/手柄）内就不擦洗——这不依赖
     /// `drag` 的写入时序，故快速甩动一帧越过 trim 与擦洗两个阈值也不会误擦。
     private var scrubGesture: some Gesture {
-        DragGesture(minimumDistance: 8)
+        DragGesture(minimumDistance: 8, coordinateSpace: .named("timeline"))
             .updating($scrubBase) { _, state, _ in
                 if state == nil { state = viewport.playheadTime }
             }
@@ -330,19 +355,29 @@ struct TimelineView: View {
             }
     }
 
-    /// 擦洗是否放行：编辑拖拽/缩放进行中、或起手落在**选中元素交互区**内——都不擦洗。
+    /// 擦洗是否放行：编辑拖拽/缩放进行中、或起手落在**选中元素所在行的交互区**（X **且** Y）内——
+    /// 都不擦洗。Y 由选中行上报在 `timeline` 命名坐标系里的 frame 给出；只挡选中元素那一条，
+    /// 其它轨同 X 位置的擦洗不受影响（低缩放下整屏被一条片段覆盖时也能擦）。
     private func canScrub(from startLocation: CGPoint) -> Bool {
         guard drag == nil, magnifyBase == nil else { return false }
-        guard let id = selection else { return true }
+        guard let rect = selectedInteractionRect() else { return true }
+        return !rect.contains(startLocation)
+    }
+
+    /// 选中元素的交互矩形（`timeline` 坐标）：选中行 Y 带 × 元素 X 带（含手柄余量）。
+    /// 缺任一半（无选中 / 行 frame 未上报）时返回 nil。
+    private func selectedInteractionRect() -> CGRect? {
+        guard let id = selection, let rowFrame = selectedRowFrame else { return nil }
         for track in model.store.plan.tracks {
             guard let index = track.elements.firstIndex(where: { $0.id == id }) else { continue }
             let starts = track.elementOutputStarts()
             let start = index < starts.count ? starts[index] : 0
             let x = viewport.viewportX(forTime: start)
             let width = LaneMetrics.width(forDuration: track.elements[index].duration, viewport: viewport)
-            return !(x - 8 ... x + width + 8).contains(startLocation.x)
+            return CGRect(x: x - 8, y: rowFrame.minY,
+                          width: width + 16, height: rowFrame.height)
         }
-        return true
+        return nil
     }
 
     /// 双指捏合的起手基准：手势开始那一刻的 pps 与累计 magnification。
