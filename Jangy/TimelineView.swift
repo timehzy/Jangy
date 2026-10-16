@@ -17,7 +17,7 @@ struct TimelineView: View {
 
     /// 双指捏合的起手基准（pps + 累计 magnification，手势开始时捕获一次）。
     /// 同样用 @GestureState：结束**或取消**自动复位，杜绝上一手势残留导致下一手势首帧跳变。
-    @GestureState private var magnifyStart: MagnifyStart?
+    @GestureState private var magnifyBase: MagnifyBase?
 
     private var viewport: TimelineViewportState { model.viewport }
 
@@ -139,6 +139,7 @@ struct TimelineView: View {
                 if state == nil { state = viewport.playheadTime }
             }
             .onChanged { value in
+                guard magnifyBase == nil else { return }   // 双指缩放期间不做擦洗（DragGesture 会跟两指质心）
                 guard let base = scrubBase else { return }
                 guard abs(value.translation.width) >= abs(value.translation.height) else { return }
                 let target = base - TimeInterval(value.translation.width / viewport.pointsPerSecond)
@@ -146,6 +147,7 @@ struct TimelineView: View {
                 model.scrubTo(viewport.playheadTime)
             }
             .onEnded { _ in
+                guard magnifyBase == nil else { return }   // 缩放中不做收尾 seek
                 model.scrubEnded()   // 补最终 seek；player 仍暂停，不会回跳
             }
     }
@@ -153,7 +155,7 @@ struct TimelineView: View {
     /// 双指捏合的起手基准：手势开始那一刻的 pps 与累计 magnification。
     /// 存这对值是为了把「**累计** magnification」换算成**绝对**目标 pps——相对起手基准算，
     /// 与逐帧是否读到上一帧无关，故不依赖 `.updating` 与 `.onChanged` 的先后，也不会跨帧累加误差。
-    private struct MagnifyStart {
+    private struct MagnifyBase {
         var pointsPerSecond: CGFloat
         var magnification: CGFloat
     }
@@ -164,15 +166,15 @@ struct TimelineView: View {
     /// 起手基准存 `@GestureState`（`.updating` 里捕获一次），手势结束或取消都自动复位，无黏性状态。
     private var magnifyGesture: some Gesture {
         MagnifyGesture()
-            .updating($magnifyStart) { value, state, _ in
+            .updating($magnifyBase) { value, state, _ in
                 if state == nil {
-                    state = MagnifyStart(pointsPerSecond: viewport.pointsPerSecond,
-                                         magnification: value.magnification)
+                    state = MagnifyBase(pointsPerSecond: viewport.pointsPerSecond,
+                                        magnification: value.magnification)
                 }
             }
             .onChanged { value in
-                guard let start = magnifyStart else { return }
-                let target = start.pointsPerSecond * (value.magnification / start.magnification)
+                guard let base = magnifyBase else { return }
+                let target = base.pointsPerSecond * (value.magnification / base.magnification)
                 viewport.zoom(by: target / viewport.pointsPerSecond,
                               anchorX: value.startAnchor.x * viewport.viewportWidth)
             }
