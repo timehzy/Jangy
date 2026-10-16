@@ -81,7 +81,8 @@ final class AppModel {
     }
 
     /// 时间线擦洗：落播放头 + seek 播放器（节流）+ 暂停（剪映同款：擦洗即暂停）。
-    private var lastSeek = Date.distantPast
+    /// `@ObservationIgnored`：私有、从不被视图读取、每帧都写，无需进观察图。
+    @ObservationIgnored private var lastSeek = Date.distantPast
     func scrubTo(_ time: TimeInterval) {
         viewport.setPlayhead(time)
         player.pauseForScrub()
@@ -240,6 +241,9 @@ final class AppModel {
 final class PlayerController {
     private(set) var player: AVPlayer?
     private(set) var currentTime: TimeInterval = 0
+    /// 预览是否在播（= 实例 rate > 0，由轮询回填）。时间线据此判断是否把播放推进回写播放头
+    /// ——擦洗时 player 是暂停的（rate 0），因此不会把播放头拉回 seek 位置。
+    private(set) var isPlaying = false
     private(set) var cues: [CaptionCue] = []
 
     private var timePollingTask: Task<Void, Never>?
@@ -276,6 +280,7 @@ final class PlayerController {
     /// 走意图单点而非直接 `player.pause()`，这样跨页返回时不会被 `pageDidAppear` 重新起播。
     func pauseForScrub() {
         wantsPlaying = false
+        isPlaying = false   // 立即反映暂停，不等 100ms 轮询
         applyDesired()
     }
 
@@ -307,6 +312,7 @@ final class PlayerController {
                 try? await Task.sleep(for: .milliseconds(100))
                 guard let self, let newPlayer, !Task.isCancelled else { return }
                 self.currentTime = newPlayer.currentTime().seconds
+                self.isPlaying = newPlayer.rate > 0
             }
         }
         applyDesired()

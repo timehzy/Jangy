@@ -15,11 +15,14 @@ struct EditorView: View {
     @State private var renameText = ""
 
     /// 时间线窗格高度（预览 / 时间线分界的拖动量）；档位由屏幕高度推导，见 snapLevels。
-    @State private var timelineHeight: CGFloat = 0
+    /// 初值非零：GeometryReader 回填前也先给一帧可用高度，避免时间线闪一帧 0 高。
+    @State private var timelineHeight: CGFloat = 240
     /// 页面可用高度（GeometryReader 回填），拖动与吸附档位都据此推导。
     @State private var screenHeight: CGFloat = 0
-    /// 分界拖动起点高度（首次 onChanged 时锁定，避免逐帧累加漂移）。
-    @State private var dividerBaseHeight: CGFloat?
+    /// 是否已按屏幕高度落过默认档（只做一次，之后交给用户拖动）。
+    @State private var heightSeeded = false
+    /// 分界拖动起点高度。@GestureState：手势结束或取消都自动复位，不残留脏基准。
+    @GestureState private var dividerBase: CGFloat?
 
     init(model: AppModel, libraryModel: LibraryModel, projectName: String) {
         self._model = State(initialValue: model)
@@ -51,16 +54,17 @@ struct EditorView: View {
 
     private var dividerDrag: some Gesture {
         DragGesture(minimumDistance: 2)
+            .updating($dividerBase) { _, state, _ in
+                if state == nil { state = timelineHeight }   // 起手捕获一次；结束/取消自动复位
+            }
             .onChanged { value in
-                let base = dividerBaseHeight ?? timelineHeight
-                dividerBaseHeight = base
-                // 上拖（translation.height < 0）→ 时间线变高：base − translation.height
+                guard let base = dividerBase else { return }
+                // 上拖（translation.height < 0）→ 时间线变高：base − 累计 translation.height
                 timelineHeight = Self.clamp(base - value.translation.height,
                                             min: screenHeight * 0.15,
                                             max: screenHeight * 0.85)
             }
             .onEnded { _ in
-                dividerBaseHeight = nil
                 timelineHeight = Self.snapHeight(timelineHeight, levels: snapLevels)
             }
     }
@@ -83,10 +87,13 @@ struct EditorView: View {
         Swift.min(Swift.max(value, lo), hi)
     }
 
-    /// 回填页面可用高度；首次测量时给时间线一个默认档位（最小档，预览为主）。
+    /// 回填页面可用高度；首次测量时给时间线一个默认档位（最小档，预览为主），只落一次。
     private func syncScreenHeight(_ h: CGFloat) {
         screenHeight = h
-        if timelineHeight == 0 { timelineHeight = Self.snapLevels(forScreenHeight: h)[0] }
+        if !heightSeeded {
+            timelineHeight = Self.snapLevels(forScreenHeight: h)[0]
+            heightSeeded = true
+        }
     }
 
     var body: some View {

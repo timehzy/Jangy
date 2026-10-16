@@ -10,9 +10,9 @@ struct TimelineView: View {
     var height: CGFloat
     var onAdd: () -> Void
 
-    @State private var lastTranslation: CGFloat = 0
-    @State private var lastVertical: CGFloat = 0
-    @State private var isScrubbing = false
+    /// 起手播放头（手势开始时捕获一次）。@GestureState 在手势结束**或取消**时自动复位，
+    /// 因此不需要在 .onEnded 里手动清理——取消也不会残留脏基准。
+    @GestureState private var scrubBase: TimeInterval?
 
     private var viewport: TimelineViewportState { model.viewport }
 
@@ -34,9 +34,9 @@ struct TimelineView: View {
             .onChange(of: geo.size.width) { _, w in viewport.viewportWidth = w }
         }
         .frame(height: height)
-        // 播放推进（非擦洗时）驱动播放头；擦洗期间由手势自行更新，避免相互打架。
+        // 只有播放推进才回写播放头；擦洗时 player 是暂停的（rate 0），不会回跳。
         .onChange(of: model.player.currentTime) { _, t in
-            if !isScrubbing { viewport.setPlayhead(t) }
+            if model.player.isPlaying { viewport.setPlayhead(t) }
         }
     }
 
@@ -81,25 +81,22 @@ struct TimelineView: View {
     }
 
     /// 单指横向拖 = 滚动 = 擦洗。与车道纵向 ScrollView 并存（`.simultaneousGesture`）：
-    /// 逐帧比较横/纵位移，**横向为主才算擦洗**，纵向留给 ScrollView，两者互不抢。
+    /// 用**累计**位移判断横向为主（逐帧差分会因抖动丢动作），纵向留给 ScrollView。
+    /// 播放头 = 起手位置 − 累计横向位移 / pps；起手位置存 `@GestureState`（结束/取消自动复位）。
     private var scrubGesture: some Gesture {
         DragGesture(minimumDistance: 8)
+            .updating($scrubBase) { _, state, _ in
+                if state == nil { state = viewport.playheadTime }
+            }
             .onChanged { value in
-                let dx = value.translation.width - lastTranslation
-                let dy = value.translation.height - lastVertical
-                lastTranslation = value.translation.width
-                lastVertical = value.translation.height
-                guard abs(dx) >= abs(dy) else { return }
-                isScrubbing = true
-                viewport.scrub(by: dx)
+                guard let base = scrubBase else { return }
+                guard abs(value.translation.width) >= abs(value.translation.height) else { return }
+                let target = base - TimeInterval(value.translation.width / viewport.pointsPerSecond)
+                viewport.setPlayhead(target)
                 model.scrubTo(viewport.playheadTime)
             }
             .onEnded { _ in
-                lastTranslation = 0
-                lastVertical = 0
-                let wasScrubbing = isScrubbing
-                isScrubbing = false
-                if wasScrubbing { model.scrubEnded() }   // 补最终 seek，防松手回跳
+                model.scrubEnded()   // 补最终 seek；player 仍暂停，不会回跳
             }
     }
 }
