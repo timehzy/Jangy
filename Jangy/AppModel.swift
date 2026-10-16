@@ -110,6 +110,16 @@ final class AppModel {
         }
     }
 
+    /// 落一个 L1 原子编辑（时间线抬手时调用）。校验失败进 lastIssues，不进撤销栈。
+    func applyTimelineEdit(_ edit: TimelineEdit) {
+        switch edit.apply(to: store) {
+        case .success:
+            afterPlanMutation()
+        case .failure(let failure):
+            lastIssues = failure.issues
+        }
+    }
+
     private func handleAgentAppliedEdit() {
         afterPlanMutation()
     }

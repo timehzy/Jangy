@@ -24,6 +24,7 @@ struct CaptionLane: View {
                 let start = index < starts.count ? starts[index] : 0
                 if visible.upperBound > start, visible.lowerBound < start + element.duration {
                     cueBar(element: element, start: start)
+                        .modifier(ElementLiftModifier(elementID: element.id, drag: context.drag))
                 }
             }
         }

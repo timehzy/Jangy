@@ -23,6 +23,7 @@ struct VideoLane: View {
             ForEach(Array(track.elements.enumerated()), id: \.element.id) { index, element in
                 let start = index < starts.count ? starts[index] : 0
                 elementView(element: element, start: start, visible: visible)
+                    .modifier(ElementLiftModifier(elementID: element.id, drag: context.drag))
             }
         }
     }

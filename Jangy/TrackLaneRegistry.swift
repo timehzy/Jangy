@@ -1,12 +1,65 @@
 import SwiftUI
 import JangyCore
 
-/// 车道呈现上下文：呈现器只读这里的东西（plan / 视口 / 解析器 / 缩略图器）。
+/// 消歧：SwiftUI（iOS 26）也有 `DragSession`（系统拖放会话）。本 App 的拖拽会话一律指 JangyCore 的。
+/// （模块级别名，遮蔽 SwiftUI 的同名类型；App 不用 SwiftUI 的拖放会话 API。）
+typealias DragSession = JangyCore.DragSession
+
+/// 车道呈现上下文：呈现器只读这里的东西（plan / 视口 / 解析器 / 缩略图器 / 拖动会话）。
 struct LaneContext {
     let plan: EditPlan
     let viewport: TimelineViewportState
     let resolver: AssetResolver
     let thumbnailer: TimelineThumbnailer
+    /// 当前拖拽会话（高频，来自 L0 的手势态）。车道据此对**被拖元素**施加瞬态位移/缩放——
+    /// 只改局部 SwiftUI，plan 不动（公约 §6.5）。非拖动态恒 nil。
+    var drag: DragSession? = nil
+}
+
+/// 拖动中元素的瞬态几何（点）：move 的偏移/缩放、trim 的左右边缘增量。
+/// 选中框/手柄（容器层）与车道内容都用它换算，保证图层与手势一致；plan 不动。
+struct TransientGeometry {
+    var offsetX: CGFloat = 0
+    var offsetY: CGFloat = 0
+    var scale: CGFloat = 1
+    /// 左边缘位移（点，右正）：>0 = 前沿内收（trim 起手侧）。
+    var leadingDelta: CGFloat = 0
+    /// 右边缘位移（点，右正）：>0 = 后沿外扩（trim 收尾侧）。
+    var trailingDelta: CGFloat = 0
+
+    static func make(elementID: UUID, drag: DragSession?) -> TransientGeometry {
+        guard let drag else { return TransientGeometry() }
+        switch drag.kind {
+        case .moveElement(let id, _) where id == elementID:
+            return TransientGeometry(offsetX: drag.translation.width, offsetY: drag.translation.height,
+                                     scale: 1.06)
+        case .trim(let id, let edge) where id == elementID:
+            var geometry = TransientGeometry()
+            if edge == .leading { geometry.leadingDelta = drag.translation.width }
+            else { geometry.trailingDelta = drag.translation.width }
+            return geometry
+        default:
+            return TransientGeometry()
+        }
+    }
+}
+
+/// 被拖元素的浮起反馈：跟随手指位移 + 放大 + 阴影。只读 drag 会话，plan 不动。
+struct ElementLiftModifier: ViewModifier {
+    let elementID: UUID
+    let drag: DragSession?
+
+    @ViewBuilder func body(content: Content) -> some View {
+        if let drag, case .moveElement(let id, _) = drag.kind, id == elementID {
+            content
+                .offset(x: drag.translation.width, y: drag.translation.height)
+                .scaleEffect(1.06)
+                .shadow(color: .black.opacity(0.4), radius: 6)
+                .zIndex(1)
+        } else {
+            content
+        }
+    }
 }
 
 /// 一类轨的 L0 呈现片（与 L2 `Features/<Name>/<Name>Feature.swift`、L3 `<Name>Engine.swift` 同 kind 的三片之一）。

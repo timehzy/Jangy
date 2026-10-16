@@ -14,6 +14,9 @@ struct EditorView: View {
     @State private var showRename = false
     @State private var renameText = ""
 
+    /// 时间线上选中的元素 id（纯 L0 局部态，不进 plan）。选中即出操作条（变速/转场/删除/布局）。
+    @State private var selection: UUID?
+
     /// 时间线窗格高度（预览 / 时间线分界的拖动量）；档位由屏幕高度推导，见 snapLevels。
     /// 初值非零：GeometryReader 回填前也先给一帧可用高度，避免时间线闪一帧 0 高。
     @State private var timelineHeight: CGFloat = 240
@@ -38,6 +41,108 @@ struct EditorView: View {
     private var captionEnabled: Bool {
         guard let track = captionTrack else { return false }
         return CaptionFeature.settings(of: track).isEnabled
+    }
+
+    // MARK: 选中态操作条（变速 / 转场 / 删除 / 布局预设）
+
+    /// 选中的内容元素及其片段（按 id 跨轨定位，不假定在主轨）。找不到（撤销/删除后 selection
+    /// 悬空）时返回 nil，操作条随之隐藏。
+    private var selectedClip: (clip: PlanClip, asset: AssetItem?)? {
+        guard let id = selection else { return nil }
+        for track in model.store.plan.tracks {
+            guard let element = track.elements.first(where: { $0.id == id }),
+                  case .content(let payload) = element.content,
+                  let clip = payload.value as? PlanClip else { continue }
+            return (clip, model.store.plan.asset(withID: clip.assetID))
+        }
+        return nil
+    }
+
+    /// 选中操作条：变速 / 转场 / 布局（菜单）+ 删除（留 gap）+ 取消选择。
+    private var selectionBar: some View {
+        HStack(spacing: 14) {
+            Menu("变速") {
+                ForEach([0.5, 1.0, 1.5, 2.0], id: \.self) { rate in
+                    Button(speedLabel(rate)) { setSpeed(rate) }
+                }
+            }
+            Menu("转场") {
+                Button("无") { setTransition(nil) }
+                Button("叠化 0.5s") { setTransition(.dissolve(duration: 0.5)) }
+                Button("淡入淡出 0.5s") { setTransition(.fade(duration: 0.5)) }
+            }
+            Menu("布局") {
+                Button("全屏") { setLayout(nil) }
+                Button("左半屏") { setLayout(.left) }.disabled(!canHalfScreen(.left))
+                Button("右半屏") { setLayout(.right) }.disabled(!canHalfScreen(.right))
+            }
+            Button("删除", role: .destructive) { deleteSelection() }
+            Spacer()
+            Button("取消选择") { selection = nil }
+        }
+        .font(.subheadline)
+        .padding(.horizontal)
+        .disabled(model.agent.isRunning)
+    }
+
+    private func speedLabel(_ rate: Double) -> String {
+        rate == rate.rounded() ? "\(Int(rate))×" : "\(rate)×"
+    }
+
+    /// 改选中片段的 payload（按 id 跨轨定位，一次 model.edit = 单撤销步）。
+    private func updateSelectedClip(_ mutate: @escaping (inout PlanClip) -> Void) {
+        guard let id = selection else { return }
+        model.edit { plan in
+            for ti in plan.tracks.indices {
+                guard let ei = plan.tracks[ti].elements.firstIndex(where: { $0.id == id }),
+                      case .content(let payload) = plan.tracks[ti].elements[ei].content,
+                      var clip = payload.value as? PlanClip else { continue }
+                mutate(&clip)
+                plan.tracks[ti].elements[ei].content = .content(TrackPayload(clip))
+                return
+            }
+        }
+    }
+
+    private func setSpeed(_ rate: Double) {
+        updateSelectedClip { $0.speed = .flat(rate) }
+    }
+
+    private func setTransition(_ transition: PlanTransition?) {
+        updateSelectedClip { $0.transitionAfter = transition }
+    }
+
+    /// 删除 = 留 gap（链式轨中间内容元素换等长 gap），走公约「删除语义」。
+    private func deleteSelection() {
+        guard let id = selection else { return }
+        model.edit { plan in TrackOperations.removeElement(id, in: &plan) }
+        selection = nil
+    }
+
+    /// 该侧半屏能否算出（视频像素尺寸未知 → halfScreen 返 nil → 禁用，不静默回退全屏）。
+    private func canHalfScreen(_ side: ClipTransform.Half) -> Bool {
+        guard let asset = selectedClip?.asset else { return false }
+        return ClipTransform.halfScreen(for: asset, preset: model.store.plan.preset, side: side) != nil
+    }
+
+    /// 设选中元素的布局：全屏 = transform nil；半屏按素材/预设算 scale。一次 model.edit。
+    private func setLayout(_ side: ClipTransform.Half?) {
+        guard let id = selection else { return }
+        model.edit { plan in
+            for ti in plan.tracks.indices {
+                guard let ei = plan.tracks[ti].elements.firstIndex(where: { $0.id == id }),
+                      case .content(let payload) = plan.tracks[ti].elements[ei].content,
+                      var clip = payload.value as? PlanClip else { continue }
+                if let side, let asset = plan.asset(withID: clip.assetID),
+                   let transform = ClipTransform.halfScreen(for: asset, preset: plan.preset, side: side) {
+                    clip.transform = transform
+                } else {
+                    clip.transform = nil   // 全屏（或算不出时也回全屏）
+                }
+                plan.tracks[ti].elements[ei].content = .content(TrackPayload(clip))
+                return
+            }
+        }
     }
 
     // MARK: 预览 / 时间线可拖分界
@@ -138,6 +243,10 @@ struct EditorView: View {
             }
             .padding(.horizontal)
 
+            if selectedClip != nil {
+                selectionBar
+            }
+
             if let progress = model.exportProgress {
                 ProgressView(value: progress).padding(.horizontal)
             }
@@ -154,7 +263,8 @@ struct EditorView: View {
 
             divider
 
-            TimelineView(model: model, height: timelineHeight, onAdd: { showLibrary = true })
+            TimelineView(model: model, height: timelineHeight, selection: $selection,
+                         onAdd: { showLibrary = true })
         }
         // 量页面可用高度（背景读取不改变既有布局），档位据此推导，不写死像素。
         .background {
