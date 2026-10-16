@@ -177,9 +177,9 @@ struct TimelineView: View {
                     .frame(width: width, height: LaneMetrics.height)
                     .allowsHitTesting(false)
                 trimHandle(elementID: element.id, edge: .leading)
-                    .offset(x: -8)
+                    .offset(x: -Self.trimHandleHalfWidth)
                 trimHandle(elementID: element.id, edge: .trailing)
-                    .offset(x: width - 8)
+                    .offset(x: width - Self.trimHandleHalfWidth)
             }
         }
         .frame(width: width, height: LaneMetrics.height, alignment: .leading)
@@ -196,7 +196,7 @@ struct TimelineView: View {
     private func trimHandle(elementID: UUID, edge: DragSession.Edge) -> some View {
         RoundedRectangle(cornerRadius: 2)
             .fill(Color.accentColor)
-            .frame(width: 16, height: LaneMetrics.height)
+            .frame(width: Self.trimHandleWidth, height: LaneMetrics.height)
             .overlay(Capsule().foregroundStyle(.white).frame(width: 2, height: 18))
             .contentShape(Rectangle())
             .highPriorityGesture(trimGesture(elementID: elementID, edge: edge))
@@ -355,30 +355,36 @@ struct TimelineView: View {
             }
     }
 
-    /// 擦洗是否放行：编辑拖拽/缩放进行中、或起手落在**选中元素所在行的交互区**（X **且** Y）内——
-    /// 都不擦洗。Y 由选中行上报在 `timeline` 命名坐标系里的 frame 给出；只挡选中元素那一条，
-    /// 其它轨同 X 位置的擦洗不受影响（低缩放下整屏被一条片段覆盖时也能擦）。
+    /// 擦洗是否放行：编辑拖拽/缩放进行中、或起手落在**选中元素的 trim 手柄区**内——都不擦洗。
+    /// 元素**体上**无拖拽手势（横拖本应擦洗），故体不挡；只有两处手柄区把擦洗让给 trim。
+    /// Y 由选中行上报在 `timeline` 命名坐标系里的 frame 给出（见 `selectionRowProbe`）。
     private func canScrub(from startLocation: CGPoint) -> Bool {
         guard drag == nil, magnifyBase == nil else { return false }
-        guard let rect = selectedInteractionRect() else { return true }
-        return !rect.contains(startLocation)
+        return !isInSelectedTrimHandle(startLocation)
     }
 
-    /// 选中元素的交互矩形（`timeline` 坐标）：选中行 Y 带 × 元素 X 带（含手柄余量）。
-    /// 缺任一半（无选中 / 行 frame 未上报）时返回 nil。
-    private func selectedInteractionRect() -> CGRect? {
-        guard let id = selection, let rowFrame = selectedRowFrame else { return nil }
+    /// 起手点是否落在选中元素的 trim 手柄区（选中行 Y 带 × 两处手柄 X 带）。
+    /// 缺任一半（无选中 / 行 frame 未上报）时返回 false（放行）。
+    private func isInSelectedTrimHandle(_ location: CGPoint) -> Bool {
+        guard let id = selection, let rowFrame = selectedRowFrame else { return false }
+        guard (rowFrame.minY ... rowFrame.maxY).contains(location.y) else { return false }
         for track in model.store.plan.tracks {
             guard let index = track.elements.firstIndex(where: { $0.id == id }) else { continue }
             let starts = track.elementOutputStarts()
             let start = index < starts.count ? starts[index] : 0
-            let x = viewport.viewportX(forTime: start)
-            let width = LaneMetrics.width(forDuration: track.elements[index].duration, viewport: viewport)
-            return CGRect(x: x - 8, y: rowFrame.minY,
-                          width: width + 16, height: rowFrame.height)
+            let leadingX = viewport.viewportX(forTime: start)
+            let trailingX = leadingX
+                + LaneMetrics.width(forDuration: track.elements[index].duration, viewport: viewport)
+            let half = Self.trimHandleHalfWidth
+            return (leadingX - half ... leadingX + half).contains(location.x)
+                || (trailingX - half ... trailingX + half).contains(location.x)
         }
-        return nil
+        return false
     }
+
+    /// trim 手柄宽度（点）及其相对元素边缘的居中偏移——手柄区判定与手柄呈现共用，避免两处对不上。
+    private static let trimHandleWidth: CGFloat = 16
+    private static var trimHandleHalfWidth: CGFloat { trimHandleWidth / 2 }
 
     /// 双指捏合的起手基准：手势开始那一刻的 pps 与累计 magnification。
     /// 存这对值是为了把「**累计** magnification」换算成**绝对**目标 pps——相对起手基准算，
