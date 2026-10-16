@@ -16,6 +16,9 @@ struct CaptionLane: View {
     let track: PlanTrack
     let context: LaneContext
 
+    /// 字幕条高度（点）。条在车道内居中，故定位的 y 偏移也由它推出。
+    private static let barHeight: CGFloat = 28
+
     var body: some View {
         let starts = track.elementOutputStarts()
         // 裁剪用 `cullRange`（存储 + 量化）而非 `visibleTimeRange`：后者转调 `playheadTime`，
@@ -26,20 +29,22 @@ struct CaptionLane: View {
                 let start = index < starts.count ? starts[index] : 0
                 if visible.upperBound > start, visible.lowerBound < start + element.duration {
                     let geometry = TransientGeometry.make(elementID: element.id, drag: context.drag)
-                    cueBar(element: element, start: start, geometry: geometry)
-                        .modifier(ElementLiftModifier(geometry: geometry))
+                    cueBar(element: element, geometry: geometry)
+                        // 定位与浮起收在这一处（内容块一律不自定位，见 `LaneElementModifier`）。
+                        .modifier(LaneElementModifier(
+                            geometry: geometry,
+                            x: context.viewport.contentX(forTime: start) + geometry.leadingDelta,
+                            y: (LaneMetrics.height - Self.barHeight) / 2))
                 }
             }
         }
     }
 
     @ViewBuilder
-    private func cueBar(element: PlanElement, start: TimeInterval,
-                        geometry: TransientGeometry) -> some View {
+    private func cueBar(element: PlanElement, geometry: TransientGeometry) -> some View {
         let baseWidth = LaneMetrics.width(forDuration: element.duration, viewport: context.viewport)
         // 字幕不可 trim（无手柄），几何的 leading/trailing 恒 0；move 时浮起由 modifier 处理。
         let width = max(1, baseWidth - geometry.leadingDelta + geometry.trailingDelta)
-        let barHeight: CGFloat = 28
         let text: String? = {
             if case .content(let payload) = element.content,
                let cue = payload.value as? CaptionCuePayload { return cue.text }
@@ -47,7 +52,7 @@ struct CaptionLane: View {
         }()
         RoundedRectangle(cornerRadius: LaneMetrics.cornerRadius)
             .fill(Color.accentColor.opacity(0.8))
-            .frame(width: width, height: barHeight)
+            .frame(width: width, height: Self.barHeight)
             .overlay(alignment: .leading) {
                 if let text {
                     Text(text)
@@ -57,7 +62,5 @@ struct CaptionLane: View {
                         .padding(.horizontal, 5)
                 }
             }
-            .offset(x: context.viewport.contentX(forTime: start) + geometry.leadingDelta,
-                    y: (LaneMetrics.height - barHeight) / 2)
     }
 }

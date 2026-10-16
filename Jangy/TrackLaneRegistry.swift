@@ -35,8 +35,10 @@ struct TransientGeometry {
         guard let drag else { return TransientGeometry() }
         switch drag.kind {
         case .moveElement(let id, _) where id == elementID:
+            // 浮起 = 「元素已离开原位」：位移非零才算真的在拖。手势层的起手阈值保证未越过阈值时
+            // 给不出非零位移，故长按不放（位移恒 0）不浮起——否则「只想点一下」也会弹一下。
             return TransientGeometry(offsetX: drag.translation.width, offsetY: drag.translation.height,
-                                     isLifted: true)
+                                     isLifted: drag.translation != .zero)
         case .trim(let id, let edge) where id == elementID:
             var geometry = TransientGeometry()
             if edge == .leading { geometry.leadingDelta = drag.translation.width }
@@ -48,18 +50,39 @@ struct TransientGeometry {
     }
 }
 
-/// 被拖元素的浮起反馈：跟随手指位移 + 放大 + 阴影。只读瞬态几何，plan 不动。
+/// 浮起的**几何**：绕自身中心放大 + 跟随手指的位移。只读瞬态几何，plan 不动。
+///
+/// **缩放必须在定位之前**：`scaleEffect` 的锚点是**被修饰视图自身 frame 的中心**，而 `offset`
+/// 只是渲染位移、不改 frame——写成 `offset(x: contentX…).scaleEffect()` 时定位量会一起被缩放，
+/// 元素按自己在内容坐标里的位置成比例横移（`contentX` 越大偏得越多，浮起瞬间整段横跳）。
+/// **容器层（选中框 / 手柄）与车道内容块都走这一条**，两处的缩放中心与顺序不可能再对不上。
+struct LiftTransformModifier: ViewModifier {
+    let geometry: TransientGeometry
+    /// 元素块在内容坐标里的 x（`contentX(forTime:)` + 前沿瞬态位移）。
+    let x: CGFloat
+    /// 内容块在车道内的竖直对齐偏移（如字幕条居中）。
+    var y: CGFloat = 0
+
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(geometry.isLifted ? TransientGeometry.liftScale : 1)
+            .offset(x: x + geometry.offsetX, y: y + geometry.offsetY)
+    }
+}
+
+/// 车道元素块 = 浮起几何（`LiftTransformModifier`）+ 阴影 + 层级。内容块**一律不自定位**。
 ///
 /// **修饰链恒定**：非浮起时各参数取中性值，**不得**写成 `if isLifted { … } else { … }`——
 /// `@ViewBuilder` 的 if/else 是两个分支，切换分支 = 被包内容换了结构位置 = SwiftUI 拆掉旧子树
 /// 重建新子树，里面的 `@State`（如胶片条的帧缓存）跟着清空。浮起 / 落下各来一次，缩略图就闪两下灰底。
-struct ElementLiftModifier: ViewModifier {
+struct LaneElementModifier: ViewModifier {
     let geometry: TransientGeometry
+    let x: CGFloat
+    var y: CGFloat = 0
 
     func body(content: Content) -> some View {
         content
-            .offset(x: geometry.offsetX, y: geometry.offsetY)
-            .scaleEffect(geometry.isLifted ? TransientGeometry.liftScale : 1)
+            .modifier(LiftTransformModifier(geometry: geometry, x: x, y: y))
             .shadow(color: .black.opacity(geometry.isLifted ? 0.4 : 0),
                     radius: geometry.isLifted ? 6 : 0)
             .zIndex(geometry.isLifted ? 1 : 0)

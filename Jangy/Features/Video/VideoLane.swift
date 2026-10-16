@@ -46,7 +46,6 @@ struct VideoLane: View {
                     Rectangle().fill(.black)
                         .frame(width: LaneMetrics.width(forDuration: element.duration, viewport: context.viewport),
                                height: LaneMetrics.height)
-                        .offset(x: context.viewport.contentX(forTime: start))
                 case .content(let payload):
                     if let clip = payload.value as? PlanClip,
                        let asset = context.plan.asset(withID: clip.assetID) {
@@ -54,22 +53,22 @@ struct VideoLane: View {
                                           start: start, window: window, context: context, geometry: geometry)
                     } else {
                         // 素材未登记 / payload 类型不符：灰条兜底，不崩。
-                        placeholder(element: element, start: start, geometry: geometry)
+                        placeholder(element: element, geometry: geometry)
                     }
                 }
             }
-            .modifier(ElementLiftModifier(geometry: geometry))
+            // 定位与浮起收在这一处（内容块一律不自定位，见 `LaneElementModifier`）。
+            .modifier(LaneElementModifier(geometry: geometry,
+                                          x: context.viewport.contentX(forTime: start) + geometry.leadingDelta))
         }
     }
 
-    private func placeholder(element: PlanElement, start: TimeInterval,
-                             geometry: TransientGeometry) -> some View {
+    private func placeholder(element: PlanElement, geometry: TransientGeometry) -> some View {
         let baseWidth = LaneMetrics.width(forDuration: element.duration, viewport: context.viewport)
         return RoundedRectangle(cornerRadius: LaneMetrics.cornerRadius)
             .fill(Color(.secondarySystemFill))
             .frame(width: max(1, baseWidth - geometry.leadingDelta + geometry.trailingDelta),
                    height: LaneMetrics.height)
-            .offset(x: context.viewport.contentX(forTime: start) + geometry.leadingDelta)
     }
 }
 
@@ -97,10 +96,8 @@ private struct VideoElementStrip: View {
     /// （旧竖拍素材会一直在「横带裁切 ↔ 灰底」之间闪）。
     @State private var adoptedAspect: AdoptedAspect?
 
-    var body: some View {
-        filmStrip
-            .offset(x: context.viewport.contentX(forTime: start) + geometry.leadingDelta)
-    }
+    /// 只出内容块，**不自定位**——定位（含浮起缩放的先后）由外层 `LaneElementModifier` 施加。
+    var body: some View { filmStrip }
 
     // MARK: 帧格胶片条
 
@@ -130,7 +127,7 @@ private struct VideoElementStrip: View {
                 }
                 .frame(width: cell.width, height: LaneMetrics.height)
                 .clipped()
-                // 格相对**条**起点定位（`i·cellWidth`）。前缘 trim 的位移已由整条的 offset 施加，
+                // 格相对**条**起点定位（`i·cellWidth`）。整条的前缘 trim 位移由外层定位施加，
                 // 这里再加一次会让胶片条比选中框多平移一个 leadingDelta。
                 .offset(x: cell.x)
             }

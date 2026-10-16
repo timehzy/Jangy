@@ -153,6 +153,7 @@ v1 范围：**导入 + 剪辑 + 导出保元数据**；球形交互预览进 bac
 
 6. **高频量只由叶子视图读取**：`playheadTime` / `scrollOffset` / `player.currentTime` 这类每帧都变的量，只允许在**叶子视图的 body** 里读（`ScrollingOffset` / `PlayheadOverlay` / `PlaybackFollow`），容器 body 一律不得读——`@Observable` 的依赖按「body 作用域内读到的 stored 属性」注册（计算属性只是转调 stored getter，照常注册），容器一读就会在滚动 / 播放的每一帧重建整棵树。**离散手势态（`@GestureState`）不属此列**——它每手势只变几次，容器读它（如轴锁定态）没有每帧代价。
    与之配套：**裁剪窗（量化、只管「建哪些内容」）与平移（连续、由叶子承载）必须分开**——用量化窗去定位平移会让滚动跳步；量化窗必须是**存储属性**且只在跨量子时写（同值写照样通知）。
+   再配套：`playheadTime` 的**写者**同样要收敛——播放跟随（`PlaybackFollow`）与用户手势不得同时写。凡会改播放头的手势（擦洗、惯性、捏合缩放）都走同一条接管路径（`AppModel.scrubTo` / `scrubEnded`：暂停播放 + 节流 seek），播放跟随靠 `isPlaying` guard 单点让位。
 
 ## 7. 测试与验收公约
 

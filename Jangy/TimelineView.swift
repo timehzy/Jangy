@@ -193,7 +193,7 @@ struct TimelineView: View {
         let geometry = TransientGeometry.make(elementID: element.id, drag: drag)
         let baseWidth = LaneMetrics.width(forDuration: element.duration, viewport: viewport)
         let width = max(1, baseWidth - geometry.leadingDelta + geometry.trailingDelta)
-        let x = viewport.contentX(forTime: start) + geometry.leadingDelta + geometry.offsetX
+        let x = viewport.contentX(forTime: start) + geometry.leadingDelta
         let isClip = Self.hasClipPayload(element)
         return ZStack(alignment: .leading) {
             Color.clear
@@ -213,7 +213,9 @@ struct TimelineView: View {
             }
         }
         .frame(width: width, height: LaneMetrics.height, alignment: .leading)
-        .offset(x: x, y: geometry.offsetY)
+        // 与车道内容**同源**：同一条浮起几何（缩放恒在定位之前，见 `LiftTransformModifier`）。
+        // 不同源则浮起时选中框 / 手柄比放大 6% 的内容小一圈，手柄也压进内容里。
+        .modifier(LiftTransformModifier(geometry: geometry, x: x))
     }
 
     /// 元素的 payload 是否是片段（可 trim 的唯一类型）。字幕等其它 payload 不产生 trim 手柄。
@@ -234,13 +236,21 @@ struct TimelineView: View {
 
     // MARK: 手势 → 会话 → 原子编辑
 
-    /// 长按元素浮起后拖动 = 移动 / 换轨。`LongPressGesture` 成功即浮起（translation 0），
-    /// 随后 `DragGesture` 累计位移；抬手 `resolve` → 一个原子编辑。
+    /// 长按元素后拖动 = 移动 / 换轨。长按完成即进会话并选中（此时位移恒 0：**只选中、不浮起**），
+    /// 位移越过起手阈值后 `DragGesture` 才给出位移 → 元素浮起跟手；抬手 `resolve` → 一个原子编辑。
     /// 拖动全程只写 `@GestureState drag`（经 `.updating`），plan 不动。
+    ///
+    /// **长按完成那一步就要写会话**（哪怕位移为 0）：擦洗的让位判据是 `drag != nil`，会话早写一步，
+    /// 长按期间横向拖才不会被擦洗抢走（起手阈值与擦洗同为 8pt，光靠阈值分不出先后）。
+    /// 而**浮起由位移驱动**（见 `TransientGeometry.make`），故「按住不放」不会浮起。
+    ///
+    /// 长按完成时系统派发 `.first(true)` 还是 `.second(true, nil)` 不作假设（实测与文档不一致）——
+    /// **两个 case 都要覆盖**：只留 `.second(true, value)` 会让会话在越过阈值前一直为 nil，
+    /// 长按期间横拖就被擦洗抢走；只留 `.first(true)` 则万一不派发就整个没反应。
     private func moveGesture(element: PlanElement) -> some Gesture {
         let kind = GestureRouter.liftSession(for: .element(id: element.id), plan: model.store.plan)?.kind
         return LongPressGesture(minimumDuration: 0.25)
-            .sequenced(before: DragGesture(minimumDistance: 0))
+            .sequenced(before: DragGesture(minimumDistance: Self.dragThreshold))
             .updating($drag) { value, state, _ in
                 guard let kind else { return }
                 switch value {
@@ -253,8 +263,12 @@ struct TimelineView: View {
                 }
             }
             .onChanged { value in
-                // 浮起即选中（拖动中的元素高亮，操作条同步）。
-                if case .second(true, _) = value { selection = element.id }
+                // 长按完成即选中（拖动中的元素高亮，操作条同步）——不等拖动起手：
+                // 「按住不放」也是选中，不该因为没越过阈值就没有选中反馈。
+                switch value {
+                case .first(true), .second(true, _): selection = element.id
+                default: break
+                }
             }
             .onEnded { value in
                 guard let kind, case .second(true, let dragValue) = value else { return }
@@ -277,11 +291,11 @@ struct TimelineView: View {
             }
     }
 
-    /// 长按轨道头上下拖 = 轨道重排。与元素移动同构。
+    /// 长按轨道头上下拖 = 轨道重排。与元素移动同构（含起手阈值：长按不放不跟手抖动）。
     private func reorderGesture(trackID: UUID) -> some Gesture {
         let kind = GestureRouter.liftSession(for: .trackCap(trackID: trackID), plan: model.store.plan)?.kind
         return LongPressGesture(minimumDuration: 0.25)
-            .sequenced(before: DragGesture(minimumDistance: 0))
+            .sequenced(before: DragGesture(minimumDistance: Self.dragThreshold))
             .updating($drag) { value, state, _ in
                 guard let kind else { return }
                 switch value {
@@ -487,6 +501,12 @@ struct TimelineView: View {
 
     /// trim 手柄宽度（点）及其相对元素边缘的居中偏移——手柄区判定与手柄呈现共用，避免两处对不上。
     private static let trimHandleWidth: CGFloat = 16
+
+    /// 「长按浮起」类拖动的**起手阈值**（点，与擦洗同口径）。
+    /// **不能取 0**：`DragGesture(minimumDistance: 0)` 会把「按住不动」也算成拖动——手指的自然
+    /// 抖动被当成位移，元素立刻浮起并跟着抖（表现为「点一下就抖」）。过阈值才算真的在拖，
+    /// 浮起也随之推迟到那一刻（见 `TransientGeometry.make`）。trim 手柄另取 1（见 `trimGesture`）。
+    private static let dragThreshold: CGFloat = 8
     private static var trimHandleHalfWidth: CGFloat { trimHandleWidth / 2 }
 
     /// 双指捏合的起手基准：手势开始那一刻的 pps 与累计 magnification。
@@ -501,6 +521,11 @@ struct TimelineView: View {
     /// `MagnifyGesture.Value.magnification` 是**整个手势的累计值**（起手 ≈ 1），不是逐帧增量——
     /// 直接喂 `zoom(by:)` 会重复计数，故先按起手基准折成绝对目标，再换算成相对当前 pps 的增量因子。
     /// 起手基准存 `@GestureState`（`.updating` 里捕获一次），手势结束或取消都自动复位，无黏性状态。
+    ///
+    /// **缩放会改播放头**（锚点补偿：锚点下的时间必须留在原地），所以它和擦洗是**同一件事**——
+    /// 走 `model.scrubTo` / `scrubEnded` 这条既有路径（暂停 + 节流 seek + 抬手精确对齐）。
+    /// 否则播放跟随（`PlaybackFollow` 每拍按播放器时间重定播放头）会和锚点补偿抢同一个
+    /// `playheadTime`：内容在两者之间来回跳——即播放态捏合的高频抖动。
     private var magnifyGesture: some Gesture {
         MagnifyGesture()
             .updating($magnifyBase) { value, state, _ in
@@ -510,10 +535,15 @@ struct TimelineView: View {
                 }
             }
             .onChanged { value in
+                cancelFling()   // 惯性也是播放头的写者，手指一接管就停
                 guard let base = magnifyBase else { return }
                 let target = base.pointsPerSecond * (value.magnification / base.magnification)
                 viewport.zoom(by: target / viewport.pointsPerSecond,
                               anchorX: value.startAnchor.x * viewport.viewportWidth)
+                model.scrubTo(viewport.playheadTime)
+            }
+            .onEnded { _ in
+                model.scrubEnded()
             }
     }
 }

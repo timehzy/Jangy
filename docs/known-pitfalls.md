@@ -31,7 +31,13 @@
 
 - **`@Observable` 的 setter 不做相等判断，同值写也通知依赖者**（2026-10-16 定位）：`currentTime` / `playheadTime` 这类高频量若无条件回写，暂停期间值不变也会按轮询频率持续通知，让时间线白重算（实测暂停时仍 10Hz 重建）。凡「每帧 / 每拍回写」的 stored 属性都要加同值 guard
 - **依赖按 body 作用域内读到的 stored 属性注册**（2026-10-16 定位）：计算属性（`scrollOffset` / `visibleTimeRange` / `contentX(forTime:)`）只是转调 stored getter，照常注册依赖；手势闭包里的读取不注册。故容器 body 一旦读高频量就会每帧重建整棵树，而父视图 body 重算**不会**无条件强制子视图 body 重算（SwiftUI 对子视图值做 diff，相等即跳过）——每个读了该对象的视图是**各自独立失效**的，修法是「把高频读取收进最小叶子」，不是「让父别重算」（约束见架构公约 §6.6）
-- **`@ViewBuilder` 的 if/else 换分支 = 子树重建、`@State` 清空**（2026-10-16 定位）：两个分支在视图结构里是**两个不同位置**（哪怕包的是同一个视图值），条件翻转时 SwiftUI 拆旧建新，里面的 `@State` 全部重来。`ElementLiftModifier` 原写成 `if isLifted { content.offset()… } else { content }`，于是长按浮起 / 落下各清空一次胶片条的帧缓存——表现为**点选（按下）时缩略图闪一下灰底**。对策：修饰链恒定，非浮起态各参数取中性值（`scaleEffect(1)` / `shadow(opacity: 0, radius: 0)`）
+- **`@ViewBuilder` 的 if/else 换分支 = 子树重建、`@State` 清空**（2026-10-16 定位）：两个分支在视图结构里是**两个不同位置**（哪怕包的是同一个视图值），条件翻转时 SwiftUI 拆旧建新，里面的 `@State` 全部重来。浮起修饰器原写成 `if isLifted { content.offset()… } else { content }`，于是长按浮起 / 落下各清空一次胶片条的帧缓存——表现为**点选（按下）时缩略图闪一下灰底**。对策：修饰链恒定，非浮起态各参数取中性值（`scaleEffect(1)` / `shadow(opacity: 0, radius: 0)`）
+- **播放跟随与手势会抢同一个 `playheadTime`**（2026-10-16 定位）：`PlaybackFollow` 在播放态每拍（100ms）按播放器时间重定播放头（带 0.12s 线性动画），而捏合缩放的锚点补偿**每帧**直接写播放头——两者同时写时，内容在「播放器时间」与「锚点要求的位置」之间来回跳，即**播放态捏合的高频抖动**（暂停态不出现，因为那时 `isPlaying` guard 已让位）。对策：会改播放头的手势一律走擦洗那条路径（`scrubTo` / `scrubEnded`），播放跟随自然让位（规则见架构公约 §6.6）
+
+## SwiftUI 渲染与手势
+
+- **`scaleEffect` 写在 `offset` 之外会把定位量一起缩放**（2026-10-16 定位）：`scaleEffect` 的锚点是**被修饰视图自身 frame 的中心**，而 `offset` 只是渲染位移、不改 frame——`content.offset(x: contentX).scaleEffect(1.06)` 的变换是「缩放 ∘ 平移」，平移量被乘了 1.06。时间线元素块原先把定位放在块内、浮起缩放放在块外，于是浮起瞬间整段横移 `0.06 × (contentX − 块宽/2)`：越靠后的片段偏得越多（实测可达几十点），而选中框 / 手柄不缩放 → 与内容错位。对策：**缩放与定位收在同一个修饰器里（`LiftTransformModifier`），缩放恒在 `offset` 之前**，容器层与车道内容共用这一条、内容块一律不自定位
+- **`DragGesture(minimumDistance: 0)` 把「按住不动」也算成拖动**（2026-10-16 定位）：长按序列（`LongPressGesture.sequenced(before: DragGesture)`）里用 0 当阈值时，长按成功那一刻起手指的自然抖动就成了位移——元素立刻浮起并跟着抖（表现为「点一下就抖」）。对策：阈值取 8pt（与擦洗同口径），浮起改由「位移非零」驱动
 
 ## 文件系统（Foundation）
 
