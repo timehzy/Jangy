@@ -48,24 +48,25 @@
 | `TrackOperations` | L2 | 两条主轨不变式的唯一维持点 |
 | `EditStore` / `UndoStack` / `EditPlanValidator` | L2 | apply 是全库唯一写入口 |
 | `AssetResolver` / `ProjectStore` / `AssetLibrary` / `PlanLoader` | L2 基础设施 | ProjectStore 多项目持久化；AssetLibrary 全局素材登记表 |
-| `EngineBridge` / `PreviewBridge` / `ExportRunner` / `PhotosBridge` / `AssetImporter` / `CaptionImageRenderer` / `StillImagePreparer` / `ImageDownsampler` / `CoverGenerator` | L3 | |
+| `EngineBridge` / `PreviewBridge` / `ExportRunner` / `PhotosBridge` / `AssetImporter` / `CaptionImageRenderer` / `StillImagePreparer` / `ImageDownsampler` / `CoverGenerator` / `TimelineThumbnailer` | L3 | `TimelineThumbnailer` 从源素材抽帧（档位离散 + 缓存），由原 L0 `ThumbnailLoader` 收口上来——后者在 L0 却 `import AVFoundation`，违反 §1 |
 | `Features/<Name>/<Name>Engine.swift`（`VideoEngine` / `CaptionEngine`） | L3 | 同一 kind 的引擎映射片（见「轨道模型」节） |
-| App 壳全部 SwiftUI + `AppModel` | L0/L1 | AppModel 目前是 L1 雏形，正式版拆出 Interaction 层 |
+| App 壳全部 SwiftUI + `AppModel` | L0 | AppModel 为表现层状态壳 |
+| `Jangy/TrackLaneRegistry.swift` / `Jangy/Features/<Name>/<Name>Lane.swift` | L0 | 轨道呈现注册表：镜像 L2 的 `Features/<Name>/<Name>Feature.swift` 切片模式（同一 kind 在每层各注册一片），`TrackLaneView` 按 kind 查表取呈现器 |
 | `AgentToolSet` / `EditAgentSession` / `AgentRunContext`（`JangyAgent` target） | L1 headless 消费方 | 剪辑 Agent：工具层（原子编辑 → `EditStore.apply`，校验失败结构化回喂）+ 编排层（连续对话 session，agent loop + snapshot 视觉自检）；App 与 CLI 共用 |
 | `AssetSynthesizer` / `SamplePlan`（`JangyTestSupport` target） | 测试脚手架 | 不分层：仅测试与 CLI 依赖，App 不链接，不进正式产物 |
-| **待建** | L1 | Interaction 层（手势→意图翻译）当前尚不存在独立模块 |
+| `TimelineViewportState` / `SnapEngine` / `DragSession` / `GestureRouter` / `TimelineEdit`（`JangyCore/Interaction`） | L1 | 交互操作层：手势→原子意图翻译；**纯 Swift（无 SwiftUI）**——手势识别仍在 L0 |
 | **待建** | L2 | 原语事件 + reactor 注册表（见 §4） |
 
 ## 2. 数据流公约
 
 1. **唯一写入口**：一切 plan 修改经 `EditStore.apply`（沿用现有硬性约定），校验失败不压撤销栈。
-2. **播放状态隔离**：播放头位置、播放/暂停态等高频状态（30/60fps）**不进 EditStore**，由 PlayerController 独立发布；时间线 UI 不订阅播放头，字幕预览叠加层等需要播放时间的组件单独订阅。理由：防止播放头每帧触发整棵 SwiftUI 树重算。
+2. **播放状态隔离**：播放头位置、播放/暂停态等高频状态（30/60fps）**不进 EditStore**，由 PlayerController 独立发布。时间线播放头由 L1 `TimelineViewportState` 驱动（高频，隔离在时间线子树内，不经 `PlayerController` 全局广播）；字幕预览叠加层仍单独订阅 `PlayerController.currentTime`。理由：防止播放头每帧触发整棵 SwiftUI 树重算。
 3. **Intent 是用户操作的唯一表达**：L0 不发「改 plan 第 3 段 speed」这种指令，只发语义 Intent（`userRequestedSplit(clipID, at:)`），由 L1 翻译成原子操作组合。
 4. **撤销粒度 = 用户操作粒度**：一次用户操作产生的所有原子修改（含 reactor 追加的联动）进同一撤销步。
 
 ## 3. 数据建模公约
 
-1. **片段级属性内禀化**：变速、未来的滤镜/调色/音量等「跟着片段走」的属性，一律存为 `PlanClip` 的字段，**禁止**建成按时间区间生效的独立实体。分割/移动时随节点拷贝，联动零成本。（依据：OTIO effects-on-clip、GES GESClip 子元素、剪映同款建模；2026-10-13 拍板。）
+1. **片段级属性内禀化**：变速、布局变换（`PlanClip.transform`，`ClipTransform`，nil = 全屏）、未来的滤镜/调色/音量等「跟着片段走」的属性，一律存为 `PlanClip` 的字段，**禁止**建成按时间区间生效的独立实体。分割/移动时随节点拷贝，联动零成本。（依据：OTIO effects-on-clip、GES GESClip 子元素、剪映同款建模；2026-10-13 拍板。）
 2. **素材引用走登记表**：`PlanClip.assetID` 必须指向 `plan.assets` 里的 `AssetItem`；禁止在 plan JSON 里写文件名直引（v2 起 `MediaRef` 已删除）。新增素材须先登记再引用，登记 + 追加片段放同一次 `EditStore.apply`（单撤销步）。**字幕 cue 的文本直接进 plan**（`CaptionCuePayload`），不再引用素材；SRT 文件退化为**导入源**（导入即展开为 cue，展开后 plan 是唯一事实源，不回写文件），轨 `settings.sourceAssetID` 保留该引用仅为素材引用保护。
 3. **时间口径统一**：渲染时长只认 `EditPlan.renderedDuration`——dissolve 与相邻片段全额重叠（扣 duration），fade 不重叠（各占相邻片段内 duration/2，总长不变）；与 Kadr CompositionBuilder `overlap(during:)` 一致，实测锚点 9.5s ≠ `Video.duration` 求和值 10.5s。UI 展示、e2e 断言都锚它；禁止「修正」成求和值，禁止另写求和。两条不变式（由 `TrackOperations` 维持、`EditPlanValidator` 兜底）：**主轨从 0 起连续覆盖 `[0, renderedDuration]`**；**任何轨的元素不得超出主轨末端**（超出时主轨尾部自动补 gap）。
 4. **无源区间素材**：图片等静态素材的 clip 无 source range，只有 duration；模型层显式建模（如 `PlanClip.source` 枚举：`.video(range)` / `.still(duration)`），不用魔法值（如 range 置零）表达。
@@ -80,7 +81,7 @@
 - **`kind: TrackKind` 是开放类型**——核心只当字符串带，不 `switch` 它。已知 `video` / `caption`；未来贴纸 / 音乐 / 特效轨只是新 `kind`。
 - **`placement: TrackPlacement` 是结构属性，核心认识**——`.chained`（位置由顺序推出，主轨）/ `.absolute`（每个元素自带 `at`）。
 - **`ElementContent`**：`.content(TrackPayload)`（时长由 payload 推出）或 `.gap(duration:)`（占位无内容，时长自带）。`placement` 与 `gap` 归核心，因为它们是**结构**不是**类型**。
-- **特性注册表**：`TrackFeatureRegistry` 只装 L2 片（`<Name>Feature.swift`：payload 模型 + 编解码 + 校验）；L3 的引擎映射片（`<Name>Engine.swift`）由 `EngineBridge` 按 `kind` 直接调用，L0 的呈现片（`<Name>Lane.swift`）属阶段②、尚未建。切三片而非一个跨层对象的原因：L2 禁 `import Kadr/AVFoundation`。
+- **特性注册表**：`TrackFeatureRegistry` 只装 L2 片（`<Name>Feature.swift`：payload 模型 + 编解码 + 校验）；L3 的引擎映射片（`<Name>Engine.swift`）由 `EngineBridge` 按 `kind` 直接调用，L0 的呈现片（`<Name>Lane.swift`）由 `TrackLaneRegistry` 按 `kind` 直接调用。切三片而非一个跨层对象的原因：L2 禁 `import Kadr/AVFoundation`。
 - **`Features/Manifest.swift` 是 L2 的唯一注册点**：加一类轨 = Manifest 加一行 + 新增一个 `Features/<Name>/` 目录，**核心的模型 / 编解码 / 校验 / 不变式零条件分支改动**（可插拔性由测试锚定）；可渲染的轨类型另需在 `EngineBridge` 挂一条引擎映射（引擎构造本就逐类型）。
 - **静态装配**：注册表在 JangyCore 内部装配，不依赖 App 启动——`jangy-cli agent` 是 headless 跑的。
 - **未知 `kind` / 未知 payload `type` 一律报错**（校验器 / 解码器），不静默丢弃。
@@ -144,8 +145,10 @@ v1 范围：**导入 + 剪辑 + 导出保元数据**；球形交互预览进 bac
 | 字幕 | SwiftUI Text 叠加层按播放时间近似 | 烧录（预渲染 `ImageOverlay`，非 `TextOverlay`） | Kadr overlay 仅导出时生效；macOS headless 下 CATextLayer 不绘制，故用图片 |
 | 转场直通规避 | renderSize +0.5pt 微扰（仅模拟器） | 无微扰 | iOS 26 模拟器像素格式直通怪癖 |
 | 拖动期间帧率 | trim/拖动手势期间允许降帧率 | 不受影响 | 交互流畅优先 |
+| 拖动期间缩略图 | 用当前档位拉伸顶替、不重算（手势结束才重算） | 不受影响 | 交互流畅优先 |
+| 时间线缩略图 | 从源素材抽帧、档位离散，不反映变速 / 转场 / 叠加 / 字幕 / 删除留下的 gap 内实际画面 | 不受影响 | 仅用于识别素材 |
 
-5. **高频操作合并**：拖动类手势（trim 手柄、滑块）产生的连续 Intent 在 L1 节流/合并，手势结束才落一个撤销步。
+5. **高频操作合并**：拖动类手势（trim 手柄、滑块、时间线拖动 / 轨道重排）产生的连续 Intent 在 L1 节流/合并，手势结束才落一个撤销步。
 
 ## 7. 测试与验收公约
 

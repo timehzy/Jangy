@@ -164,7 +164,7 @@ Features/
 | 层 | 新增 |
 |---|---|
 | L0 `Jangy/` | `TimelineView`（容器 + 可拖分界）、`RulerView`、`TrackLaneView`、`TrackCap`、`PlayheadOverlay`、`ZoomBadge`；`TrackLaneView` 是注册表驱动的——它不认识「视频轨」「字幕轨」，只按 kind 去问注册表要呈现器 |
-| L1 `JangyCore/Interaction`（**整层新建**，公约原标「待建」） | `TimelineViewportState`（播放头位置 / px-per-sec / 滚动偏移——高频，**不进 EditStore**）、`GestureRouter`、`DragSession`、`SnapEngine` |
+| L1 `JangyCore/Interaction`（已建；纯 Swift，无 SwiftUI） | `TimelineViewportState`（播放头位置 / px-per-sec / 滚动偏移——高频，**不进 EditStore**）、`SnapEngine`、`DragSession`、`GestureRouter`、`TimelineEdit` |
 | L2 `JangyCore/Plan` | `EditPlan` v4、`PlanTrack`、`PlanElement`、`ElementContent`、`TrackPayload`、`TrackFeatureRegistry`、SRT 迁移解析器；`EditPlanValidator` 扩轨校验；`ValidationIssue` 加 `elementID` |
 | L3 `JangyCore/Engine` | `EngineBridge` 扩轨映射；**`TimelineThumbnailer`**——从 App 层的 `ThumbnailLoader` 收口上来（它现在在 L0 却 `import AVFoundation`，已违反公约 §1） |
 
@@ -178,7 +178,7 @@ Features/
 
 ### 轨道头
 
-图标 + 轨道编号 + 静音 / 隐藏按钮，作为轨道条自身的一段左帽渲染，横向钉在视口左缘（`ScrollView` 的 sticky 层，不是 overlay chip），纵向跟随自己的轨道。无实色底，靠文字阴影保证在任意素材上的可读性。
+图标 + 轨道编号 + 静音 / 隐藏按钮，作为轨道条自身的一段左帽渲染，横向钉在视口左缘（钉在偏移层**之外**的兄弟视图，不是 `ScrollView` sticky、也不是 overlay chip），纵向跟随自己的轨道、滚出屏幕时一起被裁掉。无实色底，靠文字阴影保证在任意素材上的可读性。
 
 ### 手势地图
 
@@ -212,7 +212,7 @@ Features/
 
 ### 多画面定位范围
 
-本期叠加轨元素带 `transform`（位置 / 缩放 / 不透明度）参数，引擎完整映射；**UI 只提供预设布局**（全屏 / 画中画右下 / 左右分屏），自由拖拽定位留 backlog——自由定位需要一整套画布交互（拖拽框、手柄、吸附），是独立的一块，多轨的结构价值不依赖它。
+本期叠加轨元素带 `transform`（位置 / 缩放 / 不透明度）参数，引擎完整映射。**左右分屏已落地**：`PlanClip.transform`（`ClipTransform`）+ UI 预设（全屏 / 左半屏 / 右半屏）。分屏 **aspect-aware**——Kadr 的 `scale` 是均匀缩放、作用于 aspect-fill 之后的内容，故 `scale = 0.5 × 画布宽 / 填充后内容宽`（非恒定 0.5，见 `ClipTransform.halfScreen`）。自由拖拽定位仍留 backlog——需要一整套画布交互（拖拽框、手柄、吸附），是独立的一块，多轨的结构价值不依赖它。
 
 ## Agent 契约
 

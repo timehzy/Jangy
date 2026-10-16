@@ -17,7 +17,7 @@ iOS 视频剪辑 App（SwiftUI + AVFoundation），基于 [Kadr](https://github.
 ## 常用命令
 
 ```bash
-# 测试（295 个，含导出端到端；全绿才算过）
+# 测试（364 个，含导出端到端；全绿才算过）
 cd Packages/JangyCore && swift test
 
 # CLI 冒烟
@@ -43,7 +43,7 @@ swift run jangy-cli genassets --to "$APP_DIR" && swift run jangy-cli sample > "$
 
 # App 编译验证
 xcodebuild -project Jangy.xcodeproj -scheme Jangy \
-  -destination 'generic/platform=iOS Simulator' build
+  -destination 'generic/platform=iOS Simulator' build -skipMacroValidation
 ```
 
 ## 协作约定

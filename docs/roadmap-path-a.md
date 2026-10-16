@@ -8,7 +8,6 @@
 
 ### 阶段：v1 执行（当前）
 
-- [ ] **时间线多轨 · 阶段②（时间线 UI）**（`agent` 执行）：L1 Interaction 层（TimelineViewportState / GestureRouter / DragSession / SnapEngine）、可拖分界布局、轨道头（钉左无底图标）、标尺与播放头（固定居中，滚动即擦洗）、双指缩放、缩略图（L3 TimelineThumbnailer，含 ThumbnailLoader 从 L0 收口）、选中与 trim、长按拖动与轨道重排
 - [ ] **Agent 快照卡片异步加载**（`agent` 执行；App 接入遗留小项）：当前主线程同步读 MB 级 PNG，开发期可接受，后续换缓存/异步加载
 - [ ] **Agent 多模型表现评估**（`人工`）：Kimi/Claude 之外的模型在剪辑 Agent 链路的表现
 - [ ] **多项目+素材库硬化跟进**（`agent` 执行；实现审查遗留 Minor 汇总）：`ReferenceScanner` 项目目录列举失败应抛错而非吞成空表（删除保护的兜底漏洞）；离开剪辑页时 flush/cancel 防抖 autosave（亚秒窗口内存在旧 plan 覆盖新磁盘态的路径）；启动迁移失败显式上报（当前 `try?` 静默）；补回素材元数据 drift 校验的测试覆盖（DraftStoreTests 删除时随旧测试一起丢失）；`AssetLibrary` 类型 doc 注明无并发保护（调用方串行化）；ZipArchive 大工程包全量内存（流式化评估）
@@ -27,8 +26,12 @@
 
 ## 已完成
 
-### 阶段：v1 执行（2026-10-15）
+### 阶段：v1 执行（2026-10-15 ~ 10-16）
 
+- [x] **时间线多轨 · 阶段②（时间线 UI）**（✅ 2026-10-16；spec：[timeline-tracks-design](superpowers/specs/2026-10-15-timeline-tracks-design.md)，plan：[timeline-tracks-ui](superpowers/plans/2026-10-15-timeline-tracks-ui.md)）
+  - 要点：L1 Interaction 层（`TimelineViewportState` / `SnapEngine` / `DragSession` / `GestureRouter` / `TimelineEdit`，纯 Swift 无 SwiftUI）、可拖分界布局（三档吸附）、轨道头（钉左缘、无实色底、纵向跟轨）、标尺与播放头（固定居中、滚动即擦洗）、双指缩放（锚点=双指中心）、缩略图（L3 `TimelineThumbnailer`，`ThumbnailLoader` 从 L0 收口——原违反 §1）、选中与 trim、长按拖动（移动 / 换轨）与轨道重排、静音 / 隐藏按钮、左右分屏布局预设（`PlanClip.transform`，aspect-aware）
+  - 播放头归属收口到 L1 `TimelineViewportState`（高频隔离在时间线子树，不经 `PlayerController` 全局广播；字幕叠加层仍订阅 `PlayerController.currentTime`）；抽帧时间点 / 档位映射等纯 Swift 逻辑留 L2 可测
+  - 验收：364 测试全绿 + App 模拟器构建通过 + 模拟器 / 真机手动验证清单（[timeline-ui-manual-checklist](archive/timeline-ui-manual-checklist.md)）
 - [x] **时间线多轨 · 阶段①（模型 + 引擎）**（✅ 2026-10-15；spec：[timeline-tracks-design](superpowers/specs/2026-10-15-timeline-tracks-design.md)，plan：[timeline-tracks-model-engine](superpowers/plans/2026-10-15-timeline-tracks-model-engine.md)）
   - 要点：EditPlan v4（tracks + primaryTrackID）、特性注册表（核心不认识具体轨类型，可插拔性有测试锚定）、gap 语义与主轨两条不变式（成片时长恒等于主轨链长）、引擎多轨映射（叠加轨 → Kadr.Track、gap → 黑 ImageClip）、字幕逐句化（cue 进 plan，SRT 退化为导入源）、Agent 工具 ID 寻址改造、v3 → v4 迁移
   - 挖出并修复上游 Kadr 两个 bug（多轨层序反了、早结束轨末帧被保持）→ fork v1.2.2；已提上游 issue [#205](https://github.com/SteliyanH/kadr/issues/205) / [#206](https://github.com/SteliyanH/kadr/issues/206)

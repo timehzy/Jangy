@@ -29,7 +29,8 @@ struct TimelineView: View {
     @GestureState private var drag: DragSession?
 
     /// 选中元素所在**行**在 `timeline` 命名坐标系里的 frame（由选中行上报）。
-    /// 擦洗结构性让位按「行 Y 带 + 元素 X 带」判定——只挡选中元素那一条，不误伤其它轨的擦洗。
+    /// 擦洗结构性让位按「行 Y 带 + 两处 trim 手柄的窄 X 带」判定——只挡选中元素的两处手柄，
+    /// 元素体与其它轨的擦洗照常放行。
     @State private var selectedRowFrame: CGRect?
 
     private var viewport: TimelineViewportState { model.viewport }
@@ -334,7 +335,7 @@ struct TimelineView: View {
     /// 用**累计**位移判断横向为主（逐帧差分会因抖动丢动作），纵向留给 ScrollView。
     /// 播放头 = 起手位置 − 累计横向位移 / pps；起手位置存 `@GestureState`（结束/取消自动复位）。
     /// **让位有两层**：① `drag/magnifyBase` 非空（编辑拖拽/缩放进行中）；
-    /// ② **结构性**：起手点落在选中元素的交互区（选中框/手柄）内就不擦洗——这不依赖
+    /// ② **结构性**：起手点落在选中元素的**两处 trim 手柄区**内就不擦洗——这不依赖
     /// `drag` 的写入时序，故快速甩动一帧越过 trim 与擦洗两个阈值也不会误擦。
     private var scrubGesture: some Gesture {
         DragGesture(minimumDistance: 8, coordinateSpace: .named("timeline"))
