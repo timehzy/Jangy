@@ -223,6 +223,16 @@ final class DragSessionTests: XCTestCase {
         XCTAssertEqual(duration, 6, accuracy: 0.001)
     }
 
+    func testTrimStillSnapsLikeVideo() {
+        // 图片与视频走同一条吸附路径：尾缘微动（+1pt = +0.01 输出秒，在容差 0.05 内）吸回原处
+        // → 净变化为零、不落栈。否则「点一下手柄」的自然抖动会变成一次真编辑（撤销栈 +1）。
+        let plan = mainPlan([PlanClip(assetID: UUID(), source: .still(duration: 2))])
+        let id = plan.primaryTrack!.elements[0].id
+        let session = DragSession(kind: .trim(elementID: id, edge: .trailing))
+            .translated(to: CGSize(width: 1, height: 0))
+        XCTAssertNil(session.resolve(in: context(plan)), "图片 trim 也要吸附")
+    }
+
     // MARK: 链式 → 绝对轨换轨保位
 
     // 主轨：[gap(2), clip] → clip 输出起点 2；叠加轨为绝对定位空轨。

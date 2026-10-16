@@ -99,9 +99,10 @@ public struct DragSession: Equatable, Sendable {
             return .trimSource(elementID: elementID, source: .video(lower...upper))
 
         case .still(let duration):
-            // 输出时长 = duration / rate；边缘输出位移 × rate = duration 的增量
+            // 输出时长 = duration / rate；边缘输出位移换算成源时长增量 = **吸附后**的输出位移 × rate。
+            // 与 video 分支同源（都在输出时间轴上吸），否则图片 trim 不吸附、且边缘微动会被落成一次真编辑。
             let sign: Double = (edge == .leading ? -1 : 1)
-            let newDuration = max(context.minElementDuration * rate, duration + sign * outputDelta * rate)
+            let newDuration = max(context.minElementDuration * rate, duration + sign * sourceDelta)
             if newDuration == duration { return nil }
             return .trimSource(elementID: elementID, source: .still(duration: newDuration))
         }

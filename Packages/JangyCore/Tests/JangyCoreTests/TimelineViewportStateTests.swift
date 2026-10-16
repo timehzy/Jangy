@@ -57,21 +57,13 @@ final class TimelineViewportStateTests: XCTestCase {
         XCTAssertEqual(r.upperBound, 70, accuracy: 0.001)
     }
 
-    func testViewportXIsInverseOfTime() {
+    func testContentXIsTimeAtViewportXInverse() {
+        // 内容坐标 ↔ 视口坐标：contentX(t) 减去滚动偏移后落在视口里，其时间应还原成 t。
         let s = makeState(width: 400, duration: 100)
         s.setPlayhead(37)
         for t in [0.0, 12.5, 50.0, 99.0] {
-            XCTAssertEqual(s.time(atViewportX: s.viewportX(forTime: t)), t, accuracy: 0.001,
-                           "viewportX 是 time(atViewportX:) 的逆")
-        }
-    }
-
-    func testContentXEqualsViewportXPlusScrollOffset() {
-        let s = makeState(width: 400, duration: 100)
-        s.setPlayhead(37)
-        for t in [0.0, 12.5, 50.0] {
-            XCTAssertEqual(s.contentX(forTime: t), s.viewportX(forTime: t) + s.scrollOffset,
-                           accuracy: 0.001)
+            XCTAssertEqual(s.time(atViewportX: s.contentX(forTime: t) - s.scrollOffset), t,
+                           accuracy: 0.001, "contentX 平移回视口后是 time(atViewportX:) 的逆")
         }
     }
 

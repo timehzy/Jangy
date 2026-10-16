@@ -66,11 +66,6 @@ public final class TimelineViewportState {
         viewportWidth / 2 + CGFloat(t) * pointsPerSecond
     }
 
-    /// 时间 t 在**视口坐标**（相对视口左缘）的 x。是 `time(atViewportX:)` 的逆。
-    public func viewportX(forTime t: TimeInterval) -> CGFloat {
-        contentX(forTime: t) - scrollOffset
-    }
-
     /// 直接落播放头（播放推进 / 点选定位）。夹在 [0, contentDuration]。
     /// 同值不写：`@Observable` 的 setter 不做相等判断，同值写也会通知依赖者。
     public func setPlayhead(_ t: TimeInterval) {
