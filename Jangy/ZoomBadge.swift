@@ -2,13 +2,16 @@ import JangyCore
 import SwiftUI
 
 /// 缩放档位角标：时间线右下角，显示当前 px/s（如「60 px/s」）。
-/// 只读 `TimelineViewportState.pointsPerSecond`（@Observable）——自身不持有缩放手势状态，
-/// 「正在缩放」由该值变化驱动：每次变化续期，停手约 1s 后才淡出。
+/// 可见性由**捏合手势的活跃态** `isZooming` 驱动——捏合期间全程可见，手势结束 1s 后淡出。
+/// 不挂在 `pointsPerSecond` 的逐帧变化上（那会在长捏合中途闪没、且每帧起任务）；
+/// 显示的数字仍读 `pointsPerSecond`（@Observable），随捏合实时刷新。
 struct ZoomBadge: View {
     let viewport: TimelineViewportState
+    /// 捏合手势是否进行中（由 `TimelineView` 读手势态给出）。
+    let isZooming: Bool
 
     @State private var isVisible = false
-    /// 「停手后延时隐藏」的续期任务：每次缩放取消上一次、重排一个新的（停手满 1s 才隐藏）。
+    /// 捏合结束后「延时 1s 隐藏」的任务。
     @State private var hideTask: Task<Void, Never>?
 
     var body: some View {
@@ -22,16 +25,22 @@ struct ZoomBadge: View {
             .animation(.easeInOut(duration: 0.2), value: isVisible)
             // 纯展示：不拦截触摸（否则会挡住下方的 ＋ 按钮与时间线手势）。
             .allowsHitTesting(false)
-            .onChange(of: viewport.pointsPerSecond) { _, _ in flash() }
+            .onChange(of: isZooming) { _, zooming in
+                zooming ? show() : scheduleHide()
+            }
             // 离屏时取消未决的隐藏任务（对齐 AssetPreviewView / EditorView 的收尾写法）。
             .onDisappear { hideTask?.cancel() }
     }
 
-    /// 显示角标：仅在**不可见 → 可见**的跃迁上起一次「1s 后隐藏」任务。
-    /// 已可见期间连续缩放不再重排任务——避免每帧分配 Task，角标也不会因计时到点而中途闪没。
-    private func flash() {
-        guard !isVisible else { return }
+    /// 捏合开始：显示角标并取消未决的隐藏。
+    private func show() {
+        hideTask?.cancel()
+        hideTask = nil
         isVisible = true
+    }
+
+    /// 捏合结束：1s 后隐藏（期间若重新捏合，`show()` 会取消它）。
+    private func scheduleHide() {
         hideTask?.cancel()
         hideTask = Task {
             try? await Task.sleep(for: .seconds(1))

@@ -110,7 +110,8 @@ struct TimelineView: View {
     /// 角标隐去时仍占位（靠 opacity 淡出），＋ 按钮位置稳定不跳。
     private var bottomControls: some View {
         VStack(alignment: .trailing, spacing: 8) {
-            ZoomBadge(viewport: viewport)
+            // 角标可见性由捏合活跃态驱动：手势态非空 = 捏合中。
+            ZoomBadge(viewport: viewport, isZooming: magnifyBase != nil)
             addButton
         }
         .padding(8)
