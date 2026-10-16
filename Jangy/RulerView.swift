@@ -3,15 +3,17 @@ import SwiftUI
 
 /// 时间线标尺：按 `viewport` 推导的间隔画刻度 + 时间标签。
 /// 位置一律走 `contentX(forTime:)`（含半视口留白）——与内容车道同一坐标系，
-/// 由外层整体 `.offset(x: -scrollOffset)` 驱动滚动；播放头恒在视口中央。
+/// 由外层 `ScrollingOffset` 叶子驱动滚动；播放头恒在视口中央。
+/// 刻度范围取 `cullRange`（存储 + 量化）而非 `visibleTimeRange`：后者转调 `playheadTime`，
+/// 会让本视图成为它的依赖者、每帧重绘。
 struct RulerView: View {
     let viewport: TimelineViewportState
 
     var body: some View {
         // 在 body 求值期读出依赖量：@Observable 的依赖追踪发生在 body，而非 Canvas 取值闭包，
-        // 放这里才能保证 pps / playhead 变化时标尺重绘。
+        // 放这里才能保证 pps / 裁剪窗变化时标尺重绘。
         let pps = viewport.pointsPerSecond
-        let range = viewport.visibleTimeRange
+        let range = viewport.cullRange
         let interval = Self.tickInterval(pointsPerSecond: pps)
 
         return Canvas { context, size in

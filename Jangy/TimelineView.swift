@@ -7,6 +7,15 @@ import SwiftUI
 /// 轨道头钉视口左缘。选择 / trim / 长按移动 / 轨道重排都在**容器层**做——
 /// 几何命中归 L0（`GestureRouter` 只把「命中了什么」翻成会话，见其注释），
 /// 车道保持纯呈现（只读 `LaneContext`）。
+///
+/// **高频量只由叶子视图读取**（`ScrollingOffset` / `PlayheadOverlay` / `PlaybackFollow`）：
+/// `@Observable` 的依赖按「body 作用域里读到的 stored 属性」注册（计算属性只是转调 stored getter，
+/// 照常注册），本容器 body 一旦读 `scrollOffset` / `playheadTime` / `player.currentTime`，
+/// 就会在滚动或播放的每一帧整棵树重建。加新的高频读取前先想清楚它该落在哪个叶子里。
+///
+/// **内容坐标是唯一约定**：车道内容与元素交互层都在 `contentX(forTime:)` 这套坐标里
+/// （其值只依赖 pps + 视口宽，**不依赖播放头**），横向平移统一由 `ScrollingOffset` 施加。
+/// 视口坐标（`viewportX(forTime:)`）只留给手势命中判定用（擦洗起手点、trim 手柄区）。
 struct TimelineView: View {
     let model: AppModel
     /// 由分界拖动决定的窗格高度。
@@ -19,6 +28,15 @@ struct TimelineView: View {
     /// 因此不需要在 .onEnded 里手动清理——取消也不会残留脏基准。
     @GestureState private var scrubBase: TimeInterval?
 
+    /// 本手势**锁定**的滚动轴：起手那一下的方向定轴，全程不再改（`.updating` 里定一次，
+    /// 结束或取消自动复位）。四向解锁会让一次拖拽中途从滚动变成擦洗（或反之），手感很飘。
+    /// 它也用来在横向锁定时关掉纵向 ScrollView——否则横拖时纵向仍能被带着滚。
+    @GestureState private var scrubAxis: Axis?
+
+    /// 本手势是否真的擦洗过。`onEnded` 靠它判断要不要补 seek / 起惯性——
+    /// `@GestureState` 到那时可能已复位，而轴锁成垂直的手势不该有任何副作用。
+    @State private var didScrub = false
+
     /// 双指捏合的起手基准（pps + 累计 magnification，手势开始时捕获一次）。
     /// 同样用 @GestureState：结束**或取消**自动复位，杜绝上一手势残留导致下一手势首帧跳变。
     @GestureState private var magnifyBase: MagnifyBase?
@@ -27,6 +45,9 @@ struct TimelineView: View {
     /// 拖动途中只由它驱动局部瞬态呈现（元素浮起/伸缩、选中框位移），**EditPlan 一个字节不动**
     /// （公约 §6.5 高频分界）。擦洗据此让位：会话活跃时不做擦洗。
     @GestureState private var drag: DragSession?
+
+    /// 当前惯性推进任务（抬手后按衰减曲线继续滚动）。同一时刻至多一个。
+    @State private var flingTask: Task<Void, Never>?
 
     /// 选中元素所在**行**在 `timeline` 命名坐标系里的 frame（由选中行上报）。
     /// 擦洗结构性让位按「行 Y 带 + 两处 trim 手柄的窄 X 带」判定——只挡选中元素的两处手柄，
@@ -38,8 +59,8 @@ struct TimelineView: View {
     var body: some View {
         GeometryReader { geo in
             ZStack(alignment: .topLeading) {
-                contentLayer(viewportWidth: geo.size.width)
-                PlayheadOverlay(time: viewport.playheadTime)
+                contentLayer(viewportWidth: geo.size.width, viewportHeight: geo.size.height)
+                PlayheadOverlay(viewport: viewport)
                     .frame(maxWidth: .infinity, alignment: .center)
             }
             // 固定为视口尺寸：内容层比视口宽，靠它兜住 ZStack 尺寸，
@@ -52,14 +73,12 @@ struct TimelineView: View {
             .simultaneousGesture(scrubGesture)
             .simultaneousGesture(magnifyGesture)
             .overlay(alignment: .bottomTrailing) { bottomControls }
+            .background { PlaybackFollow(player: model.player, viewport: viewport) }
             .onAppear { viewport.viewportWidth = geo.size.width }
             .onChange(of: geo.size.width) { _, w in viewport.viewportWidth = w }
+            .onDisappear { cancelFling() }
         }
         .frame(height: height)
-        // 只有播放推进才回写播放头；擦洗时 player 是暂停的（rate 0），不会回跳。
-        .onChange(of: model.player.currentTime) { _, t in
-            if model.player.isPlaying { viewport.setPlayhead(t) }
-        }
     }
 
     /// 车道呈现上下文（plan / 视口 / 解析器 / 缩略图器 / 拖动会话）——车道呈现器只读这里。
@@ -69,40 +88,55 @@ struct TimelineView: View {
                     resolver: model.resolver, thumbnailer: model.thumbnailer, drag: drag)
     }
 
-    /// 内容层：标尺 + 轨道行。横向位置由 `-scrollOffset` 驱动，但**只作用于标尺与车道内容**；
-    /// 轨道头钉在视口左缘（不参与横向平移，见 `laneRow` / `TrackCap`）。
+    /// 内容层：标尺 + 轨道行。横向位置由 `-scrollOffset` 驱动，但**只作用于标尺与车道内容**
+    /// （每处各自套 `ScrollingOffset` 叶子）；轨道头钉在视口左缘（不参与横向平移，见 `laneRow` / `TrackCap`）。
     /// 标尺与车道的局部坐标原点都落在「内容坐标 x=0」——都按 `contentX(forTime:)` 定位，故对齐。
-    private func contentLayer(viewportWidth: CGFloat) -> some View {
+    private func contentLayer(viewportWidth: CGFloat, viewportHeight: CGFloat) -> some View {
         let totalWidth = viewportWidth + contentWidth
         return VStack(spacing: 0) {
             // 标尺：竖向钉顶；横向整体平移后裁到视口宽。
-            RulerView(viewport: viewport)
-                .frame(width: totalWidth, height: 24, alignment: .leading)
-                .offset(x: -viewport.scrollOffset)
-                .frame(width: viewportWidth, height: 24, alignment: .leading)
-                .clipped()
+            ScrollingOffset(viewport: viewport) {
+                RulerView(viewport: viewport)
+                    .frame(width: totalWidth, height: Self.rulerHeight, alignment: .leading)
+            }
+            .frame(width: viewportWidth, height: Self.rulerHeight, alignment: .leading)
+            .clipped()
             ScrollView(.vertical) {
-                VStack(spacing: 2) {
+                VStack(spacing: Self.rowSpacing) {
                     ForEach(Array(model.store.plan.tracks.enumerated()), id: \.element.id) { index, track in
                         laneRow(track: track, number: index + 1, viewportWidth: viewportWidth,
                                 totalWidth: totalWidth)
                     }
                 }
             }
+            // 轴锁定：本手势锁成横向时关掉纵向滚动，否则横拖仍会被带着上下跑（见 `scrubAxis`）。
+            // 另外**装得下就不滚**——纵向 ScrollView 即使内容不溢出也会吸走纵向手势，
+            // 让「拖上去没反应、也擦洗不了」。
+            .scrollDisabled(scrubAxis == .horizontal
+                            || !needsVerticalScroll(viewportHeight: viewportHeight))
         }
         .frame(width: viewportWidth, alignment: .leading)
     }
 
-    /// 一行 = 车道（横向平移）+ 元素交互层 + 轨道头（钉视口左缘）；整行裁到视口宽。
-    /// 轨道头是车道**偏移之外**的兄弟 —— 横向平移只作用于车道，轨道头不动，行内纵向自然对齐。
+    /// 一行 = 内容层（车道 + 空白点选 + 元素交互，**统一内容坐标**，横向平移由 `ScrollingOffset` 承载）
+    /// + 轨道头（钉视口左缘，是内容层**偏移之外**的兄弟，故不随横向平移）。
     /// 交互层夹在车道与轨道头之间：铺满整行（承接空白点选），但轨道头在最上层，其按钮/长按优先。
     private func laneRow(track: PlanTrack, number: Int,
                          viewportWidth: CGFloat, totalWidth: CGFloat) -> some View {
         ZStack(alignment: .leading) {
-            TrackLaneView(track: track, context: laneContext)
+            ScrollingOffset(viewport: viewport) {
+                ZStack(alignment: .topLeading) {
+                    TrackLaneView(track: track, context: laneContext)
+                        .frame(width: totalWidth, height: LaneMetrics.height, alignment: .topLeading)
+                    // 空白点选层：点它 = 取消选择。铺满内容宽（恒覆盖视口），在元素命中层之下。
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .frame(width: totalWidth, height: LaneMetrics.height)
+                        .onTapGesture { selection = nil }
+                    elementInteractionLayer(track: track, totalWidth: totalWidth)
+                }
                 .frame(width: totalWidth, height: LaneMetrics.height, alignment: .topLeading)
-                .offset(x: -viewport.scrollOffset)
-            elementInteractionLayer(track: track, viewportWidth: viewportWidth)
+            }
             TrackCap(track: track, number: number,
                      isPrimary: track.id == model.store.plan.primaryTrackID,
                      onToggleMute: { setTrackFlag(track.id) { $0.isMuted.toggle() } },
@@ -136,17 +170,12 @@ struct TimelineView: View {
 
     // MARK: 元素交互层（点选 / trim 手柄 / 长按移动）
 
-    /// 元素交互层：铺在车道内容之上、轨道头之下。
-    /// - 底部全行透明层承载「点空白 = 取消选择」（点中元素由上层命中层接管，不会落到这里）；
-    /// - 每个**内容**元素上盖一个透明命中层：点它选中、长按拖动移动（gap 不参与，点它即视为空白）；
-    /// - 选中元素再叠加边框与 trim 手柄。
-    /// 所有层都只读 `drag` / `selection` 做瞬时呈现，不改 plan。
-    private func elementInteractionLayer(track: PlanTrack, viewportWidth: CGFloat) -> some View {
+    /// 元素交互层：铺在车道内容之上、轨道头之下，与车道**同一套内容坐标**（同在外层 `ScrollingOffset` 里）。
+    /// 每个**内容**元素上盖一个透明命中层：点它选中、长按拖动移动（gap 不参与，点它即视为空白）；
+    /// 选中元素再叠加边框与 trim 手柄。所有层都只读 `drag` / `selection` 做瞬时呈现，不改 plan。
+    private func elementInteractionLayer(track: PlanTrack, totalWidth: CGFloat) -> some View {
         let starts = track.elementOutputStarts()
         return ZStack(alignment: .topLeading) {
-            Color.clear
-                .contentShape(Rectangle())
-                .onTapGesture { selection = nil }
             ForEach(Array(track.elements.enumerated()), id: \.element.id) { index, element in
                 if case .content = element.content {
                     elementInteraction(element: element,
@@ -154,17 +183,17 @@ struct TimelineView: View {
                 }
             }
         }
-        .frame(width: viewportWidth, height: LaneMetrics.height, alignment: .topLeading)
+        .frame(width: totalWidth, height: LaneMetrics.height, alignment: .topLeading)
     }
 
     /// 单个元素的交互层：透明命中层（点选 + 长按移动，跟随拖动态位移到手指下）+ 选中框 + trim 手柄。
-    /// 位置由 `viewportX(forTime:)` + 拖动瞬态几何推出，与车道内容同源换算。
+    /// 位置由 `contentX(forTime:)` + 拖动瞬态几何推出，与车道内容同源换算（同一内容坐标）。
     /// 选中框 / trim 手柄只给**可裁剪的片段**（payload 为 `PlanClip`）——字幕 cue 可选中/移动，但无 trim。
     private func elementInteraction(element: PlanElement, start: TimeInterval) -> some View {
         let geometry = TransientGeometry.make(elementID: element.id, drag: drag)
         let baseWidth = LaneMetrics.width(forDuration: element.duration, viewport: viewport)
         let width = max(1, baseWidth - geometry.leadingDelta + geometry.trailingDelta)
-        let x = viewport.viewportX(forTime: start) + geometry.leadingDelta + geometry.offsetX
+        let x = viewport.contentX(forTime: start) + geometry.leadingDelta + geometry.offsetX
         let isClip = Self.hasClipPayload(element)
         return ZStack(alignment: .leading) {
             Color.clear
@@ -306,6 +335,24 @@ struct TimelineView: View {
         CGFloat(viewport.contentDuration) * viewport.pointsPerSecond
     }
 
+    /// 标尺高度、轨道行间距（内容层与「是否要纵向滚动」共用同一口径）。
+    private static let rulerHeight: CGFloat = 24
+    private static let rowSpacing: CGFloat = 2
+
+    /// 纵向是否需要滚动：轨道总高（含行距）超过「视口高 − 标尺」才需要。
+    /// 不需要时**关掉纵向 ScrollView**——它即使内容不溢出也会吸走纵向手势，
+    /// 让「拖上去没反应、也擦洗不了」。
+    ///
+    /// 前提：时间线窗格**不压底部安全区**（`EditorView` 是安全区内布局的 VStack）。
+    /// 若日后让窗格伸进不安全区，ScrollView 会给内容加底部 inset，而这里仍按
+    /// `viewportHeight − 标尺` 估 → 高估可用高 → 误判「装得下」→ 末行够不到。
+    private func needsVerticalScroll(viewportHeight: CGFloat) -> Bool {
+        let rows = CGFloat(model.store.plan.tracks.count)
+        guard rows > 0 else { return false }
+        let content = rows * LaneMetrics.height + (rows - 1) * Self.rowSpacing
+        return content > max(0, viewportHeight - Self.rulerHeight)
+    }
+
     /// 右下角浮层：缩放档位角标（上）+ ＋ 按钮（下）。锚在视口右下、不随内容横向滚动。
     /// 角标隐去时仍占位（靠 opacity 淡出），＋ 按钮位置稳定不跳。
     private var bottomControls: some View {
@@ -334,6 +381,7 @@ struct TimelineView: View {
     /// 单指横向拖 = 滚动 = 擦洗。与车道纵向 ScrollView 并存（`.simultaneousGesture`）：
     /// 用**累计**位移判断横向为主（逐帧差分会因抖动丢动作），纵向留给 ScrollView。
     /// 播放头 = 起手位置 − 累计横向位移 / pps；起手位置存 `@GestureState`（结束/取消自动复位）。
+    /// 抬手按预测行程起**惯性**（`startFling`），所以甩一下会继续滑、预览跟着滚。
     /// **让位有两层**：① `drag/magnifyBase` 非空（编辑拖拽/缩放进行中）；
     /// ② **结构性**：起手点落在选中元素的**两处 trim 手柄区**内就不擦洗——这不依赖
     /// `drag` 的写入时序，故快速甩动一帧越过 trim 与擦洗两个阈值也不会误擦。
@@ -342,18 +390,70 @@ struct TimelineView: View {
             .updating($scrubBase) { _, state, _ in
                 if state == nil { state = viewport.playheadTime }
             }
+            .updating($scrubAxis) { value, state, _ in
+                // 起手那一下（刚过 8pt 阈值）定轴，之后无论怎么拐都不改。
+                if state == nil {
+                    state = abs(value.translation.width) >= abs(value.translation.height)
+                        ? .horizontal : .vertical
+                }
+            }
             .onChanged { value in
-                guard canScrub(from: value.startLocation) else { return }
+                // 三种「本手势不擦洗」的情形都要**顺手清 didScrub / 停惯性**：
+                // 上一手势若被取消（不走 onEnded）标志会残留 true，只有在这里清才能保证
+                // onEnded 的判定不误用上一手势的结论；而抓住画面（哪怕纵向）本就该止住惯性。
+                guard scrubAxis == .horizontal, canScrub(from: value.startLocation) else {
+                    if didScrub { didScrub = false }
+                    cancelFling()
+                    return
+                }
                 guard let base = scrubBase else { return }
-                guard abs(value.translation.width) >= abs(value.translation.height) else { return }
+                cancelFling()   // 手指再动 → 立刻接管惯性
+                if !didScrub { didScrub = true }
                 let target = base - TimeInterval(value.translation.width / viewport.pointsPerSecond)
                 viewport.setPlayhead(target)
                 model.scrubTo(viewport.playheadTime)
             }
             .onEnded { value in
-                guard canScrub(from: value.startLocation) else { return }
-                model.scrubEnded()   // 补最终 seek；player 仍暂停，不会回跳
+                guard didScrub else { return }
+                didScrub = false
+                // 惯性行程 = 系统按当前速度预测的终点位移 − 已走位移。
+                // 向右甩（正）= 时间往前 = 播放头时间减少，与拖拽同号约定。
+                let fling = TimelineFling(
+                    distance: value.predictedEndTranslation.width - value.translation.width)
+                if fling.isFling { startFling(fling) } else { model.scrubEnded() }
             }
+    }
+
+    /// 抬手惯性：按衰减曲线继续推进播放头，并（节流）让预览跟随——与擦洗**同一条路径**。
+    /// 之所以推进播放头而不是只动 offset：预览要跟着滚，否则松手瞬间预览会跳到终点。
+    private func startFling(_ fling: TimelineFling) {
+        cancelFling()
+        flingTask = Task { @MainActor in
+            var decay = fling
+            var last = Date()
+            while !Task.isCancelled, !decay.isAtRest {
+                try? await Task.sleep(for: .milliseconds(16))
+                guard !Task.isCancelled else { return }
+                let now = Date()
+                let dt = now.timeIntervalSince(last)
+                last = now
+                let step = decay.advance(by: dt)
+                let before = viewport.playheadTime
+                model.scrubTo(before - TimeInterval(step / viewport.pointsPerSecond))
+                guard viewport.playheadTime != before else { break }   // 撞到内容边界，停
+            }
+            guard !Task.isCancelled else { return }
+            model.scrubEnded()   // 停稳后补一次精确 seek
+        }
+    }
+
+    /// 停掉在途惯性。**必须有非空 guard**：本函数在擦洗手势 `onChanged` 里每帧都被调用，
+    /// 而 `@State` 写即失效视图（`Task?` 又非 Equatable，赋同值照样通知）——
+    /// 无条件写会让擦洗期间容器 body 每帧重建，把「高频量只由叶子读」的隔离白做。
+    private func cancelFling() {
+        guard flingTask != nil else { return }
+        flingTask?.cancel()
+        flingTask = nil
     }
 
     /// 擦洗是否放行：编辑拖拽/缩放进行中、或起手落在**选中元素的 trim 手柄区**内——都不擦洗。
@@ -416,4 +516,45 @@ struct TimelineView: View {
                               anchorX: value.startAnchor.x * viewport.viewportWidth)
             }
     }
+}
+
+/// 横向滚动的**叶子**：全时间线唯一读 `viewport.scrollOffset` 的地方。
+/// `scrollOffset` 每帧都变（擦洗逐帧、播放每 tick），放这里读就只有这一层 body 重算——
+/// 被包裹的 `content` 是已建好的视图值，透传不重建（见 `TimelineView` 的类注释）。
+private struct ScrollingOffset<Content: View>: View {
+    let viewport: TimelineViewportState
+    private let content: Content
+
+    init(viewport: TimelineViewportState, @ViewBuilder content: () -> Content) {
+        self.viewport = viewport
+        self.content = content()
+    }
+
+    var body: some View {
+        content.offset(x: -viewport.scrollOffset)
+    }
+}
+
+/// 播放跟随的**叶子**：只在这里读 `player.currentTime`（每 tick 变）。
+/// 用**重定向线性动画**下发——内容由动画系统插值成连续滚动（不是每 100ms 跳一格），
+/// 而 SwiftUI 每秒只做 10 次「改一个 offset」的极小更新。
+/// 事实源仍是播放器时钟（每次都取真实时间重定目标），故不漂移、播放头时间标签也正确；
+/// 擦洗时 player 是暂停的（rate 0），不会回跳。
+private struct PlaybackFollow: View {
+    let player: PlayerController
+    let viewport: TimelineViewportState
+
+    var body: some View {
+        Color.clear
+            .allowsHitTesting(false)
+            .onChange(of: player.currentTime) { _, t in
+                guard player.isPlaying else { return }
+                withAnimation(.linear(duration: Self.retargetDuration)) {
+                    viewport.setPlayhead(t)
+                }
+            }
+    }
+
+    /// 重定目标间隔略长于轮询间隔（100ms），保证下一拍到来前动画已到目标、无停顿感。
+    private static let retargetDuration: TimeInterval = 0.12
 }

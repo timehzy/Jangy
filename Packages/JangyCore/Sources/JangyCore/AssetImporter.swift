@@ -25,19 +25,30 @@ public struct AssetImporter: Sendable {
     }
 
     /// 视频元数据探测：ProjectStore 完整性比对与 importVideo 共用此入口。
+    /// 分辨率报**显示方向**的尺寸（见下），与缩略图 / 分屏 scale 的取用口径一致。
     public static func probeMetadata(of url: URL) async -> AssetMetadata {
         let asset = AVURLAsset(url: url)
         let duration = try? await asset.load(.duration)
         let seconds = duration.flatMap { $0.isNumeric ? $0.seconds : nil }
         let videoTrack = try? await asset.loadTracks(withMediaType: .video).first
         let naturalSize = try? await videoTrack?.load(.naturalSize)
+        let transform = try? await videoTrack?.load(.preferredTransform)
         let hasAudio = try? await asset.loadTracks(withMediaType: .audio).isEmpty == false
         return AssetMetadata(
             duration: seconds,
-            pixelWidth: naturalSize.map { Int($0.width) },
-            pixelHeight: naturalSize.map { Int($0.height) },
+            pixelWidth: naturalSize.map { Int(displaySize($0, transform).width) },
+            pixelHeight: naturalSize.map { Int(displaySize($0, transform).height) },
             hasAudio: hasAudio
         )
+    }
+
+    /// `naturalSize` 是**编码原始**尺寸：竖拍视频带 90° `preferredTransform`，直接取用会把竖屏算成横屏。
+    /// 下游（时间线帧格宽、`ClipTransform.halfScreen` 的 scale）都按「显示方向」取用，故这里先摆正。
+    static func displaySize(_ naturalSize: CGSize,
+                            _ transform: CGAffineTransform?) -> CGSize {
+        guard let transform else { return naturalSize }
+        let applied = naturalSize.applying(transform)
+        return CGSize(width: abs(applied.width), height: abs(applied.height))
     }
 
     /// 导入视频素材。成功返回登记项（kind = .video，元数据已探测）。
@@ -67,15 +78,19 @@ public struct AssetImporter: Sendable {
     }
 
     /// 图片元数据探测：ImageIO 读像素尺寸（不解码像素，快）。无时长/音频概念。
+    /// 分辨率报**显示方向**的尺寸：EXIF 方向 5–8 表示旋转 90°，显示时宽高互换。
     public static func probeImageMetadata(of url: URL) -> AssetMetadata {
         guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
               let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any] else {
             return AssetMetadata()
         }
+        let width = props[kCGImagePropertyPixelWidth] as? Int
+        let height = props[kCGImagePropertyPixelHeight] as? Int
+        let swapped = (5...8).contains(props[kCGImagePropertyOrientation] as? Int ?? 1)
         return AssetMetadata(
             duration: nil,
-            pixelWidth: props[kCGImagePropertyPixelWidth] as? Int,
-            pixelHeight: props[kCGImagePropertyPixelHeight] as? Int,
+            pixelWidth: swapped ? height : width,
+            pixelHeight: swapped ? width : height,
             hasAudio: nil
         )
     }

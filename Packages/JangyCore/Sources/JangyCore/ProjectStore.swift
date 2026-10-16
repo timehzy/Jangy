@@ -267,8 +267,7 @@ public struct ProjectStore: Sendable {
             compare(asset: asset, field: "duration", expected: asset.duration, actual: metadata.duration,
                     equals: { abs($0 - $1) < 0.05 },  // 帧级容差：±50ms
                     into: &report)
-            compare(asset: asset, field: "pixelWidth", expected: asset.pixelWidth, actual: metadata.pixelWidth, into: &report)
-            compare(asset: asset, field: "pixelHeight", expected: asset.pixelHeight, actual: metadata.pixelHeight, into: &report)
+            compareSize(asset: asset, probed: metadata, into: &report)
             compare(asset: asset, field: "hasAudio", expected: asset.hasAudio, actual: metadata.hasAudio, into: &report)
         }
         return report
@@ -281,6 +280,20 @@ public struct ProjectStore: Sendable {
         guard let expected, let actual, !equals(expected, actual) else { return }
         report.drifted.append(AssetDrift(assetID: asset.id, fileName: asset.fileName, field: field,
                                          expected: "\(expected)", actual: "\(actual)"))
+    }
+
+    /// 分辨率比对：**宽高互换不算漂移**。探测自本版起才摆正显示方向（视频过 `preferredTransform`、
+    /// 图片过 EXIF orientation），旧登记值可能是未摆正的原始尺寸——那是同一素材的两种方向约定，
+    /// 不是文件被换掉。值本身（含面积）变了才算。
+    private func compareSize(asset: AssetItem, probed: AssetMetadata,
+                             into report: inout ProjectIntegrityReport) {
+        guard let sw = asset.pixelWidth, let sh = asset.pixelHeight,
+              let pw = probed.pixelWidth, let ph = probed.pixelHeight else { return }
+        let same = (sw == pw && sh == ph) || (sw == ph && sh == pw)
+        guard !same else { return }
+        report.drifted.append(AssetDrift(assetID: asset.id, fileName: asset.fileName,
+                                         field: "pixelWidth/pixelHeight",
+                                         expected: "\(sw)×\(sh)", actual: "\(pw)×\(ph)"))
     }
 
     // MARK: - 旧布局迁移

@@ -26,7 +26,7 @@ final class TimelineThumbnailerTests: XCTestCase {
         let asset = videoAsset("clip1.mp4")
         let clip = PlanClip(assetID: asset.id, source: .video(0...4), speed: .flat(1.0))
 
-        let frames = await thumbnailer.frames(asset: asset, clip: clip, level: .medium,
+        let frames = await thumbnailer.frames(asset: asset, clip: clip, maxPixel: 192,
                                               outputOffsets: [0, 1, 2])
         XCTAssertEqual(frames.count, 3)
         XCTAssertTrue(frames.allSatisfy { $0 != nil }, "纯色素材每桶都应抽到帧")
@@ -37,18 +37,30 @@ final class TimelineThumbnailerTests: XCTestCase {
         let thumbnailer = TimelineThumbnailer(resolver: resolver)
         let asset = videoAsset("clip1.mp4")
         let clip = PlanClip(assetID: asset.id, source: .video(0...4), speed: .flat(2.0))
-        let frames = await thumbnailer.frames(asset: asset, clip: clip, level: .small,
+        let frames = await thumbnailer.frames(asset: asset, clip: clip, maxPixel: 128,
                                               outputOffsets: [0.5, 1.0])
         XCTAssertEqual(frames.count, 2)
         XCTAssertTrue(frames.allSatisfy { $0 != nil })
     }
 
-    func testStillAssetFramesAreNil() async throws {
-        // 图片没有源区间，抽帧路径返回 nil（L0 走降采样兜底）
+    func testStillClipFramesReturnTheSameImageForEveryOffset() async throws {
+        // 图片没有源区间：任一输出偏移都是同一张图，全部槽位共用一个实例（L0 因此不必为图片单开分支）
         let thumbnailer = TimelineThumbnailer(resolver: resolver)
-        let asset = AssetItem(kind: .image, fileName: "clip1.mp4")   // 借用存在的文件即可
+        let asset = AssetItem(kind: .image, fileName: AssetSynthesizer.imageFileName)
         let clip = PlanClip(assetID: asset.id, source: .still(duration: 3))
-        let frames = await thumbnailer.frames(asset: asset, clip: clip, level: .medium,
+        let frames = await thumbnailer.frames(asset: asset, clip: clip, maxPixel: 192,
+                                              outputOffsets: [0, 1, 2])
+        XCTAssertEqual(frames.count, 3)
+        XCTAssertNotNil(frames[0])
+        XCTAssertTrue(frames.allSatisfy { $0 === frames[0] })
+    }
+
+    func testStillClipFramesReturnNilWhenImageCannotBeDecoded() async throws {
+        // 兜底：文件读不出（这里借一个视频文件冒充图片）→ nil，不崩
+        let thumbnailer = TimelineThumbnailer(resolver: resolver)
+        let asset = AssetItem(kind: .image, fileName: "clip1.mp4")
+        let clip = PlanClip(assetID: asset.id, source: .still(duration: 3))
+        let frames = await thumbnailer.frames(asset: asset, clip: clip, maxPixel: 192,
                                               outputOffsets: [0, 1])
         XCTAssertEqual(frames, [nil, nil])
     }
@@ -66,24 +78,73 @@ final class TimelineThumbnailerTests: XCTestCase {
         XCTAssertNotNil(image)
     }
 
-    func testDistinctLevelsUseDistinctCacheEntries() async throws {
-        // 档位应进缓存键：同素材同偏移、不同档位 → 不得命中同一条目
+    func testDistinctMaxPixelsUseDistinctCacheEntries() async throws {
+        // 像素档应进缓存键：同素材同偏移、不同档 → 不得命中同一条目
         let thumbnailer = TimelineThumbnailer(resolver: resolver)
         let asset = videoAsset("clip1.mp4")
         let clip = PlanClip(assetID: asset.id, source: .video(0...4))
-        let small = await thumbnailer.frames(asset: asset, clip: clip, level: .small, outputOffsets: [1])
-        let medium = await thumbnailer.frames(asset: asset, clip: clip, level: .medium, outputOffsets: [1])
+        let small = await thumbnailer.frames(asset: asset, clip: clip, maxPixel: 128, outputOffsets: [1])
+        let large = await thumbnailer.frames(asset: asset, clip: clip, maxPixel: 256, outputOffsets: [1])
         XCTAssertNotNil(small[0])
-        XCTAssertNotNil(medium[0])
-        XCTAssertFalse(small[0] === medium[0], "不同档位不得命中同一条缓存")
+        XCTAssertNotNil(large[0])
+        XCTAssertFalse(small[0] === large[0], "不同像素档不得命中同一条缓存")
     }
 
     func testCacheReturnsSameInstanceForRepeatedRequest() async throws {
         let thumbnailer = TimelineThumbnailer(resolver: resolver)
         let asset = videoAsset("clip1.mp4")
         let clip = PlanClip(assetID: asset.id, source: .video(0...4))
-        let first = await thumbnailer.frames(asset: asset, clip: clip, level: .medium, outputOffsets: [1])
-        let second = await thumbnailer.frames(asset: asset, clip: clip, level: .medium, outputOffsets: [1])
+        let first = await thumbnailer.frames(asset: asset, clip: clip, maxPixel: 192, outputOffsets: [1])
+        let second = await thumbnailer.frames(asset: asset, clip: clip, maxPixel: 192, outputOffsets: [1])
         XCTAssertTrue(first[0] === second[0], "同键应命中缓存、返回同一 CGImage 实例")
+    }
+
+    func testThumbnailAndFramesShareCacheKeyAtTimeZero() async throws {
+        // 两条路径的键同源：素材库单帧（t=0）与时间线抽帧（源时间 0）应命中同一条缓存
+        let thumbnailer = TimelineThumbnailer(resolver: resolver)
+        let asset = videoAsset("clip1.mp4")
+        let clip = PlanClip(assetID: asset.id, source: .video(0...4))
+        let single = await thumbnailer.thumbnail(for: asset, maxPixel: 192)
+        let framed = await thumbnailer.frames(asset: asset, clip: clip, maxPixel: 192, outputOffsets: [0])
+        XCTAssertNotNil(single)
+        XCTAssertTrue(single === framed[0], "同素材同像素档、源时间 0 → 同一条缓存")
+    }
+
+    @MainActor
+    func testFrameBucketIsFinerThanSmallestCellSourceSpan() {
+        // 不变式：相邻格的**源时间**间距 = 最小格时长 × 最小倍速。桶比它粗的话，
+        // 高倍缩放 × 慢放下相邻格会抽到同一帧（条上出现重复画面）。
+        let smallestCellDuration = TimelineFilmstrip.minCellWidth / TimelineViewportState.maxPointsPerSecond
+        let smallestSourceSpan = smallestCellDuration * EditPlanValidator.speedRange.lowerBound
+        XCTAssertLessThan(TimelineThumbnailer.frameBucket, smallestSourceSpan)
+    }
+
+    func testCachedFramesReturnOnlyWhatIsAlreadyCached() async throws {
+        // 只查缓存、不抽帧：冷缓存全 nil；抽过的那一帧才命中
+        let thumbnailer = TimelineThumbnailer(resolver: resolver)
+        let asset = videoAsset("clip1.mp4")
+        let clip = PlanClip(assetID: asset.id, source: .video(0...4))
+
+        let cold = await thumbnailer.cachedFrames(asset: asset, clip: clip, maxPixel: 192,
+                                                  outputOffsets: [0, 1])
+        XCTAssertEqual(cold, [nil, nil])
+
+        _ = await thumbnailer.frames(asset: asset, clip: clip, maxPixel: 192, outputOffsets: [1])
+        let warm = await thumbnailer.cachedFrames(asset: asset, clip: clip, maxPixel: 192,
+                                                  outputOffsets: [0, 1])
+        XCTAssertNil(warm[0], "没抽过的偏移仍应是 nil")
+        XCTAssertNotNil(warm[1])
+    }
+
+    func testCachedFramesHitForStillClip() async throws {
+        // 图片没有源区间：与 `frames` 同口径（源时间 0），降采样过之后每一格都命中同一张
+        let thumbnailer = TimelineThumbnailer(resolver: resolver)
+        let asset = AssetItem(kind: .image, fileName: AssetSynthesizer.imageFileName)
+        let clip = PlanClip(assetID: asset.id, source: .still(duration: 3))
+        _ = await thumbnailer.thumbnail(for: asset, maxPixel: 192)
+        let cached = await thumbnailer.cachedFrames(asset: asset, clip: clip, maxPixel: 192,
+                                                    outputOffsets: [0, 2])
+        XCTAssertNotNil(cached[0])
+        XCTAssertTrue(cached[0] === cached[1])
     }
 }

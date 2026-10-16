@@ -18,7 +18,9 @@ struct CaptionLane: View {
 
     var body: some View {
         let starts = track.elementOutputStarts()
-        let visible = context.viewport.visibleTimeRange
+        // 裁剪用 `cullRange`（存储 + 量化）而非 `visibleTimeRange`：后者转调 `playheadTime`，
+        // 会让本视图每帧重建。位置一律走 `contentX(forTime:)`（不依赖播放头），平移交给外层叶子。
+        let visible = context.viewport.cullRange
         ZStack(alignment: .topLeading) {
             ForEach(Array(track.elements.enumerated()), id: \.element.id) { index, element in
                 let start = index < starts.count ? starts[index] : 0

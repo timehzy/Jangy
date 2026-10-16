@@ -87,4 +87,49 @@ final class TimelineViewportStateTests: XCTestCase {
         let r = s.visibleTimeRange
         XCTAssertLessThanOrEqual(r.lowerBound, r.upperBound, "空视口也要给出良构区间")
     }
+
+    // MARK: cullRange（车道 / 标尺的裁剪窗口：存储 + 量化）
+
+    func testCullRangeAlwaysContainsVisibleTimeRange() {
+        let s = makeState(width: 400, duration: 100)   // 一屏 = 40s
+        for playhead in [0.0, 3.0, 37.5, 50.0, 99.0, 100.0] {
+            s.setPlayhead(playhead)
+            let visible = s.visibleTimeRange
+            XCTAssertLessThanOrEqual(s.cullRange.lowerBound, visible.lowerBound, "playhead=\(playhead)")
+            XCTAssertGreaterThanOrEqual(s.cullRange.upperBound, visible.upperBound, "playhead=\(playhead)")
+        }
+    }
+
+    func testCullRangeLeavesAtLeastHalfScreenMargin() {
+        let s = makeState(width: 400, duration: 100)
+        s.setPlayhead(50)
+        let span = s.viewportWidth / s.pointsPerSecond   // 40s
+        XCTAssertLessThanOrEqual(s.cullRange.lowerBound, s.visibleTimeRange.lowerBound - span / 2)
+        XCTAssertGreaterThanOrEqual(s.cullRange.upperBound, s.visibleTimeRange.upperBound + span / 2)
+    }
+
+    func testCullRangeDoesNotChangeOnSmallPlayheadSteps() {
+        // 量化生效：一屏内的滚动不改变裁剪窗（读它的车道因此不重建）
+        let s = makeState(width: 400, duration: 100)
+        s.setPlayhead(50)
+        let before = s.cullRange
+        s.setPlayhead(50.5)
+        s.setPlayhead(51.0)
+        XCTAssertEqual(s.cullRange, before, "未跨屏就不该换窗")
+    }
+
+    func testCullRangeChangesAfterCrossingOneScreen() {
+        let s = makeState(width: 400, duration: 100)
+        s.setPlayhead(50)
+        let before = s.cullRange
+        s.setPlayhead(95)   // 跨过一屏（40s）
+        XCTAssertNotEqual(s.cullRange, before)
+    }
+
+    func testCullRangeDegradesToWholeContentWhenViewportWidthUnknown() {
+        // 视口宽度尚未回填（首帧）：退化到「全部内容」，不能是 0...0——那会让车道首帧全空
+        let s = TimelineViewportState(pointsPerSecond: 10)
+        s.contentDuration = 100
+        XCTAssertEqual(s.cullRange, 0...100)
+    }
 }

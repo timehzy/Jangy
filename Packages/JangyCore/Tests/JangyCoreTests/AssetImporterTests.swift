@@ -1,5 +1,6 @@
 import XCTest
 import AVFoundation
+import ImageIO
 @testable import JangyCore
 @testable import JangyTestSupport
 
@@ -147,6 +148,49 @@ final class AssetImporterMediaTests: XCTestCase {
         let item = try await importer.importMedia(from: source, kind: .image, origin: .files,
                                                   knownSHA256: "preset-hash")
         XCTAssertEqual(item.sha256, "preset-hash", "调用方已算好哈希时不重复读盘")
+    }
+
+    // MARK: 显示方向
+
+    func testProbeImageMetadataReportsDisplayOrientedSize() throws {
+        // EXIF 方向 6 = 顺时针 90°：显示时宽高互换。不摆正的话，下游会把竖图当横图
+        // （时间线帧格按横屏算 → 画面被裁成横带；分屏 scale 也算错）。
+        let url = workDir.appendingPathComponent("rotated.jpg")
+        try writeJPEG(to: url, width: 400, height: 200, orientation: 6)
+
+        let metadata = AssetImporter.probeImageMetadata(of: url)
+        XCTAssertEqual(metadata.pixelWidth, 200, "EXIF 旋转 90° 后显示宽 = 原始高")
+        XCTAssertEqual(metadata.pixelHeight, 400)
+    }
+
+    func testProbeImageMetadataKeepsSizeForUnrotatedImage() throws {
+        let url = workDir.appendingPathComponent("upright.jpg")
+        try writeJPEG(to: url, width: 400, height: 200, orientation: 1)
+        let metadata = AssetImporter.probeImageMetadata(of: url)
+        XCTAssertEqual(metadata.pixelWidth, 400)
+        XCTAssertEqual(metadata.pixelHeight, 200)
+    }
+
+    func testDisplaySizeAppliesVideoRotation() {
+        let natural = CGSize(width: 1920, height: 1080)
+        let rotated = AssetImporter.displaySize(natural, CGAffineTransform(rotationAngle: .pi / 2))
+        XCTAssertEqual(rotated.width, 1080, accuracy: 0.5)
+        XCTAssertEqual(rotated.height, 1920, accuracy: 0.5)
+        XCTAssertEqual(AssetImporter.displaySize(natural, nil), natural, "无方向信息时原样返回")
+    }
+
+    /// 写一张带 EXIF 方向的 JPEG（只用于探测，不要求画面内容）。
+    private func writeJPEG(to url: URL, width: Int, height: Int, orientation: Int) throws {
+        let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8,
+                                bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
+                                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+        let image = try XCTUnwrap(context?.makeImage())
+        let destination = try XCTUnwrap(CGImageDestinationCreateWithURL(
+            url as CFURL, "public.jpeg" as CFString, 1, nil))
+        CGImageDestinationAddImage(destination, image, [
+            kCGImagePropertyOrientation: orientation,
+        ] as CFDictionary)
+        XCTAssertTrue(CGImageDestinationFinalize(destination))
     }
 }
 

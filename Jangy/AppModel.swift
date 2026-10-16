@@ -13,7 +13,7 @@ final class AppModel {
     let projectID: UUID
     let store: EditStore
     let resolver: AssetResolver
-    /// 时间线缩略图器（L3）：车道抽帧与素材库共用同一约定（缓存按 assetID+档位+时间桶）。
+    /// 时间线缩略图器（L3）：车道抽帧与素材库共用同一约定（缓存按 assetID+像素高+时间桶）。
     /// 与 resolver 同时装配；跨轨道复用同一实例让缓存真正命中。
     let thumbnailer: TimelineThumbnailer
     let player: PlayerController
@@ -79,7 +79,8 @@ final class AppModel {
     /// plan 变更后的统一下行联动：校验提示清零 + 视口时长同步 + 预览重建 + 防抖落盘。
     private func afterPlanMutation() {
         lastIssues = nil
-        viewport.contentDuration = store.plan.renderedDuration
+        let duration = store.plan.renderedDuration
+        if viewport.contentDuration != duration { viewport.contentDuration = duration }
         player.rebuild()
         scheduleAutosave()
     }
@@ -95,10 +96,10 @@ final class AppModel {
         player.seek(to: time)
     }
 
-    /// 擦洗结束：补一次**非节流** seek，把播放器对齐到最终播放头。
+    /// 擦洗结束：补一次**非节流**的精确 seek，把播放器对齐到最终播放头。
     /// 否则节流可能漏掉末帧 seek，松手后轮询把播放头拉回旧 seek 位置（bounce-back）。
     func scrubEnded() {
-        player.seek(to: viewport.playheadTime)
+        player.seekExact(to: viewport.playheadTime)
     }
 
     func edit(_ mutate: (inout EditPlan) -> Void) {
@@ -292,16 +293,32 @@ final class PlayerController {
 
     /// 时间线擦洗导致的暂停：把「用户希望暂停」写入意图并收敛（擦洗即暂停）。
     /// 走意图单点而非直接 `player.pause()`，这样跨页返回时不会被 `pageDidAppear` 重新起播。
+    /// **幂等**：擦洗每帧都会调到这里，意图已是暂停且实例确实没在播时直接返回。
     func pauseForScrub() {
+        guard wantsPlaying || (player?.rate ?? 0) > 0 else { return }
         wantsPlaying = false
         isPlaying = false   // 立即反映暂停，不等 100ms 轮询
         applyDesired()
     }
 
-    /// 擦洗定位：seek 播放器并同步 `currentTime`（避免 100ms 轮询延迟带来的播放头回跳）。
+    /// 擦洗期间的 seek 容差（秒）。擦洗是每 ~50ms 一次的高频 seek，而**精确 seek 会让合成器
+    /// 每次全量重渲到目标帧**——这是擦洗手感卡顿的主因；0.1s 容差肉眼无差。松手由 `seekExact` 对齐。
+    static let scrubSeekTolerance = CMTime(value: 1, timescale: 10)
+
+    /// 擦洗定位：**容差** seek + 同步 `currentTime`（避免 100ms 轮询延迟带来的播放头回跳）。
     func seek(to time: TimeInterval) {
-        player?.seek(to: CMTime(seconds: time, preferredTimescale: 600))
-        currentTime = time
+        seek(to: time, tolerance: Self.scrubSeekTolerance)
+    }
+
+    /// 擦洗结束 / 精确落位：零容差 seek（见 `scrubEnded`）。
+    func seekExact(to time: TimeInterval) {
+        seek(to: time, tolerance: .zero)
+    }
+
+    private func seek(to time: TimeInterval, tolerance: CMTime) {
+        player?.seek(to: CMTime(seconds: time, preferredTimescale: 600),
+                     toleranceBefore: tolerance, toleranceAfter: tolerance)
+        if time != currentTime { currentTime = time }
     }
 
     /// 单点收敛：把意图落到当前实例上。
@@ -325,8 +342,14 @@ final class PlayerController {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .milliseconds(100))
                 guard let self, let newPlayer, !Task.isCancelled else { return }
-                self.currentTime = newPlayer.currentTime().seconds
-                self.isPlaying = newPlayer.rate > 0
+                // 同值不写：@Observable 的 setter 不做相等判断，同值写也会通知依赖者——
+                // 暂停时值不变，无 guard 会让时间线在暂停期间仍以 10Hz 白重算。
+                // 先写 isPlaying 再写 currentTime：播放跟随的 onChange 由 currentTime 触发，
+                // 反过来的话起播第一拍会读到尚未更新的 isPlaying 而漏跟一拍。
+                let playing = newPlayer.rate > 0
+                if playing != self.isPlaying { self.isPlaying = playing }
+                let time = newPlayer.currentTime().seconds
+                if time != self.currentTime { self.currentTime = time }
             }
         }
         applyDesired()
